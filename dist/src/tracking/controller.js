@@ -2,7 +2,6 @@ import {
   GestureBinding,
   ReleaseBinding,
   inspectRightHand,
-  inspectReleaseHands,
   PITCH_BINDING,
 } from "./gesture.js";
 
@@ -221,22 +220,25 @@ export class HandController {
   };
   consume(result, time) {
     if (!this.active) return;
-    const releasePose = inspectReleaseHands(result);
+    let release = this.releaseBinding.update(result, time);
     if (this.blocked) {
       const sample = inspectRightHand(result);
-      this.draw(sample, false, releasePose);
-      this.indicators(sample, releasePose);
-      if (sample.allowed || releasePose.allowed) {
+      this.draw(sample, false, release);
+      this.indicators(sample, release);
+      if (sample.allowed || release.rawAllowed) {
         this.setStatus("Relax both hands to resume", "ready");
         return;
       }
       this.blocked = false;
       this.binding.reset(this.getPitch());
       this.releaseBinding.reset(this.getRelease());
+      release = this.releaseBinding.update(result, time);
     }
     // Release takes priority: a right-hand pinch must never also move pitch.
-    const sample = this.binding.update(releasePose.allowed ? {} : result, time);
-    const release = this.releaseBinding.update(result, time);
+    const sample = this.binding.update(
+      release.allowed || release.active ? {} : result,
+      time,
+    );
     const editing = sample.active || release.active;
     const wasEditing = this.editing;
     if (editing !== this.editing) {
@@ -267,11 +269,13 @@ export class HandController {
           ? "Hold pose…"
           : release.leftOpen
             ? "Pinch right thumb + index for release"
-            : !sample.hasRight
-              ? "Show your right hand"
-              : !sample.indexExtended
-                ? "Straighten your right index finger"
-                : "Press right middle, ring + pinky tips into palm",
+            : release.pinched
+              ? "Hold left hand upright (±15°)"
+              : !sample.hasRight
+                ? "Show your right hand"
+                : !sample.indexExtended
+                  ? "Straighten your right index finger"
+                  : "Press right middle, ring + pinky tips into palm",
         "ready",
       );
     }

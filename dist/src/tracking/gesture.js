@@ -12,9 +12,16 @@ export const PITCH_BINDING = Object.freeze({
 export const RELEASE_BINDING = Object.freeze({
   near: 0.08,
   far: 0.6,
-  acquireMs: 180,
-  releaseMs: 100,
+  acquireMs: 80,
+  releaseMs: 180,
+  acquireGraceMs: 180,
   smoothingMs: 100,
+  uprightEnterDegrees: 15,
+  uprightExitDegrees: 22,
+  pinchEnterRatio: 0.4,
+  pinchExitRatio: 0.62,
+  poseAcquireMs: 50,
+  poseDropoutMs: 180,
 });
 const sub = (a, b) => [a.x - b.x, a.y - b.y, a.z - b.z];
 const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
@@ -93,7 +100,11 @@ export function fingertipAtPalm(points, mcp, pip, dip, tip) {
     Math.abs(z) <= palm.width * 0.18
   );
 }
-export function selectHand(result, hand) {
+export function selectHand(
+  result,
+  hand,
+  { minConfidence = 0.7, requirePalm = true } = {},
+) {
   let selected = null;
   for (let i = 0; i < (result?.handedness?.length || 0); i++) {
     const category = result.handedness[i]?.[0],
@@ -101,7 +112,7 @@ export function selectHand(result, hand) {
     if (
       category?.categoryName !== hand ||
       !Number.isFinite(category.score) ||
-      category.score < 0.7 ||
+      category.score < minConfidence ||
       !landmarks?.length ||
       !landmarks.every(finite) ||
       landmarks.length !== 21
@@ -111,7 +122,7 @@ export function selectHand(result, hand) {
       result.worldLandmarks?.[i]?.length === 21
         ? result.worldLandmarks[i]
         : landmarks;
-    if (!shape.every(finite) || !palmFrame(shape)) continue;
+    if (!shape.every(finite) || (requirePalm && !palmFrame(shape))) continue;
     if (!selected || category.score > selected.confidence)
       selected = { landmarks, shape, confidence: category.score };
   }
@@ -145,41 +156,81 @@ export function inspectRightHand(result) {
     pitch: denormalize("pitch", normalized),
   };
 }
-function uprightOpen(hand) {
-  if (!hand) return false;
-  const p = hand.shape,
-    image = hand.landmarks;
-  if (!FINGERS.every((ids) => fingerExtended(p, ...ids))) return false;
-  // An extended thumb is naturally diagonal; the four long fingers point toward the roof.
-  if (
-    angle(p[1], p[2], p[3]) < 150 ||
-    angle(p[2], p[3], p[4]) < 155 ||
-    distance(p[4], p[17]) < distance(p[5], p[17]) * 0.95 ||
-    image[4].y >= image[2].y
-  )
-    return false;
-  const palmLength = Math.hypot(
-    image[9].x - image[0].x,
-    image[9].y - image[0].y,
+// A global 3D finger direction is unchanged by turning the palm toward/away from
+// the camera. Three clear long fingers suffice when the fourth is occluded.
+function uprightMetrics(hand) {
+  if (!hand) return { tilt: Infinity, extended: 0 };
+  const points = hand.shape,
+    directions = [];
+  for (const [m, p, d, t] of FINGERS) {
+    const chain =
+      distance(points[m], points[p]) +
+      distance(points[p], points[d]) +
+      distance(points[d], points[t]);
+    if (
+      chain > 1e-6 &&
+      distance(points[m], points[t]) / chain >= 0.82 &&
+      angle(points[m], points[p], points[d]) >= 145 &&
+      angle(points[p], points[d], points[t]) >= 135
+    ) {
+      directions.push(unit(sub(points[t], points[m])));
+    }
+  }
+  if (!directions.length) return { tilt: Infinity, extended: 0 };
+  const axis = [0, 1, 2].map(
+    (i) => directions.reduce((sum, v) => sum + v[i], 0) / directions.length,
   );
-  return (
-    palmLength > 0.01 &&
-    image[9].y < image[0].y &&
-    FINGERS.every(([m, , , t]) => {
-      const dx = image[t].x - image[m].x,
-        up = image[m].y - image[t].y;
-      return up > palmLength * 0.45 && Math.abs(dx) <= up * 0.58;
-    })
-  );
+  const tilt =
+    (Math.atan2(Math.hypot(axis[0], axis[2]), -axis[1]) * 180) / Math.PI;
+  return { tilt, extended: directions.length };
 }
-export function inspectReleaseHands(result) {
-  const left = selectHand(result, "Left"),
-    right = selectHand(result, "Right");
-  const leftOpen = uprightOpen(left),
-    pinched =
-      !!right &&
-      distance(right.shape[4], right.shape[8]) <=
-        palmFrame(right.shape).width * 0.22;
+function pinchMetrics(hand, aspect) {
+  if (!hand) return { ratio: Infinity, imageRatio: Infinity };
+  const points = hand.shape,
+    image = hand.landmarks;
+  const scale = Math.max(
+    distance(points[5], points[17]),
+    distance(points[0], points[9]) * 0.75,
+  );
+  const pixels = (a, b) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+  const imageScale = Math.max(
+    pixels(image[5], image[17]),
+    pixels(image[0], image[9]) * 0.75,
+  );
+  return {
+    ratio: scale > 1e-6 ? distance(points[4], points[8]) / scale : Infinity,
+    imageRatio:
+      imageScale > 1e-6 ? pixels(image[4], image[8]) / imageScale : Infinity,
+  };
+}
+export function inspectReleaseHands(
+  result,
+  { leftLatched = false, pinchLatched = false } = {},
+) {
+  // Release does not require a well-conditioned palm plane (an edge-on hand can
+  // collapse its projected width). Pitch retains its stricter palm-contact checks.
+  const selection = { minConfidence: 0.55, requirePalm: false };
+  const left = selectHand(result, "Left", selection),
+    right = selectHand(result, "Right", selection);
+  const { tilt, extended } = uprightMetrics(left);
+  const aspect = Number.isFinite(result?.frameAspectRatio)
+    ? result.frameAspectRatio
+    : 4 / 3;
+  const { ratio, imageRatio } = pinchMetrics(right, aspect);
+  const leftOpen =
+    extended >= 3 &&
+    tilt <=
+      (leftLatched
+        ? RELEASE_BINDING.uprightExitDegrees
+        : RELEASE_BINDING.uprightEnterDegrees);
+  // Use 2D proximity to tolerate uncertain depth when touching fingertips occlude
+  // one another, while rejecting a large 3D separation seen in projection.
+  const pinched =
+    ratio <=
+      (pinchLatched
+        ? RELEASE_BINDING.pinchExitRatio
+        : RELEASE_BINDING.pinchEnterRatio) ||
+    (imageRatio <= (pinchLatched ? 0.42 : 0.28) && ratio <= 0.85);
   let pinch = null,
     anchor = null,
     normalized = 0;
@@ -200,6 +251,10 @@ export function inspectReleaseHands(result) {
     );
   return {
     allowed: leftOpen && pinched,
+    leftTilt: tilt,
+    leftExtended: extended,
+    pinchRatio: ratio,
+    pinchImageRatio: imageRatio,
     leftOpen,
     pinched,
     left,
@@ -241,8 +296,12 @@ class SmoothedBinding {
           (Math.log(sample[this.key]) - this.logValue) *
           (1 - Math.exp(-dt / this.config.smoothingMs));
     } else {
-      this.readySince = null;
       if (this.invalidSince === null) this.invalidSince = time;
+      if (
+        !this.config.acquireGraceMs ||
+        time - this.invalidSince >= this.config.acquireGraceMs
+      )
+        this.readySince = null;
       if (time - this.invalidSince >= this.config.releaseMs)
         this.active = false;
     }
@@ -259,8 +318,71 @@ export class GestureBinding extends SmoothedBinding {
     super(inspectRightHand, "pitch", PITCH_BINDING, 220);
   }
 }
+// Each pose has its own stable state, so alternating noisy frames do not force
+// the two hands to satisfy raw entry thresholds on the exact same frame.
+class PoseLatch {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.active = false;
+    this.readySince = null;
+    this.invalidSince = null;
+  }
+  update(enter, stay, time) {
+    if (this.active ? stay : enter) {
+      this.invalidSince = null;
+      if (this.readySince === null) this.readySince = time;
+      if (time - this.readySince >= RELEASE_BINDING.poseAcquireMs)
+        this.active = true;
+    } else {
+      this.readySince = null;
+      if (this.invalidSince === null) this.invalidSince = time;
+      if (time - this.invalidSince >= RELEASE_BINDING.poseDropoutMs)
+        this.active = false;
+    }
+    return this.active;
+  }
+}
 export class ReleaseBinding extends SmoothedBinding {
   constructor() {
     super(inspectReleaseHands, "release", RELEASE_BINDING, 1);
+    this.leftLatch = new PoseLatch();
+    this.pinchLatch = new PoseLatch();
+    this.inspect = (result) => {
+      const raw = inspectReleaseHands(result);
+      const relaxed = inspectReleaseHands(result, {
+        leftLatched: true,
+        pinchLatched: true,
+      });
+      const leftOpen = this.leftLatch.update(
+        raw.leftOpen,
+        relaxed.leftOpen,
+        this.sampleTime,
+      );
+      const pinched = this.pinchLatch.update(
+        raw.pinched,
+        relaxed.pinched,
+        this.sampleTime,
+      );
+      return {
+        ...relaxed,
+        rawAllowed: raw.allowed,
+        leftOpen,
+        pinched,
+        // Missing or clearly broken poses freeze edits immediately; the stable
+        // indicators and activation survive a brief tracking dropout.
+        allowed: leftOpen && pinched && relaxed.leftOpen && relaxed.pinched,
+      };
+    };
+  }
+  reset(value = 1) {
+    super.reset(value);
+    this.leftLatch?.reset();
+    this.pinchLatch?.reset();
+  }
+  update(result, time) {
+    this.sampleTime = time;
+    return super.update(result, time);
   }
 }

@@ -36,6 +36,7 @@ self.addEventListener("message", async (event) => {
     try {
       if (!tracker) throw new Error("Hand tracker is not ready.");
       const result = tracker.detectForVideo(data.frame, data.timestamp);
+      result.frameAspectRatio = data.frame.width / data.frame.height;
       self.postMessage({ type: "result", timestamp: data.timestamp, result });
     } catch (error) {
       self.postMessage({

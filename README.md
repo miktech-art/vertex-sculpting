@@ -63,7 +63,7 @@ Visual direction informed by Chronophase and the user's local VoidWave sculpture
 
 Version 0.2 resets prior browser sounds and custom connections once, keeps only the sine factory preset, inverts the pitch/thickness default connection, and increases interface fonts by 2 px. New saves and mapping edits persist normally after the reset.
 
-## Camera and hand bindings (v0.4)
+## Camera and hand bindings (v0.4.1)
 
 Enable Camera in the upper right. The browser must allow camera access. Video and both labeled hand overlays are visible in the panel. Camera frames stay in the browser; MediaPipe assets are served from the app's origin.
 
@@ -71,12 +71,18 @@ Pitch: anatomical right-index Y → pitch, logarithmically spanning 55–1760 Hz
 
 Inference now receives the original, unmirrored camera frames, correcting the observed reversed hand assignment. Only the preview and overlay are mirrored. Hand selection uses model handedness with at least 70% confidence, never left/right screen position. Overlay labels L and R identify the selected anatomical hands.
 
-Release: keep all five left-hand fingers extended, with the four long fingers upright (within 30° of vertical), and pinch the right thumb and index (tips within 22% of right palm width). The thumb can extend diagonally. Horizontal separation between the left palm center and right pinch spans 20 ms–3 s logarithmically, from 8% to 60% of camera width. Greater separation means longer release; vertical motion does not affect it. Release changes update the preset, ADSR graph and sculpture. They apply to subsequent triggered notes and to held notes when released; finite notes already scheduled keep their original envelope. This gesture takes priority over pitch and does not trigger a note itself.
+Release: hold an open left hand within 15° of vertical in 3D, regardless of which side faces the camera. Its overall long-finger direction sets tilt, rather than testing every finger in the image. Three clear extended long fingers suffice, tolerating one occluded finger; thumb pose is unrestricted for this binding. Once acquired, tilt can drift to 22° before disengaging, avoiding boundary flicker.
 
-Pitch acquisition requires 140 ms, release acquisition 180 ms. Pitch smoothing is 75 ms plus a 30 ms audio ramp; release smoothing is 100 ms. Invalid poses freeze parameter changes immediately. Gate release waits 100 ms to avoid chatter; a watchdog handles stalled frames. A valid pitch pose starts a sustained note; breaking it releases the note. Manual playback uses finite ADSR. Stop/Escape disarms both gestures until relaxed. Hiding the page or disabling Camera stops camera tracks and the worker. Each continuous gesture session is one undo transaction, including transitions between bindings.
+Pinch the right thumb and index. Pinch entry allows a fingertip gap of 40% of palm scale (the larger of 3D palm width or 75% of wrist-to-middle-knuckle length); it stays pinched up to 62%. Close 2D fingertips can compensate for moderate 3D depth uncertainty at contact. Large 3D gaps still reject accidental projected overlap. Release accepts handedness confidence ≥55%; pitch retains its stricter ≥70% and palm-contact checks.
+
+Horizontal separation between the left palm center and right pinch spans 20 ms–3 s logarithmically, from 8% to 60% of camera width. Greater separation means longer release; vertical motion does not affect it. Release changes update the preset, ADSR graph and sculpture. They apply to subsequent triggered notes and to held notes when released; finite notes already scheduled keep their original envelope. This gesture takes priority over pitch and does not trigger a note itself.
+
+Release pose indicators have independent 50 ms acquisition and 180 ms dropout tolerance. The combined binding acquires after another 80 ms, with short interruptions tolerated rather than restarting acquisition. Missing hands or clearly broken poses freeze edits immediately, while stable indicators persist through short tracking gaps. Release values use 100 ms smoothing. Pitch acquisition (140 ms), smoothing (75 ms plus a 30 ms audio ramp), immediate invalid-pose freeze and 100 ms gate release are unchanged.
+
+A valid pitch pose starts a sustained note; breaking it releases the note. Manual playback uses finite ADSR. Stop/Escape disarms both gestures until relaxed. Hiding the page or disabling Camera stops camera tracks and the worker. Each continuous gesture session is one undo transaction, including transitions between bindings.
 
 `src/tracking/gesture.js` contains camera-independent geometry and binding state; `controller.js` owns camera frames, preview, and callbacks; `worker.js` runs MediaPipe off the UI thread with at most one frame in flight (25 Hz cap). Runtime is MediaPipe Tasks Vision 1.1.1, model Hand Landmarker float16 v1; license and sources are in `dist/vendor/mediapipe/`.
 
 The v0.3 migration replaces the active v0.2 sound with saw, preserving connections and saves. v0.4 preserves the preset and edits.
 
-Geometry tests cover contact proximity, index extension, upright left fingers, pinching, hand order/crossing, ranges, smoothing, missing data and scale/rotation. Camera/model startup and UI are checked in the hosted browser. Physical poses and hand assignment still need the user's live test.
+Geometry tests cover contact proximity, index extension, left-hand yaw through 360°, ±14° acceptance and excess tilt rejection, occluded fingers, pinch rotation/depth uncertainty, simultaneous pose jitter/dropouts, hand order/crossing, ranges and smoothing. Camera/model startup and UI are checked in the hosted browser. Physical poses and hand assignment still need the user's live test.

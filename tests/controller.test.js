@@ -46,10 +46,10 @@ test("right pitch pose gates notes while release gesture only edits release", ()
 test("one undo transaction covers a gesture and commits on loss or manual stop", () => {
   const { hand, events } = controller();
   hand.consume(releaseFixture(), 0);
-  hand.consume(releaseFixture(), 200);
-  hand.consume(releaseFixture(), 250);
+  for (const t of [40, 80, 120, 160, 200, 250])
+    hand.consume(releaseFixture(), t);
   hand.consume({}, 300);
-  hand.consume({}, 420);
+  hand.consume({}, 490);
   hand.consume({}, 500);
   assert.deepEqual(
     events.filter(([k]) => k === "edit"),
@@ -58,8 +58,8 @@ test("one undo transaction covers a gesture and commits on loss or manual stop",
       ["edit", false],
     ],
   );
-  hand.consume(releaseFixture(), 600);
-  hand.consume(releaseFixture(), 800);
+  for (const t of [600, 640, 680, 720, 760, 800])
+    hand.consume(releaseFixture(), t);
   hand.disarm();
   assert.deepEqual(
     events.filter(([k]) => k === "edit"),
@@ -76,8 +76,8 @@ test("one undo transaction covers a gesture and commits on loss or manual stop",
 });
 test("breaking either release pose freezes edits immediately, including release hysteresis", () => {
   const { hand, events } = controller();
-  hand.consume(releaseFixture(), 0);
-  hand.consume(releaseFixture(), 200);
+  for (const t of [0, 40, 80, 120, 160, 200]) hand.consume(releaseFixture(), t);
+  assert.ok(events.some(([k]) => k === "release"));
   events.length = 0;
   hand.consume(fixture({ hand: "Left", closed: false }), 220);
   assert.equal(

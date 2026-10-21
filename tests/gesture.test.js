@@ -78,7 +78,7 @@ test("stable pitch acquisition, invalid-pose freeze and delayed note release", (
   assert.equal(invalid.active, true);
   assert.equal(binding.update({}, 300).active, false);
 });
-test("release requires all five left fingers extended, four vertical, and right pinch", () => {
+test("release requires an upright open left hand and right pinch, without thumb-orientation constraints", () => {
   assert.equal(inspectReleaseHands(releaseFixture()).allowed, true);
   const closed = combine(
     fixture({ hand: "Left", closed: true }),
@@ -89,9 +89,9 @@ test("release requires all five left fingers extended, four vertical, and right 
   assert.equal(inspectReleaseHands(noPinch).allowed, false);
   const thumb = releaseFixture();
   thumb.worldLandmarks[0][4] = { x: 0, y: -0.1, z: 0.8 };
-  assert.equal(inspectReleaseHands(thumb).allowed, false);
+  assert.equal(inspectReleaseHands(thumb).allowed, true);
   const tilted = releaseFixture();
-  tilted.landmarks[0] = tilted.landmarks[0].map((p) => ({
+  tilted.worldLandmarks[0] = tilted.worldLandmarks[0].map((p) => ({
     x: 0.5 - (p.y - 0.5),
     y: 0.5 + (p.x - 0.5),
     z: p.z,
@@ -124,12 +124,13 @@ test("release freezes immediately if pinch or left pose breaks, without jumping 
   const binding = new ReleaseBinding();
   binding.reset(0.8);
   assert.equal(binding.update(releaseFixture(), 0).release, null);
+  for (const t of [40, 80, 120, 160]) binding.update(releaseFixture(), t);
   const active = binding.update(releaseFixture(), 200);
   assert.equal(active.active, true);
   assert.ok(active.release > 0);
   assert.equal(binding.update({}, 220).release, null);
-  assert.equal(binding.update({}, 340).active, false);
-  assert.equal(binding.update(releaseFixture(), 360).release, null);
+  assert.equal(binding.update({}, 420).active, false);
+  assert.equal(binding.update(releaseFixture(), 440).release, null);
 });
 test("missing, malformed or degenerate landmarks cannot activate either binding", () => {
   const malformed = fixture();
@@ -150,4 +151,118 @@ test("missing, malformed or degenerate landmarks cannot activate either binding"
     assert.equal(inspectRightHand(result).allowed, false);
     assert.equal(inspectReleaseHands(result).allowed, false);
   }
+});
+
+function rotate(points, { yaw = 0, tilt = 0 } = {}) {
+  const y = (yaw * Math.PI) / 180,
+    t = (tilt * Math.PI) / 180;
+  return points.map((p) => {
+    const x = p.x * Math.cos(y) + p.z * Math.sin(y),
+      z = -p.x * Math.sin(y) + p.z * Math.cos(y);
+    return {
+      x: x * Math.cos(t) - p.y * Math.sin(t),
+      y: x * Math.sin(t) + p.y * Math.cos(t),
+      z,
+    };
+  });
+}
+function pose({ yaw = 0, tilt = 0, gap = 0.05, score = 0.99 } = {}) {
+  const result = releaseFixture();
+  result.worldLandmarks[0] = rotate(result.worldLandmarks[0], { yaw, tilt });
+  result.worldLandmarks[1][4] = {
+    ...result.worldLandmarks[1][8],
+    x: result.worldLandmarks[1][8].x + gap * 1.05,
+  };
+  result.handedness.forEach((hand) => (hand[0].score = score));
+  return result;
+}
+test("upright left hand works palm-on, pinky-on, thumb-on and back-on within 15 degrees", () => {
+  for (const yaw of [0, 45, 90, 135, 180, 225, 270, 315]) {
+    for (const tilt of [-14, 0, 14])
+      assert.equal(
+        inspectReleaseHands(pose({ yaw, tilt })).leftOpen,
+        true,
+        `yaw ${yaw}, tilt ${tilt}`,
+      );
+    assert.equal(inspectReleaseHands(pose({ yaw, tilt: 25 })).leftOpen, false);
+  }
+  const forward = pose();
+  forward.worldLandmarks[0] = forward.worldLandmarks[0].map((p) => ({
+    x: p.x,
+    y: p.y * Math.cos(0.4) - p.z * Math.sin(0.4),
+    z: p.y * Math.sin(0.4) + p.z * Math.cos(0.4),
+  }));
+  assert.equal(
+    inspectReleaseHands(forward).leftOpen,
+    false,
+    "depth tilt is also measured",
+  );
+});
+test("one occluded long finger and an unreliable thumb do not reject an otherwise open hand", () => {
+  const result = pose();
+  result.worldLandmarks[0][16] = { x: -0.3, y: -0.6, z: 0.05 };
+  result.worldLandmarks[0][4] = { x: 0, y: 0, z: 0.5 };
+  assert.equal(inspectReleaseHands(result).leftOpen, true);
+  result.worldLandmarks[0][20] = { x: -0.6, y: -0.6, z: 0.05 };
+  assert.equal(
+    inspectReleaseHands(result).leftOpen,
+    false,
+    "a mostly curled hand still fails",
+  );
+});
+test("pinch tolerates contact-pad spacing, rotation, depth uncertainty and moderate handedness confidence", () => {
+  for (const yaw of [0, 90, 180, 270]) {
+    const result = pose({ gap: 0.32, score: 0.6 });
+    result.worldLandmarks[1] = rotate(result.worldLandmarks[1], { yaw });
+    assert.equal(inspectReleaseHands(result).pinched, true);
+  }
+  const uncertain = pose({ gap: 0.65 });
+  assert.equal(
+    inspectReleaseHands(uncertain).pinched,
+    true,
+    "close image tips rescue moderate depth error",
+  );
+  const separate = pose({ gap: 1.1 });
+  assert.equal(
+    inspectReleaseHands(separate).pinched,
+    false,
+    "large depth separation cannot be rescued by image overlap",
+  );
+  const spread = pose({ gap: 0.55 });
+  spread.landmarks[1][4].x = spread.landmarks[1][8].x + 0.2;
+  assert.equal(inspectReleaseHands(spread).pinched, false);
+});
+test("both poses stay acquired through boundary jitter and brief tracking loss", () => {
+  const binding = new ReleaseBinding();
+  binding.reset(0.8);
+  for (const t of [0, 40, 80, 120, 160])
+    binding.update(pose({ tilt: 14, gap: 0.35 }), t);
+  for (let t = 200; t <= 800; t += 40) {
+    const result = pose({
+      tilt: t % 80 === 0 ? 18 : 14,
+      gap: t % 80 === 0 ? 0.5 : 0.35,
+    });
+    // Keep image tips apart here so only the 3D hysteresis maintains the pinch.
+    result.landmarks[1][4].x = result.landmarks[1][8].x + 0.2;
+    const sample = binding.update(result, t);
+    assert.equal(sample.leftOpen, true);
+    assert.equal(sample.pinched, true);
+    assert.equal(sample.active, true);
+    assert.ok(sample.release !== null);
+  }
+  const missing = binding.update({}, 840);
+  assert.equal(missing.leftOpen, true);
+  assert.equal(missing.pinched, true);
+  assert.equal(
+    missing.release,
+    null,
+    "missing hands freeze values despite stable indicators",
+  );
+  assert.ok(binding.update(pose(), 880).release !== null);
+  const broken = pose({ tilt: 50, gap: 1.1 });
+  assert.equal(binding.update(broken, 920).release, null);
+  const ended = binding.update(broken, 1120);
+  assert.equal(ended.leftOpen, false);
+  assert.equal(ended.pinched, false);
+  assert.equal(ended.active, false);
 });
