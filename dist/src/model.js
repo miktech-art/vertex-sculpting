@@ -250,7 +250,7 @@ export const TARGETS = [
   {
     id: "spectralPeak",
     label: "Cutoff resonance",
-    description: "Boosts bands near the cutoff frequencies.",
+    description: "Crinkles frequency-band lines near each cutoff.",
   },
 
   {

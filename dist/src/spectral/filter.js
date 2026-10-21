@@ -84,3 +84,12 @@ export function bandAmplitude(band, params, response) {
     gain: before > 0 ? Math.sqrt(after / before) : 0,
   };
 }
+
+// Resonance uses the original crinkled-ridge language, localized in log frequency.
+export function cutoffResonanceWeight(frequency, low, high, amount) {
+  if (amount <= 0 || frequency <= 0) return 0;
+  const width = 0.45 - 0.22 * amount;
+  const proximity = (cutoff) =>
+    Math.exp(-0.5 * (Math.log2(frequency / cutoff) / width) ** 2);
+  return amount * Math.max(proximity(low), proximity(high));
+}

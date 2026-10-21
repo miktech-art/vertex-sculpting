@@ -2,6 +2,7 @@ import {
   createFilterResponse,
   HARMONIC_BANDS,
   bandAmplitude,
+  cutoffResonanceWeight,
 } from "../spectral/filter.js";
 import {
   TARGETS,
@@ -22,11 +23,16 @@ const hash = (i, j = 0) => {
 
 // Geometry is deterministic: identical sound + mapping always gives the same object.
 export function buildGeometry(params, m, sampleRate = 48000) {
+  const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
+    highCut = denormalize("cutoff", m.spectralHigh ?? 1);
+  const crinkle = (frequency) =>
+    cutoffResonanceWeight(frequency, lowCut, highCut, m.spectralPeak ?? 0);
   const response = createFilterResponse(
     {
       cutoffLow: denormalize("cutoffLow", m.spectralLow ?? 0),
       cutoff: denormalize("cutoff", m.spectralHigh ?? 1),
-      resonance: denormalize("resonance", m.spectralPeak ?? 0),
+      // Brightness encodes rejection; resonance is drawn as crinkles, not glow.
+      resonance: 0.1,
     },
     sampleRate,
   );
@@ -62,7 +68,13 @@ export function buildGeometry(params, m, sampleRate = 48000) {
           0.5 *
           Math.sin(u * total * denormalize("rate", m.rate) * TAU),
       e = envelopeAt(contour, Math.min(total - 0.00001, u * total)) * wave;
-    return { x: (u - 0.5) * length, y: 0, z: 0, u, e };
+    return {
+      x: (u - 0.5) * length,
+      y: crinkle(params.pitch) * 13 * Math.sin(u * TAU * 22) ** 7 * e ** 0.6,
+      z: 0,
+      u,
+      e,
+    };
   });
   lines.push({
     points: center,
@@ -75,7 +87,8 @@ export function buildGeometry(params, m, sampleRate = 48000) {
   for (let j = 0; j < bands.length; j++) {
     const band = bands[j],
       position = Math.log(band.center) / Math.log(96),
-      energy = bandAmplitude(band, spectrumParams, response);
+      energy = bandAmplitude(band, spectrumParams, response),
+      resonanceShape = crinkle(params.pitch * band.center);
     for (const sign of [-1, 1]) {
       const line = [];
       for (let i = 0; i < points; i++) {
@@ -86,9 +99,10 @@ export function buildGeometry(params, m, sampleRate = 48000) {
           modal = 0.65 + 0.35 * Math.sin(u * Math.PI),
           teeth =
             m.edge *
-            8 *
-            position *
-            Math.sin(u * TAU * (8 + 18 * m.detail) + j * 0.7) ** 7,
+              8 *
+              position *
+              Math.sin(u * TAU * (8 + 18 * m.detail) + j * 0.7) ** 7 +
+            resonanceShape * 13 * Math.sin(u * TAU * 22 + j * 0.7) ** 7,
           wave =
             1 -
             m.motion * 0.5 +
@@ -108,7 +122,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       lines.push({
         points: line,
         alpha: (0.32 + 0.16 * ((j % 4) / 3)) * energy.source ** 0.28,
-        width: 0.5 + 0.35 * m.edge,
+        width: 0.5 + 0.35 * (m.edge + resonanceShape),
         kind: "filament",
         frequency: params.pitch * band.center,
         partials: band.partials,
@@ -373,10 +387,7 @@ export class SculptureRenderer {
     for (const line of g.lines) {
       const pts = line.points;
       const amplitude = Math.min(3, line.filterGain ?? 1) ** 0.7;
-      const peak = Math.max(
-        0,
-        Math.log2(Math.max(1, line.filterGain ?? 1)) - 0.25,
-      );
+
       if (amplitude < 0.002) continue;
       c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
       c.lineCap = "round";
@@ -411,8 +422,6 @@ export class SculptureRenderer {
         for (const v of lower.reverse()) c.lineTo(v.x, v.y);
         c.closePath();
         c.fillStyle = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
-        c.shadowColor = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity)})`;
-        c.shadowBlur = Math.min(12, peak * 5);
         c.fill();
         c.shadowBlur = 0;
       } else {
@@ -422,9 +431,7 @@ export class SculptureRenderer {
           if (i === 0) c.moveTo(v.x, v.y);
           else c.lineTo(v.x, v.y);
         }
-        c.lineWidth = line.width + Math.min(1.4, peak * 0.4);
-        c.shadowColor = `rgba(255,255,255,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
-        c.shadowBlur = Math.min(12, peak * 5);
+        c.lineWidth = line.width;
         c.stroke();
         c.shadowBlur = 0;
       }

@@ -67,7 +67,7 @@ test("fixed spectral bands cover each of the 96 synthesized partials exactly onc
   );
   assert.deepEqual(HARMONIC_BANDS[0].partials, [1]);
 });
-test("filtering and resonance change band amplitude without rotating or moving any harmonic points", () => {
+test("filter attenuation changes band amplitude without rotating or moving harmonic points", () => {
   const params = { ...PRESETS[0].params, pitch: 220 };
   const open = geometry({
     ...params,
@@ -77,7 +77,7 @@ test("filtering and resonance change band amplitude without rotating or moving a
   });
   for (const p of [
     { cutoffLow: 1200, cutoff: 5000, resonance: 0.1 },
-    { cutoffLow: 20, cutoff: 1000, resonance: 16 },
+    { cutoffLow: 20, cutoff: 1000, resonance: 0.1 },
   ]) {
     const filtered = geometry({ ...params, ...p });
     assert.equal(filtered.lines.length, open.lines.length);
@@ -137,5 +137,41 @@ test("old presets gain a neutral low edge and replace only the old default filte
   assert.equal(
     validateDocument(migrated).routes.length,
     migrated.routes.length,
+  );
+});
+
+test("resonance crinkles only bands near a cutoff, without adding brightness or glow", () => {
+  const params = {
+    ...PRESETS[0].params,
+    pitch: 220,
+    cutoffLow: 20,
+    cutoff: 3520,
+    detune: 0,
+    noise: 0,
+    drive: 0,
+  };
+  const base = geometry({ ...params, resonance: 0.1 }),
+    resonant = geometry({ ...params, resonance: 16 });
+  const movement = (frequency) => {
+    const index = base.lines.findIndex((l) => l.frequency === frequency);
+    return Math.max(
+      ...base.lines[index].points.map((p, i) =>
+        Math.hypot(
+          p.y - resonant.lines[index].points[i].y,
+          p.z - resonant.lines[index].points[i].z,
+        ),
+      ),
+    );
+  };
+  assert.ok(movement(3520) > 5);
+  assert.ok(movement(220) < 1e-8);
+  assert.ok(movement(21120) < 1e-8);
+  assert.deepEqual(
+    base.lines.map((l) => l.filterGain),
+    resonant.lines.map((l) => l.filterGain),
+  );
+  assert.deepEqual(
+    base.lines.map((l) => l.alpha),
+    resonant.lines.map((l) => l.alpha),
   );
 });
