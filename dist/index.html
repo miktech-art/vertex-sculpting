@@ -1,65 +1,380 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#080909">
-  <meta name="description" content="An instrument for exploring the form of sound. Sculpt native sounds and compose your own sound-to-visual mappings.">
-  <title>Sound / Form — a study in sound</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080909'/%3E%3Cpath d='M5 16h22' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css">
-</head>
-<body>
-  <div class="app-shell">
-    <header class="app-header">
-      <a class="wordmark" href="./" aria-label="Sound Form home"><span class="brand-symbol" aria-hidden="true">╱</span> SOUND <span class="wordmark-slash">/</span> FORM <span class="version">STUDY 001</span></a>
-      <nav class="mode-switch" aria-label="Workspace"><button class="active" data-mode="sculpt" aria-pressed="true">Sculpt</button><button data-mode="mapping" aria-pressed="false">Connections <span id="route-count">20</span></button></nav>
-      <div class="header-actions"><span class="native-status"><i></i> NATIVE ENGINE</span><button id="help-button" class="icon-button" aria-label="About and keyboard shortcuts">?</button></div>
-    </header>
-    <div class="workspace">
-      <main id="sculpt-workspace" class="sculpt-workspace">
-        <div class="stage-header"><div><p class="eyebrow">SOUND SCULPTURE <span class="small-line"></span> <span id="preset-family">HARMONIC STAB</span></p><h1 id="preset-title">Velvet<span class="modified" id="modified-indicator" hidden>·</span></h1><p id="preset-description" class="preset-description">A bowed bundle of harmonics with a soft trailing edge.</p></div><button id="compare-button" class="text-button" title="Hold to see and hear the loaded preset">Hold to compare <span>↔</span></button></div>
-        <section class="stage" aria-label="Interactive sound sculpture">
-          <div class="stage-coordinate top-left"><span class="crosshair">+</span> <span id="view-label">PERSPECTIVE</span></div>
-          <div class="stage-coordinate top-right"><span class="state-dot"></span><span id="stage-state">STATIC FORM</span></div>
-          <canvas id="sculpture" aria-label="Three-dimensional sound sculpture. Drag to rotate; scroll to zoom; double-click to reset." tabindex="0"></canvas>
-          <div class="stage-coordinate bottom-left"><span id="note-label">E3</span><span class="coordinate-separator">/</span><span id="pitch-label">165 Hz</span></div>
-          <div class="stage-tools"><button id="front-view" class="text-button">Front</button><button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button></div>
-          <span class="stage-instruction">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</span>
-        </section>
-        <section class="timeline-section" aria-label="Sound envelope and playback">
-          <div class="section-caption"><span>CONTOUR <span class="caption-muted">/ ADSR</span></span><span id="duration-label">1.37 s</span></div>
-          <canvas id="envelope-canvas" aria-label="Amplitude envelope over time"></canvas>
-          <div class="timeline-labels"><span>0.00</span><span id="envelope-segments">ATTACK — DECAY — SUSTAIN — RELEASE</span><span id="timeline-end">1.37</span></div>
-        </section>
-        <section class="preset-strip" aria-label="Factory presets"><div class="preset-strip-label">STARTING<br>POINTS <span>↘</span></div><div id="preset-cards" class="preset-cards"></div><button id="library-button" class="library-button"><span>▤</span> My sounds <span id="saved-count">0</span></button></section>
-      </main>
-      <main id="mapping-workspace" class="mapping-workspace" hidden>
-        <div class="mapping-heading"><p class="eyebrow">THE RELATIONSHIP BETWEEN</p><h1>Sound & form<span class="heading-dot">.</span></h1><p class="preset-description">Make a connection. Discover a different way of seeing.</p></div>
-        <div class="mapping-legend"><span>SOUND PARAMETERS <small>OUTPUT</small></span><span>VISUAL PROPERTIES <small>INPUT</small></span></div>
-        <div id="mapping-scroll" class="mapping-scroll"><div id="mapping-board" class="mapping-board"><svg id="mapping-wires" aria-label="Sound to visual connections"></svg><div id="sound-nodes" class="node-column source-column"></div><div id="visual-nodes" class="node-column target-column"></div></div></div>
-        <div class="mapping-footer"><span id="mapping-hint">Drag between nodes, or select a sound then a visual.</span><button id="reset-mappings" class="text-button">Restore defaults ↺</button></div>
-      </main>
-      <aside class="inspector" aria-label="Sound controls">
-        <div id="sound-inspector">
-          <div class="inspector-heading"><span class="eyebrow">THE INSTRUMENT</span><span class="fine-print">01 — 03</span></div>
-          <div class="control-tabs" role="tablist" aria-label="Sound parameter groups"><button role="tab" aria-selected="true" class="active" data-group="source">Source</button><button role="tab" aria-selected="false" data-group="contour">Contour</button><button role="tab" aria-selected="false" data-group="space">Space</button></div>
-          <div id="parameter-controls" class="parameter-controls"></div>
-          <div class="inspector-note"><span>↳</span><p id="parameter-note">Change a quality. The sound updates on the next play.</p></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080909" />
+    <meta
+      name="description"
+      content="An instrument for exploring the form of sound. Sculpt native sounds and compose your own sound-to-visual mappings."
+    />
+    <title>Sound / Form — a study in sound</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080909'/%3E%3Cpath d='M5 16h22' stroke='white' stroke-width='2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <a class="wordmark" href="./" aria-label="Sound Form home"
+          ><span class="brand-symbol" aria-hidden="true">╱</span> SOUND
+          <span class="wordmark-slash">/</span> FORM
+          <span class="version">STUDY 001</span></a
+        >
+        <nav class="mode-switch" aria-label="Workspace">
+          <button class="active" data-mode="sculpt" aria-pressed="true">
+            Sculpt</button
+          ><button data-mode="mapping" aria-pressed="false">
+            Connections <span id="route-count">20</span>
+          </button>
+        </nav>
+        <div class="header-actions">
+          <span class="native-status"><i></i> NATIVE ENGINE</span
+          ><button
+            id="help-button"
+            class="icon-button"
+            aria-label="About and keyboard shortcuts"
+          >
+            ?
+          </button>
         </div>
-        <div id="route-inspector" hidden>
-          <div class="inspector-heading"><span class="eyebrow">LIVE PREVIEW</span><span class="fine-print">↗</span></div>
-          <div class="mini-stage"><canvas id="mini-sculpture" aria-label="Live preview of current mapping"></canvas></div>
-          <div id="connection-details"></div>
+      </header>
+      <div class="workspace">
+        <main id="sculpt-workspace" class="sculpt-workspace">
+          <div class="stage-header">
+            <div>
+              <p class="eyebrow">
+                SOUND SCULPTURE <span class="small-line"></span>
+                <span id="preset-family">HARMONIC STAB</span>
+              </p>
+              <h1 id="preset-title">
+                Velvet<span class="modified" id="modified-indicator" hidden
+                  >·</span
+                >
+              </h1>
+              <p id="preset-description" class="preset-description">
+                A bowed bundle of harmonics with a soft trailing edge.
+              </p>
+            </div>
+            <button
+              id="compare-button"
+              class="text-button"
+              title="Hold to see and hear the loaded preset"
+            >
+              Hold to compare <span>↔</span>
+            </button>
+          </div>
+          <section class="stage" aria-label="Interactive sound sculpture">
+            <div class="stage-coordinate top-left">
+              <span class="crosshair">+</span>
+              <span id="view-label">PERSPECTIVE</span>
+            </div>
+            <div class="stage-coordinate top-right">
+              <span class="state-dot"></span
+              ><span id="stage-state">STATIC FORM</span>
+            </div>
+            <canvas
+              id="sculpture"
+              aria-label="Three-dimensional sound sculpture. Drag to rotate; scroll to zoom; double-click to reset."
+              tabindex="0"
+            ></canvas>
+            <div class="stage-coordinate bottom-left">
+              <span id="note-label">E3</span
+              ><span class="coordinate-separator">/</span
+              ><span id="pitch-label">165 Hz</span>
+            </div>
+            <div class="stage-tools">
+              <button id="front-view" class="text-button">Front</button
+              ><button
+                id="reset-view"
+                class="icon-button"
+                aria-label="Reset sculpture view"
+                title="Reset view"
+              >
+                ⌖
+              </button>
+            </div>
+            <span class="stage-instruction"
+              >DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</span
+            >
+          </section>
+          <section
+            class="timeline-section"
+            aria-label="Sound envelope and playback"
+          >
+            <div class="section-caption">
+              <span>CONTOUR <span class="caption-muted">/ ADSR</span></span
+              ><span id="duration-label">1.37 s</span>
+            </div>
+            <canvas
+              id="envelope-canvas"
+              aria-label="Amplitude envelope over time"
+            ></canvas>
+            <div class="timeline-labels">
+              <span>0.00</span
+              ><span id="envelope-segments"
+                >ATTACK — DECAY — SUSTAIN — RELEASE</span
+              ><span id="timeline-end">1.37</span>
+            </div>
+          </section>
+          <section class="preset-strip" aria-label="Factory presets">
+            <div class="preset-strip-label">
+              STARTING<br />POINTS <span>↘</span>
+            </div>
+            <div id="preset-cards" class="preset-cards"></div>
+            <button id="library-button" class="library-button">
+              <span>▤</span> My sounds <span id="saved-count">0</span>
+            </button>
+          </section>
+        </main>
+        <main id="mapping-workspace" class="mapping-workspace" hidden>
+          <div class="mapping-heading">
+            <p class="eyebrow">THE RELATIONSHIP BETWEEN</p>
+            <h1>Sound & form<span class="heading-dot">.</span></h1>
+            <p class="preset-description">
+              Make a connection. Discover a different way of seeing.
+            </p>
+          </div>
+          <div class="mapping-legend">
+            <span>SOUND PARAMETERS <small>OUTPUT</small></span
+            ><span>VISUAL PROPERTIES <small>INPUT</small></span>
+          </div>
+          <div id="mapping-scroll" class="mapping-scroll">
+            <div id="mapping-board" class="mapping-board">
+              <svg
+                id="mapping-wires"
+                aria-label="Sound to visual connections"
+              ></svg>
+              <div id="sound-nodes" class="node-column source-column"></div>
+              <div id="visual-nodes" class="node-column target-column"></div>
+            </div>
+          </div>
+          <div class="mapping-footer">
+            <span id="mapping-hint"
+              >Drag between nodes, or select a sound then a visual.</span
+            ><button id="reset-mappings" class="text-button">
+              Restore defaults ↺
+            </button>
+          </div>
+        </main>
+        <aside class="inspector" aria-label="Sound controls">
+          <div id="sound-inspector">
+            <div class="inspector-heading">
+              <span class="eyebrow">THE INSTRUMENT</span
+              ><span class="fine-print">01 — 03</span>
+            </div>
+            <div
+              class="control-tabs"
+              role="tablist"
+              aria-label="Sound parameter groups"
+            >
+              <button
+                role="tab"
+                aria-selected="true"
+                class="active"
+                data-group="source"
+              >
+                Source</button
+              ><button role="tab" aria-selected="false" data-group="contour">
+                Contour</button
+              ><button role="tab" aria-selected="false" data-group="space">
+                Space
+              </button>
+            </div>
+            <div id="parameter-controls" class="parameter-controls"></div>
+            <div class="inspector-note">
+              <span>↳</span>
+              <p id="parameter-note">
+                Change a quality. The sound updates on the next play.
+              </p>
+            </div>
+          </div>
+          <div id="route-inspector" hidden>
+            <div class="inspector-heading">
+              <span class="eyebrow">LIVE PREVIEW</span
+              ><span class="fine-print">↗</span>
+            </div>
+            <div class="mini-stage">
+              <canvas
+                id="mini-sculpture"
+                aria-label="Live preview of current mapping"
+              ></canvas>
+            </div>
+            <div id="connection-details"></div>
+          </div>
+          <div class="inspector-bottom">
+            <div class="history-actions">
+              <button
+                id="undo-button"
+                class="text-button"
+                aria-label="Undo"
+                title="Undo (⌘Z)"
+              >
+                ↶ Undo</button
+              ><button
+                id="redo-button"
+                class="text-button"
+                aria-label="Redo"
+                title="Redo (⌘⇧Z)"
+              >
+                ↷ Redo</button
+              ><button
+                id="reset-sound"
+                class="text-button"
+                title="Reset the current sound to its loaded state"
+              >
+                Reset
+              </button>
+            </div>
+            <button id="save-button" class="save-button">
+              <span>Save sound</span><span>↗</span>
+            </button>
+            <div class="file-actions">
+              <button id="import-button" class="text-button">
+                Import preset</button
+              ><span>/</span
+              ><button id="export-button" class="text-button">
+                Export JSON</button
+              ><button
+                id="wav-button"
+                class="text-button"
+                title="Render this sound as stereo WAV"
+              >
+                WAV ↓
+              </button>
+            </div>
+            <input
+              type="file"
+              id="import-file"
+              accept="application/json,.json"
+              hidden
+            />
+          </div>
+        </aside>
+      </div>
+      <footer class="transport">
+        <div class="transport-left">
+          <button id="play-button" class="play-button" aria-label="Play sound">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5 3l8 5-8 5z" />
+            </svg></button
+          ><button id="stop-button" class="icon-button" aria-label="Stop sound">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="4" y="4" width="8" height="8" rx=".5" />
+            </svg>
+          </button>
+          <div class="transport-divider"></div>
+          <button
+            id="loop-button"
+            class="text-button"
+            aria-pressed="false"
+            title="Loop sound (L)"
+          >
+            <span class="loop-symbol">↻</span> Loop</button
+          ><span class="transport-time" id="transport-time">00:00.00</span>
         </div>
-        <div class="inspector-bottom"><div class="history-actions"><button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button><button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button><button id="reset-sound" class="text-button" title="Reset the current sound to its loaded state">Reset</button></div><button id="save-button" class="save-button"><span>Save sound</span><span>↗</span></button><div class="file-actions"><button id="import-button" class="text-button">Import preset</button><span>/</span><button id="export-button" class="text-button">Export JSON</button><button id="wav-button" class="text-button" title="Render this sound as stereo WAV">WAV ↓</button></div><input type="file" id="import-file" accept="application/json,.json" hidden></div>
-      </aside>
+        <div class="transport-center">
+          <span class="keyboard-key">space</span><span>to play</span
+          ><span class="shortcut-divider">/</span
+          ><span>every sound has a shape</span>
+        </div>
+        <div class="transport-right">
+          <span id="audio-status">READY WHEN YOU ARE</span
+          ><button
+            id="mute-button"
+            class="icon-button"
+            aria-label="Mute audio"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 18 18" aria-hidden="true">
+              <path
+                d="M3 7h3l4-3v10l-4-3H3zM13 6q4 3 0 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.2"
+              />
+            </svg>
+          </button>
+        </div>
+      </footer>
     </div>
-    <footer class="transport"><div class="transport-left"><button id="play-button" class="play-button" aria-label="Play sound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l8 5-8 5z"/></svg></button><button id="stop-button" class="icon-button" aria-label="Stop sound"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx=".5"/></svg></button><div class="transport-divider"></div><button id="loop-button" class="text-button" aria-pressed="false" title="Loop sound (L)"><span class="loop-symbol">↻</span> Loop</button><span class="transport-time" id="transport-time">00:00.00</span></div><div class="transport-center"><span class="keyboard-key">space</span><span>to play</span><span class="shortcut-divider">/</span><span>every sound has a shape</span></div><div class="transport-right"><span id="audio-status">READY WHEN YOU ARE</span><button id="mute-button" class="icon-button" aria-label="Mute audio" aria-pressed="false"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h3l4-3v10l-4-3H3zM13 6q4 3 0 6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button></div></footer>
-  </div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <dialog id="save-dialog"><form method="dialog" id="save-form"><p class="eyebrow">KEEP AN EXPLORATION</p><h2>Give it a name.</h2><label for="save-name">Sound name</label><input id="save-name" maxlength="60" required autocomplete="off"><p class="dialog-description">Sound settings and connections are saved together in this browser. Export JSON to keep a portable copy.</p><div class="dialog-actions"><button type="button" class="text-button" data-close-dialog="save-dialog">Cancel</button><button type="submit" class="solid-button">Save sound ↗</button></div></form></dialog>
-  <dialog id="library-dialog"><div class="dialog-top"><span class="eyebrow">YOUR EXPLORATIONS</span><button class="icon-button" aria-label="Close library" data-close-dialog="library-dialog">×</button></div><h2>My sounds.</h2><div id="library-list"></div></dialog>
-  <dialog id="help-dialog"><div class="dialog-top"><span class="eyebrow">SOUND / FORM — STUDY 001</span><button class="icon-button" aria-label="Close help" data-close-dialog="help-dialog">×</button></div><h2>A sound you can see.</h2><p>Begin with Origin: a pure tone drawn as a single white line. Raise its pitch and the line becomes thicker. Add harmonics, noise, contour, and space to discover a more complex form.</p><p>The whole sculpture stays visible in silence. Playing the sound sends a light through it; delay leaves repeated impressions. Drag the sculpture to rotate it.</p><p>Connections define your own visual language. Drag or click between a sound parameter and a visual property. Select a line to adjust its strength, curve, inversion, and smoothing.</p><div class="shortcut-list"><span>Play / retrigger</span><kbd>Space</kbd><span>Stop</span><kbd>Esc</kbd><span>Loop</span><kbd>L</kbd><span>Undo / redo</span><kbd>⌘ Z / ⌘ ⇧ Z</kbd><span>Reset view</span><kbd>Double click</kbd></div><p class="dialog-description">A native browser instrument. Import accepts Sound / Form JSON presets. DAW and third-party instrument formats are not supported in this version. Audio settings apply on the next trigger; sculpture edits appear immediately. No microphone or recording uploads.</p></dialog>
-  <script type="module" src="./src/app.js"></script>
-</body>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="save-dialog">
+      <form method="dialog" id="save-form">
+        <p class="eyebrow">KEEP AN EXPLORATION</p>
+        <h2>Give it a name.</h2>
+        <label for="save-name">Sound name</label
+        ><input id="save-name" maxlength="60" required autocomplete="off" />
+        <p class="dialog-description">
+          Sound settings and connections are saved together in this browser.
+          Export JSON to keep a portable copy.
+        </p>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="text-button"
+            data-close-dialog="save-dialog"
+          >
+            Cancel</button
+          ><button type="submit" class="solid-button">Save sound ↗</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="library-dialog">
+      <div class="dialog-top">
+        <span class="eyebrow">YOUR EXPLORATIONS</span
+        ><button
+          class="icon-button"
+          aria-label="Close library"
+          data-close-dialog="library-dialog"
+        >
+          ×
+        </button>
+      </div>
+      <h2>My sounds.</h2>
+      <div id="library-list"></div>
+    </dialog>
+    <dialog id="help-dialog">
+      <div class="dialog-top">
+        <span class="eyebrow">SOUND / FORM — STUDY 001</span
+        ><button
+          class="icon-button"
+          aria-label="Close help"
+          data-close-dialog="help-dialog"
+        >
+          ×
+        </button>
+      </div>
+      <h2>A sound you can see.</h2>
+      <p>
+        Begin with Origin: a pure tone drawn as a single white line. Raise its
+        pitch and the line becomes thicker. Add harmonics, noise, contour, and
+        space to discover a more complex form.
+      </p>
+      <p>
+        The whole sculpture stays visible in silence. Playing the sound sends a
+        light through it; delay leaves repeated impressions. Drag the sculpture
+        to rotate it.
+      </p>
+      <p>
+        Connections define your own visual language. Drag or click between a
+        sound parameter and a visual property. Select a line to adjust its
+        strength, curve, inversion, and smoothing.
+      </p>
+      <div class="shortcut-list">
+        <span>Play / retrigger</span><kbd>Space</kbd><span>Stop</span
+        ><kbd>Esc</kbd><span>Loop</span><kbd>L</kbd><span>Undo / redo</span
+        ><kbd>⌘ Z / ⌘ ⇧ Z</kbd><span>Reset view</span><kbd>Double click</kbd>
+      </div>
+      <p class="dialog-description">
+        A native browser instrument. Import accepts Sound / Form JSON presets.
+        DAW and third-party instrument formats are not supported in this
+        version. Audio settings apply on the next trigger; sculpture edits
+        appear immediately. No microphone or recording uploads.
+      </p>
+    </dialog>
+    <script type="module" src="./src/app.js"></script>
+  </body>
 </html>

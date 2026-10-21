@@ -20,7 +20,7 @@ Open http://localhost:5177. Run the automated checks with `npm test` (Node 20+).
 - Space / Play triggers the current sound; L toggles looping; Escape stops. Undo / redo uses Command/Ctrl Z and Shift Command/Ctrl Z.
 - Drag to orbit; scroll to zoom; double-click to reset. Front gives an unrotated view.
 - The complete sculpture stays visible when paused. Playback highlights the form over time. Delay produces repeated impressions; reverb adds diffuse structure.
-- Connections supports drag or click between endpoints. Select a line for strength, response curve, inversion, smoothing, or disconnection. Negative strengths subtract before the target is clamped.
+- Connections supports drag or click between endpoints. Select a line to audition its source value and adjust strength, response curve, inversion, smoothing, or disconnection. Negative strengths subtract before the target is clamped.
 - Save sound stores sound parameters and mappings together in this browser. JSON import/export is portable. WAV renders a stereo sound including delay and reverb.
 
 ## Architecture
