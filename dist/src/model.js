@@ -469,7 +469,7 @@ export function resolveMappings(params, routes) {
 }
 export function validateDocument(input) {
   if (!input || input.schema !== SCHEMA)
-    throw new Error("This file is not a Sound / Form v1 preset.");
+    throw new Error("This file is not a Sound/Sculpt v1 preset.");
   if (
     !input.params ||
     !Array.isArray(input.routes) ||

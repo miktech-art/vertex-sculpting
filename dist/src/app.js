@@ -497,7 +497,7 @@ const filename = (name) =>
 function downloadJSON(doc = store.document) {
   download(
     new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }),
-    `${filename(doc.name)}.soundform.json`,
+    `${filename(doc.name)}.soundsculpt.json`,
   );
   toast("Sound and connections exported");
 }

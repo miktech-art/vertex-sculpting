@@ -1,4 +1,4 @@
-# Sound / Form
+# Sound/Sculpt
 
 A native browser instrument for exploring sound → visual mappings. Version 0.3.
 
@@ -118,3 +118,5 @@ Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy,
 ## Expanded delay (v0.7.1)
 
 The shared `src/delay.js` response stretches repeat decay by three times: actual audio feedback is the cube root of the stored Feedback control value. The first repeat level and delay interval stay unchanged. This produces roughly 2–3 times as many audible/visible repeats at nonzero feedback, up to 30. Zero feedback still produces one repeat. Live audio, offline WAV tail length, and sculpture copies use the same decay and threshold; saved parameter values and mappings are preserved.
+
+The app is named Sound/Sculpt. The original preset schema and browser storage key remain compatible with earlier Sound / Form versions.
