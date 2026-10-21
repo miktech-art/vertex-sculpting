@@ -15,6 +15,7 @@ import {
 } from "../model.js";
 
 const TAU = Math.PI * 2;
+const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
 const hash = (i, j = 0) => {
   let n = Math.imul(i + 171, 374761393) ^ Math.imul(j + 439, 668265263);
   n = Math.imul(n ^ (n >>> 13), 1274126177);
@@ -445,7 +446,7 @@ export class SculptureRenderer {
           c.beginPath();
           let started = false;
           for (const pt of pts) {
-            if (Math.abs(pt.u - u) > 0.055) {
+            if (Math.abs(pt.u - u) > PRESENT_WINDOW_HALF_WIDTH) {
               started = false;
               continue;
             }
