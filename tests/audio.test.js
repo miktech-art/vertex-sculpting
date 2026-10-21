@@ -55,6 +55,7 @@ class Node {
     this.startTime = time;
   }
   stop(time) {
+    this.stopCalls = (this.stopCalls ?? 0) + 1;
     this.stopTime = time;
   }
   setPeriodicWave(wave) {
@@ -141,10 +142,11 @@ test("the engine schedules complete ADSR events and cleans every owned audio nod
     );
     assert.equal(oscillators.length, 2);
     assert.equal(oscillators[0].frequency.value, preset.params.pitch);
-    assert.ok(event.sources.every((n) => n.stopTime > event.start));
+    assert.ok(event.sources.every((n) => !n.stopCalls));
     engine.disposeVoice(event);
     assert.equal(engine.voices.size, 0);
     assert.ok(event.nodes.every((n) => n.disconnected));
+    assert.ok(event.sources.every((n) => n.stopCalls === 1));
   }
 });
 test("effects only create feedback loops when delay is enabled", async () => {
@@ -197,7 +199,7 @@ test("gesture voices sustain until released and then have a finite effect tail",
   assert.equal(voice.released, true);
   assert.ok(Number.isFinite(voice.total) && voice.total > voice.duration);
   assert.equal(voice.envelope.gain.events.at(-1).value, 0);
-  assert.ok(voice.sources.every((source) => source.stopTime > engine.now()));
+  assert.ok(voice.sources.every((source) => !source.stopCalls));
   engine.disposeVoice(voice);
 });
 test("WAV export interleaves stereo samples with a valid PCM header", async () => {
@@ -230,6 +232,7 @@ test("release edits apply to held voices at gate-off without altering already sc
   engine.setRelease(2.5);
   assert.equal(held.params.release, 2.5);
   assert.equal(finite.params.release, original);
+  engine.context.currentTime += 1;
   engine.release(held);
   assert.equal(held.envelope.gain.events.at(-1).time, engine.now() + 2.5);
   engine.disposeVoice(held);
@@ -256,5 +259,128 @@ test("audio routes a resonant highpass and lowpass in series and supports live b
   assert.ok(
     Object.values(voice.filters).every((n) => n.Q.events.at(-1).value === 12),
   );
+  engine.disposeVoice(voice);
+});
+
+test("all source and effect edits update the existing voice at the current clock without retriggering", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger({ ...BASE, hold: 2 });
+  const start = voice.start,
+    oscillators = [...voice.pitchedSources],
+    oldWave = oscillators[0].wave;
+  engine.context.currentTime += 0.5;
+  const now = engine.now();
+  engine.update({
+    ...voice.params,
+    pitch: 440,
+    volume: 0.6,
+    harmonics: 0.85,
+    detune: 15,
+    width: 0.8,
+    noise: 0.2,
+    drive: 0.7,
+    motion: 0.5,
+    rate: 7,
+    delayMix: 0.3,
+    delayTime: 0.6,
+    feedback: 0.5,
+    reverbMix: 0.4,
+    reverbDecay: 3,
+  });
+  assert.equal(voice.start, start);
+  assert.equal(engine.voices.size, 1);
+  assert.deepEqual(voice.pitchedSources, oscillators);
+  assert.notEqual(oscillators[0].wave, oldWave);
+  assert.ok(
+    oscillators.every((osc) => osc.startTime === start && !osc.stopCalls),
+  );
+  assert.equal(voice.level.gain.events.at(-1).value, 0.6);
+  assert.equal(oscillators[0].frequency.events.at(-1).time, now);
+  assert.equal(voice.tones[0].pan.pan.events.at(-1).value, -0.8 * 0.85);
+  assert.equal(voice.noise.gain.gain.events.at(-1).value, 0.2 * 0.65);
+  assert.equal(voice.motion.source.frequency.events.at(-1).value, 7);
+  assert.equal(voice.delay.node.delayTime.events.at(-1).value, 0.6);
+  assert.equal(voice.delay.feedback.gain.events.at(-1).value, 0.5);
+  assert.equal(voice.reverb.wet.gain.events.at(-1).value, 0.4);
+  assert.equal(voice.drive.shaper.curve.length, 2048);
+  engine.disposeVoice(voice);
+});
+test("ADSR edits reshape the envelope at elapsed time and can extend it without restarting sources", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger({
+      ...BASE,
+      attack: 0.1,
+      decay: 0.2,
+      hold: 0.5,
+      release: 0.3,
+    });
+  const start = voice.start;
+  engine.context.currentTime = start + 0.6;
+  const before = voice.envelope.gain.events.length;
+  engine.update({ ...voice.params, hold: 1.5, sustain: 0.4 });
+  assert.equal(voice.start, start);
+  assert.ok(Math.abs(voice.duration - 2.1) < 1e-10);
+  const recent = voice.envelope.gain.events.slice(before);
+  assert.equal(recent[0].type, "hold");
+  assert.equal(recent[1].value, 0.4);
+  assert.ok(recent.every((e) => e.time >= start + 0.6));
+  assert.ok(voice.sources.every((s) => !s.stopCalls));
+  assert.equal(voice.envelope.gain.events.at(-1).value, 0);
+  assert.ok(
+    Math.abs(voice.envelope.gain.events.at(-1).time - (start + 2.1)) < 1e-9,
+  );
+  engine.disposeVoice(voice);
+});
+test("drive edits replace and crossfade shapers instead of reassigning a curve or restarting oscillators", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger(BASE),
+    original = voice.drive;
+  engine.update({ ...voice.params, drive: 0.8 });
+  assert.notEqual(voice.drive.shaper, original.shaper);
+  assert.equal(original.gate.gain.events.at(-1).value, 0);
+  assert.equal(voice.drive.gate.gain.events.at(-1).value, 1);
+  assert.ok(voice.pitchedSources.every((s) => s.startTime === voice.start));
+  engine.disposeVoice(voice);
+  assert.equal(voice.tasks.size, 0);
+});
+test("reverb decay crossfades impulse banks on the running voice", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger(PRESETS[0].params),
+    old = voice.reverb.active;
+  engine.context.currentTime += 0.2;
+  engine.update({ ...voice.params, reverbDecay: 3.5 });
+  assert.notEqual(voice.reverb.active, old);
+  assert.equal(voice.reverb.banks[old].gain.gain.events.at(-1).value, 0);
+  assert.equal(
+    voice.reverb.banks[voice.reverb.active].gain.gain.events.at(-1).value,
+    1,
+  );
+  assert.equal(voice.reverb.decay, "3.5");
+  engine.disposeVoice(voice);
+});
+
+test("editing effects during a loop tail neither restarts ended envelopes nor keeps moving disposal into the future", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger({
+      ...BASE,
+      release: 0.05,
+      reverbMix: 0.2,
+      reverbDecay: 2,
+    });
+  const originalDuration = voice.duration,
+    sourceEnd = voice.sourceEnd;
+  engine.context.currentTime = voice.start + originalDuration + 0.5;
+  const events = voice.envelope.gain.events.length;
+  engine.update({ ...voice.params, hold: 2, volume: 0.2, delayMix: 0.2 });
+  assert.equal(voice.envelope.gain.events.length, events);
+  assert.equal(voice.duration, originalDuration);
+  assert.equal(voice.sourceEnd, sourceEnd);
+  const total = voice.total;
+  engine.context.currentTime += 0.3;
+  engine.update({ ...voice.params, volume: 0.4 });
+  assert.equal(voice.total, total);
+  assert.ok(voice.output.connections.includes(voice.level));
+  assert.ok(voice.reverb.wet.connections.includes(voice.level));
+  assert.ok(voice.delay.wet.connections.includes(voice.level));
   engine.disposeVoice(voice);
 });

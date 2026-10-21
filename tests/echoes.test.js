@@ -26,7 +26,7 @@ test("echo starts follow exact delay intervals on the same longitudinal time sca
       copy.gain,
       copy.index === 0 ? 1 : 0.4 * 0.5 ** (copy.index - 1),
     );
-    assert.ok(Math.abs(copy.offset.y) <= copy.offset.x * 0.1);
+    assert.equal(copy.offset.y, copy.index * 32);
   }
   assert.equal(layout.duration, 2 + layout.copies.at(-1).time);
   assert.equal(layout.length, 500 + layout.copies.at(-1).offset.x);
@@ -145,5 +145,29 @@ test("viewing scale remains fixed on a delay edit until Fit time is requested", 
   assert.equal(renderer.zoom, zoom);
   assert.deepEqual(renderer.pan, pan);
   renderer.fitTimeline();
-  assert.ok(renderer.zoom < zoom);
+  assert.ok(renderer.zoom <= zoom);
+  assert.notDeepEqual(renderer.pan, pan);
+});
+
+test("transverse spacing grows with the sound body and Fit time frames the full stack", () => {
+  const params = {
+    ...PRESETS[0].params,
+    delayMix: 0.5,
+    feedback: 0.6,
+    delayTime: 0.2,
+  };
+  const g = buildGeometry(params, resolveMappings(params, DEFAULT_ROUTES));
+  assert.ok(g.echoLayout.copies[1].offset.y >= 50);
+  const renderer = Object.assign(Object.create(SculptureRenderer.prototype), {
+    geometry: g,
+    size: { width: 1200, height: 700 },
+  });
+  renderer.fitTimeline();
+  const low = renderer.project({ x: 0, y: g.bounds.minY, z: 0 });
+  const high = renderer.project(
+    { x: 0, y: g.bounds.maxY, z: 0 },
+    g.echoLayout.copies.at(-1).offset,
+  );
+  assert.ok(high.y - low.y <= 700 * 0.72 + 0.01);
+  assert.ok(low.y > 30 && high.y < 670);
 });

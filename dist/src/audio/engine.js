@@ -1,6 +1,8 @@
 import { filterSettings, harmonicAmplitude } from "../spectral/filter.js";
 import { duration, tailDuration, clamp } from "../model.js";
+import { voiceEnvelopeAt, futureEnvelope } from "./live-envelope.js";
 
+const RAMP = 0.02;
 function createMaster(context, level = 0.72) {
   const master = context.createGain(),
     limiter = context.createDynamicsCompressor();
@@ -13,14 +15,23 @@ function createMaster(context, level = 0.72) {
   master.connect(limiter).connect(context.destination);
   return master;
 }
+function driveCurve(amount) {
+  const curve = new Float32Array(2048),
+    k = 1 + amount * 18;
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = amount < 0.001 ? x : Math.tanh(x * k) / Math.tanh(k);
+  }
+  return curve;
+}
 
-// Adapter contract: trigger(params) -> {start, duration, total, params}; stop(); now().
-// A future external instrument adapter can implement the same contract.
+// Future external audio adapters can implement trigger/update/stop with the same clock.
 export class NativeAudioEngine {
   constructor() {
     this.context = null;
     this.voices = new Set();
     this.impulses = new Map();
+    this.waves = new Map();
     this.muted = false;
   }
   async init() {
@@ -38,255 +49,466 @@ export class NativeAudioEngine {
   setMuted(value) {
     this.muted = value;
     if (this.master)
-      this.master.gain.setTargetAtTime(value ? 0 : 0.72, this.now(), 0.02);
+      this.master.gain.setTargetAtTime(value ? 0 : 0.72, this.now(), RAMP);
   }
   impulse(seconds) {
     const c = this.context,
-      key = seconds.toFixed(2);
+      key = seconds.toFixed(1);
     if (this.impulses.has(key)) return this.impulses.get(key);
-    const n = Math.ceil(c.sampleRate * seconds),
-      b = c.createBuffer(2, n, c.sampleRate);
+    const n = Math.ceil(c.sampleRate * Number(key)),
+      buffer = c.createBuffer(2, n, c.sampleRate);
     let seed = 43;
     for (let ch = 0; ch < 2; ch++) {
-      const data = b.getChannelData(ch);
+      const data = buffer.getChannelData(ch);
       for (let i = 0; i < n; i++) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
         data[i] = ((seed / 4294967296) * 2 - 1) * (1 - i / n) ** 2.8 * 0.7;
       }
     }
-    this.impulses.set(key, b);
-    if (this.impulses.size > 10)
+    this.impulses.set(key, buffer);
+    if (this.impulses.size > 20)
       this.impulses.delete(this.impulses.keys().next().value);
-    return b;
+    return buffer;
   }
-  async trigger(params, { held = false } = {}) {
-    await this.init();
-    const p = { ...params },
-      c = this.context,
-      start = c.currentTime + 0.015,
-      nodes = [],
-      sources = [],
-      pitchedSources = [];
-    const own = (n) => {
-      nodes.push(n);
-      return n;
-    };
-    const input = own(c.createGain()),
-      drive = own(c.createWaveShaper()),
-      filter = own(c.createBiquadFilter()),
-      highpass = own(c.createBiquadFilter()),
-      env = own(c.createGain()),
-      amp = own(c.createGain()),
-      output = own(c.createGain());
-    const curve = new Float32Array(2048),
-      k = 1 + p.drive * 18;
-    for (let i = 0; i < curve.length; i++) {
-      const x = (i / (curve.length - 1)) * 2 - 1;
-      curve[i] = p.drive < 0.001 ? x : Math.tanh(x * k) / Math.tanh(k);
-    }
-    drive.curve = curve;
-    drive.oversample = "2x";
-    filter.type = "lowpass";
-    const settings = filterSettings(p, c.sampleRate);
-    filter.frequency.value = settings.high;
-    filter.Q.value = settings.resonance;
-    highpass.type = "highpass";
-    highpass.frequency.value = settings.low;
-    highpass.Q.value = settings.resonance;
-    input
-      .connect(drive)
-      .connect(highpass)
-      .connect(filter)
-      .connect(env)
-      .connect(amp)
-      .connect(output);
-    output.gain.value = 0.52;
+  wave(amount) {
+    const key = amount.toFixed(3);
+    if (this.waves.has(key)) return this.waves.get(key);
     const real = new Float32Array(97),
       imag = new Float32Array(97);
     imag[1] = 1;
-    for (let h = 2; h < 97; h++) imag[h] = harmonicAmplitude(h, p.harmonics);
-    const wave = c.createPeriodicWave(real, imag);
-    for (let v = 0; v < 2; v++) {
-      const osc = own(c.createOscillator()),
+    for (let h = 2; h < 97; h++) imag[h] = harmonicAmplitude(h, amount);
+    const wave = this.context.createPeriodicWave(real, imag);
+    this.waves.set(key, wave);
+    if (this.waves.size > 32) this.waves.delete(this.waves.keys().next().value);
+    return wave;
+  }
+  defer(v, fn, ms) {
+    const timer = setTimeout(() => {
+      v.tasks.delete(timer);
+      if (this.voices.has(v) && !v.stopping) fn();
+    }, ms);
+    v.tasks.add(timer);
+    return timer;
+  }
+  async trigger(params, { held = false } = {}) {
+    await this.init();
+    const c = this.context,
+      p = { ...params },
+      start = c.currentTime + 0.015;
+    const v = {
+      start,
+      params: p,
+      nodes: [],
+      sources: [],
+      pitchedSources: [],
+      tones: [],
+      tasks: new Set(),
+      held,
+      released: false,
+      releaseAt: null,
+      releaseLevel: 0,
+      stopping: false,
+    };
+    v.own = (node) => {
+      v.nodes.push(node);
+      return node;
+    };
+    const own = v.own;
+    v.input = own(c.createGain());
+    v.envelope = own(c.createGain());
+    v.level = own(c.createGain());
+    v.amp = own(c.createGain());
+    v.output = own(c.createGain());
+    v.filters = {
+      low: own(c.createBiquadFilter()),
+      high: own(c.createBiquadFilter()),
+    };
+    v.filters.low.type = "highpass";
+    v.filters.high.type = "lowpass";
+    const settings = filterSettings(p, c.sampleRate);
+    v.filters.low.frequency.value = settings.low;
+    v.filters.high.frequency.value = settings.high;
+    for (const filter of Object.values(v.filters))
+      filter.Q.value = settings.resonance;
+    v.drive = this.makeDrive(v, p.drive);
+    v.drive.gate.gain.value = 1;
+    v.filters.low
+      .connect(v.filters.high)
+      .connect(v.envelope)
+      .connect(v.amp)
+      .connect(v.output)
+      .connect(v.level)
+      .connect(this.master);
+    v.output.gain.value = 0.52;
+    v.level.gain.value = p.volume;
+    v.amp.gain.value = 1 - p.motion / 2;
+    const wave = this.wave(p.harmonics);
+    for (let i = 0; i < 2; i++) {
+      const sign = i ? 1 : -1,
+        osc = own(c.createOscillator()),
         gain = own(c.createGain()),
         pan = own(c.createStereoPanner());
       osc.setPeriodicWave(wave);
       osc.frequency.value = p.pitch;
-      osc.detune.value = ((v ? 1 : -1) * p.detune) / 2;
+      osc.detune.value = (sign * p.detune) / 2;
       gain.gain.value = (1 - p.noise) * 0.5;
-      pan.pan.value = (v ? 1 : -1) * p.width * 0.85;
-      osc.connect(gain).connect(pan).connect(input);
+      pan.pan.value = sign * p.width * 0.85;
+      osc.connect(gain).connect(pan).connect(v.input);
       osc.start(start);
-      sources.push(osc);
-      pitchedSources.push(osc);
+      v.sources.push(osc);
+      v.pitchedSources.push(osc);
+      v.tones.push({ osc, gain, pan, sign });
     }
-    if (p.noise > 0) {
-      const noise = own(c.createBufferSource()),
-        gain = own(c.createGain()),
-        buf = c.createBuffer(2, c.sampleRate * 2, c.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const a = buf.getChannelData(ch);
-        for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1;
-      }
-      noise.buffer = buf;
-      noise.loop = true;
-      gain.gain.value = p.noise * 0.65;
-      noise.connect(gain).connect(input);
-      noise.start(start);
-      sources.push(noise);
-    }
-    const gate = p.attack + p.decay + p.hold,
-      end = duration(p);
-    env.gain.setValueAtTime(0, start);
-    env.gain.linearRampToValueAtTime(p.volume, start + p.attack);
-    env.gain.linearRampToValueAtTime(
-      p.volume * p.sustain,
-      start + p.attack + p.decay,
-    );
+    if (p.noise > 0) this.ensureNoise(v, start);
+    if (p.motion > 0) this.ensureMotion(v, start);
+    if (p.delayMix > 0) this.ensureDelay(v, true);
+    if (p.reverbMix > 0) this.ensureReverb(v, true);
+    const gain = v.envelope.gain;
+    gain.setValueAtTime(0, start);
+    gain.linearRampToValueAtTime(1, start + p.attack);
+    gain.linearRampToValueAtTime(p.sustain, start + p.attack + p.decay);
     if (!held) {
-      env.gain.setValueAtTime(p.volume * p.sustain, start + gate);
-      env.gain.linearRampToValueAtTime(0, start + end);
+      gain.setValueAtTime(p.sustain, start + p.attack + p.decay + p.hold);
+      gain.linearRampToValueAtTime(0, start + duration(p));
     }
-    amp.gain.value = 1 - p.motion / 2;
-    if (p.motion > 0) {
-      const lfo = own(c.createOscillator()),
-        depth = own(c.createGain());
-      lfo.frequency.value = p.rate;
-      depth.gain.value = p.motion / 2;
-      lfo.connect(depth).connect(amp.gain);
-      lfo.start(start);
-      sources.push(lfo);
-    }
-    output.connect(this.master);
-    if (p.delayMix > 0) {
-      const delay = own(c.createDelay(1)),
-        feedback = own(c.createGain()),
-        wet = own(c.createGain());
-      delay.delayTime.value = p.delayTime;
-      feedback.gain.value = p.feedback;
-      wet.gain.value = p.delayMix;
-      output.connect(delay);
-      delay.connect(feedback).connect(delay);
-      delay.connect(wet).connect(this.master);
-    }
-    if (p.reverbMix > 0) {
-      const convolver = own(c.createConvolver()),
-        wet = own(c.createGain());
-      convolver.buffer = this.impulse(p.reverbDecay);
-      wet.gain.value = p.reverbMix;
-      output.connect(convolver).connect(wet).connect(this.master);
-    }
-    if (!held) for (const source of sources) source.stop(start + end + 0.03);
-    const voice = {
-      start,
-      duration: held ? Infinity : end,
-      total: held ? Infinity : tailDuration(p),
-      params: p,
-      nodes,
-      sources,
-      pitchedSources,
-      envelope: env,
-      filters: { low: highpass, high: filter },
-      held,
-      released: false,
-    };
-    this.voices.add(voice);
-    if (!held)
-      voice.timer = setTimeout(
-        () => this.disposeVoice(voice),
-        (voice.total + 0.3) * 1000,
-      );
-    return voice;
+    this.voices.add(v);
+    this.refreshLifetime(v);
+    return v;
   }
-  setPitch(hz) {
-    const pitch = clamp(hz, 55, 1760),
-      now = this.now();
-    for (const voice of this.voices) {
-      if (voice.released) continue;
-      for (const source of voice.pitchedSources)
-        source.frequency.setTargetAtTime(pitch, now, 0.03);
-      voice.params.pitch = pitch;
-    }
+  makeDrive(v, amount) {
+    // WaveShaper.curve cannot be reassigned portably. Crossfade replacement nodes.
+    const shaper = v.own(this.context.createWaveShaper()),
+      gate = v.own(this.context.createGain());
+    shaper.curve = driveCurve(amount);
+    shaper.oversample = "2x";
+    gate.gain.value = 0;
+    v.input.connect(shaper).connect(gate).connect(v.filters.low);
+    return { shaper, gate };
   }
-  setFilter(params) {
-    const now = this.now();
-    for (const voice of this.voices) {
-      if (voice.released) continue;
-      const settings = filterSettings(params, this.context.sampleRate);
-      voice.filters.low.frequency.setTargetAtTime(settings.low, now, 0.025);
-      voice.filters.high.frequency.setTargetAtTime(settings.high, now, 0.025);
-      for (const node of Object.values(voice.filters))
-        node.Q.setTargetAtTime(settings.resonance, now, 0.025);
-      Object.assign(voice.params, {
-        cutoffLow: settings.low,
-        cutoff: settings.high,
-        resonance: settings.resonance,
-      });
-    }
-  }
-  setRelease(seconds) {
-    for (const voice of this.voices)
-      if (voice.held) voice.params.release = clamp(seconds, 0.02, 3);
-  }
-  release(voice) {
-    if (!voice || !voice.held || !this.voices.has(voice)) return;
+  replaceDrive(v) {
     const now = this.now(),
-      p = voice.params,
-      elapsed = Math.max(0, now - voice.start),
-      gain = voice.envelope.gain;
-    if (typeof gain.cancelAndHoldAtTime === "function")
-      gain.cancelAndHoldAtTime(now);
+      before = v.drive,
+      next = this.makeDrive(v, v.params.drive);
+    v.drive = next;
+    before.gate.gain.setTargetAtTime(0, now, RAMP);
+    next.gate.gain.setTargetAtTime(1, now, RAMP);
+    this.defer(
+      v,
+      () => {
+        try {
+          v.input.disconnect(before.shaper);
+        } catch {}
+        for (const node of [before.shaper, before.gate]) {
+          node.disconnect();
+          const index = v.nodes.indexOf(node);
+          if (index >= 0) v.nodes.splice(index, 1);
+        }
+      },
+      120,
+    );
+    v.lastDrive = now;
+  }
+  queueDrive(v) {
+    if (v.driveTask) {
+      clearTimeout(v.driveTask);
+      v.tasks.delete(v.driveTask);
+    }
+    const wait = Math.max(0, 0.04 - (this.now() - (v.lastDrive ?? -Infinity)));
+    if (!wait) this.replaceDrive(v);
+    else
+      v.driveTask = this.defer(
+        v,
+        () => {
+          v.driveTask = null;
+          this.replaceDrive(v);
+        },
+        wait * 1000,
+      );
+  }
+  ensureNoise(v, start = this.now()) {
+    if (v.noise) return;
+    if (!this.noiseBuffer) {
+      const c = this.context,
+        b = c.createBuffer(2, c.sampleRate * 2, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = b.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      this.noiseBuffer = b;
+    }
+    const source = v.own(this.context.createBufferSource()),
+      gain = v.own(this.context.createGain());
+    source.buffer = this.noiseBuffer;
+    source.loop = true;
+    gain.gain.value = start === v.start ? v.params.noise * 0.65 : 0;
+    source.connect(gain).connect(v.input);
+    source.start(start);
+    v.sources.push(source);
+    v.noise = { source, gain };
+  }
+  ensureMotion(v, start = this.now()) {
+    if (v.motion) return;
+    const source = v.own(this.context.createOscillator()),
+      depth = v.own(this.context.createGain());
+    source.frequency.value = v.params.rate;
+    depth.gain.value = start === v.start ? v.params.motion / 2 : 0;
+    source.connect(depth).connect(v.amp.gain);
+    source.start(start);
+    v.sources.push(source);
+    v.motion = { source, depth };
+  }
+  ensureDelay(v, initial = false) {
+    if (v.delay) return;
+    const node = v.own(this.context.createDelay(1)),
+      feedback = v.own(this.context.createGain()),
+      wet = v.own(this.context.createGain());
+    node.delayTime.value = v.params.delayTime;
+    feedback.gain.value = v.params.feedback;
+    wet.gain.value = initial ? v.params.delayMix : 0;
+    v.output.connect(node);
+    node.connect(feedback).connect(node);
+    node.connect(wet).connect(v.level);
+    v.delay = { node, feedback, wet };
+  }
+  ensureReverb(v, initial = false) {
+    if (v.reverb) return;
+    const wet = v.own(this.context.createGain()),
+      banks = [];
+    wet.gain.value = initial ? v.params.reverbMix : 0;
+    wet.connect(v.level);
+    for (let i = 0; i < 2; i++) {
+      const convolver = v.own(this.context.createConvolver()),
+        gain = v.own(this.context.createGain());
+      convolver.buffer = this.impulse(v.params.reverbDecay);
+      gain.gain.value = i ? 0 : 1;
+      v.output.connect(convolver).connect(gain).connect(wet);
+      banks.push({ convolver, gain });
+    }
+    v.reverb = {
+      wet,
+      banks,
+      active: 0,
+      decay: v.params.reverbDecay.toFixed(1),
+      lastChange: this.now(),
+    };
+  }
+  queueReverb(v) {
+    if (!v.reverb || v.reverb.decay === v.params.reverbDecay.toFixed(1)) return;
+    if (v.reverbTask) {
+      clearTimeout(v.reverbTask);
+      v.tasks.delete(v.reverbTask);
+    }
+    const swap = () => {
+      const effect = v.reverb,
+        previous = effect.banks[effect.active],
+        next = effect.banks[1 - effect.active],
+        now = this.now();
+      next.convolver.buffer = this.impulse(v.params.reverbDecay);
+      previous.gain.gain.setTargetAtTime(0, now, RAMP);
+      next.gain.gain.setTargetAtTime(1, now, RAMP);
+      effect.active = 1 - effect.active;
+      effect.decay = v.params.reverbDecay.toFixed(1);
+      effect.lastChange = now;
+    };
+    const wait = Math.max(0, 0.12 - (this.now() - v.reverb.lastChange));
+    if (!wait) swap();
+    else
+      v.reverbTask = this.defer(
+        v,
+        () => {
+          v.reverbTask = null;
+          swap();
+        },
+        wait * 1000,
+      );
+  }
+  update(params, only = null) {
+    if (!this.context) return;
+    const now = this.now();
+    for (const v of only ? [only] : this.voices) {
+      if (v.stopping) continue;
+      const old = { ...v.params },
+        changed = (id) => old[id] !== params[id];
+      if (!Object.keys(old).some(changed)) continue;
+      const sourceAlive = v.held || now < v.start + v.duration;
+      const envelopeChanged = [
+        "attack",
+        "decay",
+        "sustain",
+        "hold",
+        "release",
+      ].some(changed);
+      const oldEnvelope = { ...old },
+        oldState = {
+          held: v.held,
+          releaseAt: v.releaseAt,
+          releaseLevel: v.releaseLevel,
+        };
+      Object.assign(v.params, params);
+      if (!sourceAlive)
+        for (const id of ["attack", "decay", "sustain", "hold", "release"])
+          v.params[id] = old[id];
+      if (changed("pitch"))
+        for (const osc of v.pitchedSources)
+          osc.frequency.setTargetAtTime(params.pitch, now, 0.03);
+      if (changed("harmonics")) {
+        const wave = this.wave(params.harmonics);
+        for (const osc of v.pitchedSources) osc.setPeriodicWave(wave);
+      }
+      for (const tone of v.tones) {
+        if (changed("detune"))
+          tone.osc.detune.setTargetAtTime(
+            (tone.sign * params.detune) / 2,
+            now,
+            RAMP,
+          );
+        if (changed("width"))
+          tone.pan.pan.setTargetAtTime(
+            tone.sign * params.width * 0.85,
+            now,
+            RAMP,
+          );
+        if (changed("noise"))
+          tone.gain.gain.setTargetAtTime((1 - params.noise) * 0.5, now, RAMP);
+      }
+      if (changed("volume"))
+        v.level.gain.setTargetAtTime(params.volume, now, RAMP);
+      if (changed("drive")) this.queueDrive(v);
+      if (["cutoffLow", "cutoff", "resonance"].some(changed)) {
+        const settings = filterSettings(params, this.context.sampleRate);
+        v.filters.low.frequency.setTargetAtTime(settings.low, now, 0.025);
+        v.filters.high.frequency.setTargetAtTime(settings.high, now, 0.025);
+        for (const filter of Object.values(v.filters))
+          filter.Q.setTargetAtTime(settings.resonance, now, 0.025);
+      }
+      if (changed("noise")) {
+        if (params.noise > 0) this.ensureNoise(v);
+        v.noise?.gain.gain.setTargetAtTime(params.noise * 0.65, now, RAMP);
+      }
+      if (changed("motion") || changed("rate")) {
+        if (params.motion > 0) this.ensureMotion(v);
+        v.amp.gain.setTargetAtTime(1 - params.motion / 2, now, RAMP);
+        v.motion?.source.frequency.setTargetAtTime(params.rate, now, RAMP);
+        v.motion?.depth.gain.setTargetAtTime(params.motion / 2, now, RAMP);
+      }
+      if (["delayMix", "delayTime", "feedback"].some(changed)) {
+        if (params.delayMix > 0) this.ensureDelay(v);
+        if (v.delay) {
+          v.delay.node.delayTime.setTargetAtTime(params.delayTime, now, 0.03);
+          v.delay.wet.gain.setTargetAtTime(params.delayMix, now, RAMP);
+          v.delay.feedback.gain.setTargetAtTime(params.feedback, now, RAMP);
+        }
+      }
+      if (["reverbMix", "reverbDecay"].some(changed)) {
+        if (params.reverbMix > 0) this.ensureReverb(v);
+        v.reverb?.wet.gain.setTargetAtTime(params.reverbMix, now, RAMP);
+        this.queueReverb(v);
+      }
+      if (envelopeChanged && sourceAlive)
+        this.reshapeEnvelope(v, now, oldEnvelope, oldState);
+      this.refreshLifetime(v, { bridge: envelopeChanged && sourceAlive });
+    }
+  }
+  reshapeEnvelope(v, now, oldParams = v.params, oldState = v) {
+    const elapsed = Math.max(0, now - v.start),
+      gain = v.envelope.gain,
+      bridge = RAMP;
+    if (gain.cancelAndHoldAtTime) gain.cancelAndHoldAtTime(now);
     else {
       gain.cancelScheduledValues(now);
-      const level =
-        elapsed < p.attack
-          ? elapsed / p.attack
-          : elapsed < p.attack + p.decay
-            ? 1 - ((1 - p.sustain) * (elapsed - p.attack)) / p.decay
-            : p.sustain;
-      gain.setValueAtTime(p.volume * level, now);
+      gain.setValueAtTime(voiceEnvelopeAt(oldParams, elapsed, oldState), now);
     }
-    gain.linearRampToValueAtTime(0, now + p.release);
-    for (const source of voice.sources) source.stop(now + p.release + 0.03);
-    voice.held = false;
-    voice.released = true;
-    voice.duration = elapsed + p.release;
-    const effectTail = tailDuration(p) - duration(p);
-    voice.total = voice.duration + effectTail;
-    voice.timer = setTimeout(
-      () => this.disposeVoice(voice),
-      (p.release + effectTail + 0.3) * 1000,
+    gain.linearRampToValueAtTime(
+      voiceEnvelopeAt(v.params, elapsed + bridge, v),
+      now + bridge,
     );
+    for (const point of futureEnvelope(v.params, elapsed + bridge, v))
+      gain.linearRampToValueAtTime(point.value, v.start + point.time);
+  }
+  refreshLifetime(v, { bridge = false } = {}) {
+    v.duration = v.held
+      ? Infinity
+      : v.releaseAt !== null
+        ? v.releaseAt + v.params.release
+        : duration(v.params);
+    v.sourceEnd = bridge
+      ? Math.max(v.duration, this.now() - v.start + RAMP)
+      : (v.sourceEnd ?? v.duration);
+    const end = v.sourceEnd;
+    v.total = v.held
+      ? Infinity
+      : end + tailDuration(v.params) - duration(v.params);
+    clearTimeout(v.timer);
+    if (!v.held)
+      v.timer = setTimeout(
+        () => this.disposeVoice(v),
+        Math.max(0, (v.start + v.total + 0.3 - this.now()) * 1000),
+      );
+  }
+  setPitch(hz) {
+    for (const v of this.voices)
+      if (!v.stopping) this.updateVoicePatch(v, { pitch: clamp(hz, 55, 1760) });
+  }
+  setFilter(params) {
+    for (const v of this.voices)
+      if (!v.stopping)
+        this.updateVoicePatch(v, {
+          cutoffLow: params.cutoffLow ?? 20,
+          cutoff: params.cutoff,
+          resonance: params.resonance,
+        });
+  }
+  setRelease(seconds) {
+    for (const v of this.voices)
+      if (v.held)
+        this.updateVoicePatch(v, { release: clamp(seconds, 0.02, 3) });
+  }
+  updateVoicePatch(v, patch) {
+    this.update({ ...v.params, ...patch }, v);
+  }
+  release(v) {
+    if (!v || !v.held || !this.voices.has(v)) return;
+    const now = this.now(),
+      elapsed = Math.max(0, now - v.start),
+      oldState = { held: true, releaseAt: null };
+    v.releaseLevel = voiceEnvelopeAt(v.params, elapsed, oldState);
+    v.releaseAt = elapsed;
+    v.held = false;
+    v.released = true;
+    this.reshapeEnvelope(v, now, v.params, oldState);
+    this.refreshLifetime(v, { bridge: true });
   }
   disposeVoice(v) {
     clearTimeout(v.timer);
-    for (const s of v.sources) {
+    for (const timer of v.tasks) clearTimeout(timer);
+    v.tasks.clear();
+    for (const source of v.sources) {
       try {
-        s.stop();
+        source.stop();
       } catch {}
     }
-    for (const n of v.nodes) {
+    for (const node of v.nodes) {
       try {
-        n.disconnect();
+        node.disconnect();
       } catch {}
     }
     this.voices.delete(v);
   }
   stop() {
     for (const v of this.voices) {
-      const now = this.now();
-      for (const n of v.nodes) {
-        if (n instanceof GainNode) n.gain.setTargetAtTime(0, now, 0.008);
-      }
+      v.stopping = true;
+      v.level.gain.setTargetAtTime(0, this.now(), 0.008);
       clearTimeout(v.timer);
       v.timer = setTimeout(() => this.disposeVoice(v), 60);
     }
   }
   async render(params) {
-    // Use the same synthesis graph through a temporary adapter and an offline context.
-    const length = Math.ceil((tailDuration(params) + 0.25) * 44100);
-    const context = new OfflineAudioContext(2, length, 44100);
-    const engine = new NativeAudioEngine();
+    const context = new OfflineAudioContext(
+        2,
+        Math.ceil((tailDuration(params) + 0.25) * 44100),
+        44100,
+      ),
+      engine = new NativeAudioEngine();
     engine.context = context;
     engine.master = createMaster(context);
     engine.init = async () => {};
@@ -296,6 +518,7 @@ export class NativeAudioEngine {
     return buffer;
   }
 }
+
 export function encodeWav(buffer) {
   const frames = buffer.length,
     channels = buffer.numberOfChannels,

@@ -161,9 +161,21 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       size: 0.35 + hash(i, 76) * 0.8,
     });
   }
+  let minY = 0,
+    maxY = 0;
+  for (const line of lines)
+    for (const point of line.points) {
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+  for (const point of particles) {
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  }
   return {
     lines,
     particles,
+    bounds: { minY, maxY },
     length,
     total,
     thickness: 0.65 + m.thickness * 4.4,
@@ -172,6 +184,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       mix: denormalize("delayMix", m.echoes),
       delay: denormalize("delayTime", m.echoSpacing),
       feedback: denormalize("feedback", m.persistence),
+      separation: Math.max(32, body * 0.7 + grain * 0.3),
     }),
     halo: m.halo,
   };
@@ -260,14 +273,19 @@ export class SculptureRenderer {
     this.yaw = 0;
     this.pitch = 0;
     const base = Math.min(this.size.width / 680, this.size.height / 180);
+    const lastY = g.echoLayout.copies.at(-1).offset.y;
     this.zoom = clamp(
-      (this.size.width * 0.85) / (g.echoLayout.length * base),
+      Math.min(
+        (this.size.width * 0.85) / (g.echoLayout.length * base),
+        (this.size.height * 0.72) /
+          ((g.bounds.maxY - g.bounds.minY + lastY + 20) * base),
+      ),
       0.02,
       1,
     );
     this.pan = {
       x: (-(g.echoLayout.length - g.length) * base * this.zoom) / 2,
-      y: 0,
+      y: (-(g.bounds.minY + g.bounds.maxY + lastY) * base * this.zoom) / 2,
     };
     this.autoFit = false;
   }

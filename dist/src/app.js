@@ -1,3 +1,4 @@
+import { installLiveRange } from "./ui/live-range.js";
 import { FilterRange, constrainCutoff } from "./ui/filter-range.js";
 import {
   PARAMETERS,
@@ -28,7 +29,6 @@ const store = new Store(),
       store.edit((doc) => Object.assign(doc.params, changes), "parameter"),
     onCommit: () => {
       store.commit();
-      if (looping) scheduleNext(true);
     },
     onScaleChange: (seconds) => {
       $("#timeline-end").textContent = `${seconds.toFixed(2)} s`;
@@ -99,6 +99,7 @@ function makeControls() {
     input.min = 0;
     input.max = 1000;
     input.step = 1;
+    installLiveRange(input);
     input.setAttribute("aria-label", p.label);
     input.title = p.description;
     const ends = document.createElement("div");
@@ -123,7 +124,6 @@ function makeControls() {
     input.addEventListener("change", () => {
       store.commit();
       wrapper.classList.remove("active");
-      if (looping) scheduleNext(true);
     });
     input.addEventListener("focus", () => {
       $("#parameter-note").textContent = p.description;
@@ -199,10 +199,7 @@ function renderReadouts(p) {
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
 }
 function sync(doc, kind) {
-  // Pitch is the first parameter with a live audio path; all input sources share it.
-  audio.setPitch(doc.params.pitch);
-  audio.setRelease(doc.params.release);
-  audio.setFilter(doc.params);
+  if (!compare) audio.update(doc.params);
   renderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
@@ -212,6 +209,7 @@ function sync(doc, kind) {
   contour.setParams(compare ? store.initial.params : doc.params);
   mapping.update();
   if (kind === "load" || kind === "routes") mapping.renderDetails();
+  if (looping && activeEvent) scheduleNext();
 }
 store.subscribe(sync);
 makeControls();
@@ -245,13 +243,14 @@ async function play() {
     playingPromise = false;
   }
 }
-function scheduleNext(immediate = false) {
+function scheduleNext() {
   clearTimeout(loopTimer);
-  if (!looping) return;
-  const interval = immediate
-    ? 60
-    : (duration(store.document.params) + 0.18) * 1000;
-  loopTimer = setTimeout(() => play(), interval);
+  if (!looping || !activeEvent || activeEvent.held) return;
+  const deadline = activeEvent.start + duration(activeEvent.params) + 0.18;
+  loopTimer = setTimeout(
+    () => play(),
+    Math.max(30, (deadline - audio.now()) * 1000),
+  );
 }
 function stop({ keepBinding = false } = {}) {
   gestureTicket++;
@@ -300,8 +299,7 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source:
-        "Pitch, filter band and resonance change live. Other settings apply on the next play.",
+      source: "Parameters update the playing sound live.",
       contour: "Drag the ADSR handles to change the envelope.",
       space: "Delay and reverb settings.",
     }[group];

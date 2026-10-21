@@ -16,7 +16,7 @@ Open http://localhost:5177. Run the automated checks with `npm test` (Node 20+).
 
 - One starting sound: saw, a paired detuned source with 96 harmonics, low-pass filtering, saturation, noise, tremolo, delay, and reverb. Lower pitch increases line thickness under the default mapping.
 - Drag the A, D, S, and R envelope handles to edit attack, decay/sustain level, hold/sustain level, and release. Arrow keys adjust the focused handle; Shift uses larger increments.
-- Source, Contour and Space expose 21 editable parameters. Pitch changes update active voices immediately. Other audio changes take effect on the next trigger. Loop to audition changes repeatedly.
+- Source, Contour and Space expose 22 editable parameters. Controls update the active sound and sculpture continuously at the current playback time.
 - Space / Play triggers the current sound; L toggles looping; Escape stops. Undo / redo uses Command/Ctrl Z and Shift Command/Ctrl Z.
 - Drag to orbit; scroll to zoom; double-click to reset. Front gives an unrotated view.
 - The complete sculpture stays visible when paused. Playback highlights the form over time. Delay produces repeated impressions; reverb adds diffuse structure.
@@ -49,7 +49,7 @@ This is an editable additive/noise synth with paired detuned voices, a saturator
 
 The static form describes synthesis settings through authored mappings; it is not a reconstruction of the output waveform or a perceptual audio analyzer. Disconnecting a connection can intentionally remove a quality from its visual representation. Modulation rate has no audible effect at zero depth; effect timing has no audible effect at zero mix.
 
-Sounds are finite ADSR gestures: attack → decay → hold → release. Pitch changes live; other settings apply to the next trigger, with release also updating held notes. Existing effect tails can overlap in Loop mode. Simultaneous playback is bounded at the interface; Stop fades active voices and disconnects their graphs. Sounds are limited at the output, but extreme resonance and effect settings can change perceived level.
+Sounds are finite ADSR gestures: attack → decay → hold → release. All source, envelope and effect parameters update live, with envelope edits anchored to the original note start. Existing effect tails can overlap in Loop mode. Simultaneous playback is bounded at the interface; Stop fades active voices and disconnects their graphs. Sounds are limited at the output, but extreme resonance and effect settings can change perceived level.
 
 Session and saved sounds live in localStorage. There is no account database or cloud library synchronization. Export JSON for backup.
 
@@ -75,7 +75,7 @@ Release: hold an open left hand within 15° of vertical in 3D, regardless of whi
 
 Pinch the right thumb and index. Pinch entry allows a fingertip gap of 40% of palm scale (the larger of 3D palm width or 75% of wrist-to-middle-knuckle length); it stays pinched up to 62%. Close 2D fingertips can compensate for moderate 3D depth uncertainty at contact. Large 3D gaps still reject accidental projected overlap. Release accepts handedness confidence ≥55%; pitch retains its stricter ≥70% and palm-contact checks.
 
-Horizontal separation between the left palm center and right pinch spans 20 ms–3 s logarithmically, from 8% to 60% of camera width. Greater separation means longer release; vertical motion does not affect it. Release changes update the preset, ADSR graph and sculpture. They apply to subsequent triggered notes and to held notes when released; finite notes already scheduled keep their original envelope. This gesture takes priority over pitch and does not trigger a note itself.
+Horizontal separation between the left palm center and right pinch spans 20 ms–3 s logarithmically, from 8% to 60% of camera width. Greater separation means longer release; vertical motion does not affect it. Release changes update the preset, ADSR graph and sculpture. They apply to the current playing envelope and subsequent triggered notes. This gesture takes priority over pitch and does not trigger a note itself.
 
 Release pose indicators have independent 50 ms acquisition and 180 ms dropout tolerance. The combined binding acquires after another 80 ms, with short interruptions tolerated rather than restarting acquisition. Missing hands or clearly broken poses freeze edits immediately, while stable indicators persist through short tracking gaps. Release values use 100 ms smoothing. Pitch acquisition (140 ms), smoothing (75 ms plus a 30 ms audio ramp), immediate invalid-pose freeze and 100 ms gate release are unchanged.
 
@@ -99,8 +99,18 @@ This is an STFT-inspired, model-based harmonic view, not a measured spectrogram 
 
 ## Echoes on the time axis (v0.6)
 
-Echoes translate longitudinally by `repeat index × delay time × units per second`, while keeping the original geometry, length and line thickness. Each repeat has gain `delay mix × feedback^(index−1)`, represented with the same visual amplitude compression. A 4-unit transverse offset per copy helps distinguish overlap, with no depth offset or artificial shrinking. The visible train ends below 0.008 gain (maximum 10 echoes, covering the supported parameter range).
+Echoes translate longitudinally by `repeat index × delay time × units per second`, while keeping the original geometry, length and line thickness. Each repeat has gain `delay mix × feedback^(index−1)`, represented with the same visual amplitude compression. Each copy has a transverse separation of at least 32 units, increasing with the sound body, with no depth offset or artificial shrinking. The visible train ends below 0.008 gain (maximum 10 echoes, covering the supported parameter range).
 
 A shared seconds scale extends through the last visible echo. The narrow present-moment window is one third of its original temporal width, and intersects every copy at its local sound time; it continues across echoes after the source envelope finishes. Held-note previews cycle across the full displayed timeline. The ADSR editor remains the source envelope only.
 
-The whole train fits once on load/reset. Subsequent delay edits retain the viewing scale. Fit time explicitly frames the full train; Shift-drag pans and the wheel zooms. Tick marks below the sculpture show elapsed seconds. Existing custom mappings to echo level, spacing and persistence remain supported. The audio delay graph is unchanged.
+The whole train fits once on load/reset. Subsequent delay edits retain the viewing scale. Fit time explicitly frames the full train; Shift-drag pans and the wheel zooms. Tick marks below the sculpture show elapsed seconds. Existing custom mappings to echo level, spacing and persistence remain supported. Live delay edits update the existing audio graph.
+
+## Live editing (v0.7)
+
+All native sliders capture pointer movement and emit input continuously; keyboard edits remain native. Releasing a pointer only commits undo history. It no longer retriggers a Loop note. The next loop is scheduled relative to the current note's original start and updated envelope duration.
+
+`NativeAudioEngine.update(params)` modifies running voices without replacing their oscillators or start times. Volume, pitch, detune, width, noise, tremolo, filter, delay and effect levels use short AudioParam ramps. Harmonics update the periodic waveform while keeping oscillator phase. Drive crossfades replacement shapers because a non-null WaveShaper curve cannot be reassigned portably. Reverb decay crossfades two impulse banks, quantized to 100 ms and throttled to 120 ms between bank swaps. Previously zero effects/noise/tremolo can turn on during a note.
+
+ADSR changes cancel future automation, bridge the current level over 20 ms, and reschedule only the envelope landmarks ahead of the elapsed note time. Sources remain available until voice cleanup so an unfinished envelope can be extended. Finished source envelopes do not restart when editing effect tails, and repeated edits do not indefinitely extend old tail lifetimes. Volume controls both dry sound and tails. Stop fades each voice's complete bus and cleans its nodes and pending tasks.
+
+Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy, rather than the former 4 units. Fit time considers the full transverse stack as well as its longitudinal extent.

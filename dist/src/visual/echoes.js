@@ -5,7 +5,7 @@ export const MIN_ECHO_LEVEL = 0.008;
 export function buildEchoLayout(
   duration,
   length,
-  { mix = 0, delay = 0.28, feedback = 0 } = {},
+  { mix = 0, delay = 0.28, feedback = 0, separation = 32 } = {},
 ) {
   const unitsPerSecond = length / duration,
     copies = [
@@ -19,7 +19,7 @@ export function buildEchoLayout(
       time: i * delay,
       gain,
       scale: 1,
-      offset: { x: i * delay * unitsPerSecond, y: i * 4, z: 0 },
+      offset: { x: i * delay * unitsPerSecond, y: i * separation, z: 0 },
     });
   }
   const last = copies.at(-1);
