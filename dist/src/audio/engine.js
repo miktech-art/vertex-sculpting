@@ -1,3 +1,4 @@
+import { filterSettings, harmonicAmplitude } from "../spectral/filter.js";
 import { duration, tailDuration, clamp } from "../model.js";
 
 function createMaster(context, level = 0.72) {
@@ -73,6 +74,7 @@ export class NativeAudioEngine {
     const input = own(c.createGain()),
       drive = own(c.createWaveShaper()),
       filter = own(c.createBiquadFilter()),
+      highpass = own(c.createBiquadFilter()),
       env = own(c.createGain()),
       amp = own(c.createGain()),
       output = own(c.createGain());
@@ -85,10 +87,15 @@ export class NativeAudioEngine {
     drive.curve = curve;
     drive.oversample = "2x";
     filter.type = "lowpass";
-    filter.frequency.value = p.cutoff;
-    filter.Q.value = p.resonance;
+    const settings = filterSettings(p, c.sampleRate);
+    filter.frequency.value = settings.high;
+    filter.Q.value = settings.resonance;
+    highpass.type = "highpass";
+    highpass.frequency.value = settings.low;
+    highpass.Q.value = settings.resonance;
     input
       .connect(drive)
+      .connect(highpass)
       .connect(filter)
       .connect(env)
       .connect(amp)
@@ -97,8 +104,7 @@ export class NativeAudioEngine {
     const real = new Float32Array(97),
       imag = new Float32Array(97);
     imag[1] = 1;
-    for (let h = 2; h < 97; h++)
-      imag[h] = p.harmonics / h ** (1.1 + (1 - p.harmonics) * 1.5);
+    for (let h = 2; h < 97; h++) imag[h] = harmonicAmplitude(h, p.harmonics);
     const wave = c.createPeriodicWave(real, imag);
     for (let v = 0; v < 2; v++) {
       const osc = own(c.createOscillator()),
@@ -180,6 +186,7 @@ export class NativeAudioEngine {
       sources,
       pitchedSources,
       envelope: env,
+      filters: { low: highpass, high: filter },
       held,
       released: false,
     };
@@ -199,6 +206,22 @@ export class NativeAudioEngine {
       for (const source of voice.pitchedSources)
         source.frequency.setTargetAtTime(pitch, now, 0.03);
       voice.params.pitch = pitch;
+    }
+  }
+  setFilter(params) {
+    const now = this.now();
+    for (const voice of this.voices) {
+      if (voice.released) continue;
+      const settings = filterSettings(params, this.context.sampleRate);
+      voice.filters.low.frequency.setTargetAtTime(settings.low, now, 0.025);
+      voice.filters.high.frequency.setTargetAtTime(settings.high, now, 0.025);
+      for (const node of Object.values(voice.filters))
+        node.Q.setTargetAtTime(settings.resonance, now, 0.025);
+      Object.assign(voice.params, {
+        cutoffLow: settings.low,
+        cutoff: settings.high,
+        resonance: settings.resonance,
+      });
     }
   }
   setRelease(seconds) {

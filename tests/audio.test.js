@@ -235,3 +235,26 @@ test("release edits apply to held voices at gate-off without altering already sc
   engine.disposeVoice(held);
   engine.disposeVoice(finite);
 });
+
+test("audio routes a resonant highpass and lowpass in series and supports live band edits", async () => {
+  const engine = new NativeAudioEngine();
+  await engine.init();
+  engine.context.sampleRate = 48000;
+  const voice = await engine.trigger({
+    ...PRESETS[0].params,
+    cutoffLow: 500,
+    cutoff: 5000,
+  });
+  assert.equal(voice.filters.low.type, "highpass");
+  assert.equal(voice.filters.high.type, "lowpass");
+  assert.ok(voice.filters.low.connections.includes(voice.filters.high));
+  assert.equal(voice.filters.low.frequency.value, 500);
+  assert.equal(voice.filters.high.frequency.value, 5000);
+  engine.setFilter({ cutoffLow: 1000, cutoff: 4000, resonance: 12 });
+  assert.equal(voice.filters.low.frequency.events.at(-1).value, 1000);
+  assert.equal(voice.filters.high.frequency.events.at(-1).value, 4000);
+  assert.ok(
+    Object.values(voice.filters).every((n) => n.Q.events.at(-1).value === 12),
+  );
+  engine.disposeVoice(voice);
+});

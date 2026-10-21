@@ -1,4 +1,9 @@
 import {
+  createFilterResponse,
+  HARMONIC_BANDS,
+  bandAmplitude,
+} from "../spectral/filter.js";
+import {
   TARGETS,
   BASE,
   normalize,
@@ -16,7 +21,19 @@ const hash = (i, j = 0) => {
 };
 
 // Geometry is deterministic: identical sound + mapping always gives the same object.
-export function buildGeometry(params, m) {
+export function buildGeometry(params, m, sampleRate = 48000) {
+  const response = createFilterResponse(
+    {
+      cutoffLow: denormalize("cutoffLow", m.spectralLow ?? 0),
+      cutoff: denormalize("cutoff", m.spectralHigh ?? 1),
+      resonance: denormalize("resonance", m.spectralPeak ?? 0),
+    },
+    sampleRate,
+  );
+  const spectrumParams = {
+    ...params,
+    harmonics: Math.max(params.harmonics, m.edge * 0.35),
+  };
   const contour = {
     attack: denormalize("attack", m.onset),
     decay: denormalize("decay", m.decayShape),
@@ -30,11 +47,11 @@ export function buildGeometry(params, m) {
     grain = m.grain * 52,
     twist = m.twist * 3.6,
     spread = m.spread * 34;
-  const points = 181,
-    strands =
+  const points = 121,
+    bands =
       body > 0.05 || grain > 0.05 || m.edge > 0.04
-        ? Math.round(8 + 14 * m.detail)
-        : 0,
+        ? HARMONIC_BANDS.slice(1)
+        : [],
     lines = [];
   const center = Array.from({ length: points }, (_, i) => {
     const u = i / (points - 1),
@@ -47,44 +64,56 @@ export function buildGeometry(params, m) {
       e = envelopeAt(contour, Math.min(total - 0.00001, u * total)) * wave;
     return { x: (u - 0.5) * length, y: 0, z: 0, u, e };
   });
-  lines.push({ points: center, alpha: 1, width: 1, kind: "core" });
-  for (let j = 0; j < strands; j++) {
-    const line = [],
-      angle0 = (j / strands) * TAU;
-    for (let i = 0; i < points; i++) {
-      const u = i / (points - 1),
-        t = u * total,
-        e = envelopeAt(contour, Math.min(total - 0.00001, t)),
-        a = angle0 + twist * TAU * u;
-      const modal =
-        (0.65 + 0.35 * Math.sin(u * Math.PI)) *
-        (0.7 + 0.3 * Math.sin(j * 2.2 + 0.5));
-      const teeth =
-        m.edge * 13 * Math.sin(u * TAU * (8 + 18 * m.detail) + j * 0.7) ** 7;
-      const wave =
-        1 -
-        m.motion * 0.5 +
-        m.motion * 0.5 * Math.sin(t * denormalize("rate", m.rate) * TAU);
-      const radius = (body * modal + teeth) * e ** 0.6 * wave;
-      const jitter = (hash(i, j) - 0.5) * grain * Math.sin(Math.PI * u) ** 0.5;
-      const y = Math.cos(a) * radius + jitter + (j % 2 ? 1 : -1) * spread * e;
-      const z =
-        Math.sin(a) * radius * 0.8 + (hash(i + 31, j) - 0.5) * grain * 0.6;
-      line.push({ x: (u - 0.5) * length, y, z, u, e });
-    }
-    lines.push({
-      points: line,
-      alpha: 0.26 + 0.33 * ((j % 4) / 3),
-      width: 0.5 + 0.35 * m.edge,
-      kind: "filament",
-    });
-    if (j % 3 === 0 && body > 5) {
-      const second = line.map((pt, i) => ({
-        ...pt,
-        y: pt.y * (1.05 + 0.04 * Math.sin(i * 0.12)),
-        z: pt.z * 1.07,
-      }));
-      lines.push({ points: second, alpha: 0.13, width: 0.5, kind: "filament" });
+  lines.push({
+    points: center,
+    alpha: 1,
+    width: 1,
+    kind: "core",
+    frequency: params.pitch,
+    filterGain: response(params.pitch),
+  });
+  for (let j = 0; j < bands.length; j++) {
+    const band = bands[j],
+      position = Math.log(band.center) / Math.log(96),
+      energy = bandAmplitude(band, spectrumParams, response);
+    for (const sign of [-1, 1]) {
+      const line = [];
+      for (let i = 0; i < points; i++) {
+        const u = i / (points - 1),
+          t = u * total,
+          e = envelopeAt(contour, Math.min(total - 0.00001, t)),
+          a = twist * TAU * u,
+          modal = 0.65 + 0.35 * Math.sin(u * Math.PI),
+          teeth =
+            m.edge *
+            8 *
+            position *
+            Math.sin(u * TAU * (8 + 18 * m.detail) + j * 0.7) ** 7,
+          wave =
+            1 -
+            m.motion * 0.5 +
+            m.motion * 0.5 * Math.sin(t * denormalize("rate", m.rate) * TAU),
+          radius = (body * position * modal + teeth) * e ** 0.6 * wave,
+          jitter = (hash(i, j) - 0.5) * grain * Math.sin(Math.PI * u) ** 0.5;
+        line.push({
+          x: (u - 0.5) * length,
+          y: sign * (Math.cos(a) * radius + spread * e * position) + jitter,
+          z:
+            sign * Math.sin(a) * radius * 0.8 +
+            (hash(i + 31, j) - 0.5) * grain * 0.6,
+          u,
+          e,
+        });
+      }
+      lines.push({
+        points: line,
+        alpha: (0.32 + 0.16 * ((j % 4) / 3)) * energy.source ** 0.28,
+        width: 0.5 + 0.35 * m.edge,
+        kind: "filament",
+        frequency: params.pitch * band.center,
+        partials: band.partials,
+        filterGain: energy.gain,
+      });
     }
   }
   const particles = [];
@@ -102,7 +131,17 @@ export function buildGeometry(params, m) {
       y: Math.cos(a) * r,
       z: Math.sin(a) * r * 0.8,
       u,
-      alpha: 0.08 + hash(i, 70) * 0.32,
+      alpha:
+        (0.08 + hash(i, 70) * 0.32) *
+        Math.min(
+          2.5,
+          response(
+            params.pitch *
+              HARMONIC_BANDS[Math.floor(hash(i, 91) * HARMONIC_BANDS.length)]
+                .center,
+          ),
+        ) **
+          0.7,
       size: 0.35 + hash(i, 76) * 0.8,
     });
   }
@@ -112,11 +151,7 @@ export function buildGeometry(params, m) {
     length,
     total,
     thickness: 0.65 + m.thickness * 4.4,
-    brightness: clamp(
-      1 + (m.brightness - normalize("volume", BASE.volume)) * 0.8,
-      0.25,
-      1,
-    ),
+    brightness: clamp(m.brightness / normalize("volume", BASE.volume), 0, 1.5),
     echoes: m.echoes,
     echoSpacing: 25 + m.echoSpacing * 90,
     persistence: m.persistence,
@@ -197,6 +232,12 @@ export class SculptureRenderer {
     this.canvas.height = Math.round(r.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+  setSampleRate(rate) {
+    if (this.sampleRate !== rate) {
+      this.sampleRate = rate;
+      this.needsBuild = true;
+    }
+  }
   setDocument(doc, instant = false) {
     this.document = doc;
     this.needsBuild = true;
@@ -238,13 +279,16 @@ export class SculptureRenderer {
     }
     for (const id of this.routeValues.keys())
       if (!valid.has(id)) this.routeValues.delete(id);
-    for (const id in vals) vals[id] = clamp(vals[id]);
+    for (const target of TARGETS)
+      vals[target.id] = doc.routes.some((r) => r.target === target.id)
+        ? clamp(vals[target.id])
+        : (target.default ?? 0);
     const changed = Object.keys(vals).some(
       (k) => Math.abs((this.targets[k] ?? -1) - vals[k]) > 0.00001,
     );
     if (changed || this.needsBuild) {
       this.targets = vals;
-      this.geometry = buildGeometry(doc.params, vals);
+      this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000);
       this.needsBuild = false;
     }
     return moving;
@@ -328,7 +372,13 @@ export class SculptureRenderer {
     const c = this.ctx;
     for (const line of g.lines) {
       const pts = line.points;
-      c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * g.brightness * opacity * (lit ? 1.8 : 1))})`;
+      const amplitude = Math.min(3, line.filterGain ?? 1) ** 0.7;
+      const peak = Math.max(
+        0,
+        Math.log2(Math.max(1, line.filterGain ?? 1)) - 0.25,
+      );
+      if (amplitude < 0.002) continue;
+      c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
       c.lineCap = "round";
       if (line.kind === "core") {
         // One filled ribbon avoids overlapping translucent caps and their visible texture.
@@ -360,8 +410,11 @@ export class SculptureRenderer {
         for (const v of upper) c.lineTo(v.x, v.y);
         for (const v of lower.reverse()) c.lineTo(v.x, v.y);
         c.closePath();
-        c.fillStyle = `rgba(255,255,255,${clamp(g.brightness * opacity * (lit ? 1.8 : 1))})`;
+        c.fillStyle = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
+        c.shadowColor = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity)})`;
+        c.shadowBlur = Math.min(12, peak * 5);
         c.fill();
+        c.shadowBlur = 0;
       } else {
         c.beginPath();
         for (let i = 0; i < pts.length; i++) {
@@ -369,8 +422,11 @@ export class SculptureRenderer {
           if (i === 0) c.moveTo(v.x, v.y);
           else c.lineTo(v.x, v.y);
         }
-        c.lineWidth = line.width;
+        c.lineWidth = line.width + Math.min(1.4, peak * 0.4);
+        c.shadowColor = `rgba(255,255,255,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
+        c.shadowBlur = Math.min(12, peak * 5);
         c.stroke();
+        c.shadowBlur = 0;
       }
       if (!ghost) {
         for (const event of this.events) {
@@ -392,10 +448,10 @@ export class SculptureRenderer {
               started = true;
             } else c.lineTo(v.x, v.y);
           }
-          c.strokeStyle = `rgba(255,255,255,${line.kind === "core" ? 0.95 : 0.75})`;
+          c.strokeStyle = `rgba(255,255,255,${clamp((line.kind === "core" ? 0.95 : 0.75) * amplitude * g.brightness * opacity)})`;
           c.lineWidth =
             (line.kind === "core" ? g.thickness : line.width) + 1.05;
-          c.shadowColor = "rgba(255,255,255,.7)";
+          c.shadowColor = `rgba(255,255,255,${clamp(0.7 * amplitude * g.brightness * opacity)})`;
           c.shadowBlur = 9;
           c.stroke();
           c.shadowBlur = 0;

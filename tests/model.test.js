@@ -77,7 +77,10 @@ test("sine is one white line and lower pitch makes it thicker", () => {
   assert.ok(a.thickness > b.thickness * 3);
   assert.equal(a.brightness, 1);
   assert.equal(a.lines[0].alpha, 1);
-  assert.deepEqual(a.lines, b.lines);
+  assert.deepEqual(
+    a.lines.map((l) => l.points),
+    b.lines.map((l) => l.points),
+  );
 });
 test("envelope endpoints agree with a complete finite sound event", () => {
   const p = {

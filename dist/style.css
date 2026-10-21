@@ -1818,3 +1818,58 @@ dialog input:not([type]) {
   color: #e6c5a8;
   border-color: #a68c74;
 }
+
+.filter-label {
+  font-size: 12px;
+  letter-spacing: 0.1px;
+  color: #c7c9c1;
+}
+.filter-range {
+  position: relative;
+  height: 24px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.filter-range::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11px;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    #2a2e28 var(--low),
+    #a3a79b var(--low),
+    #a3a79b var(--high),
+    #2a2e28 var(--high)
+  );
+}
+.filter-range input[type="range"] {
+  position: absolute;
+  inset: 4px 0;
+  pointer-events: none;
+}
+.filter-range input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.filter-range input[type="range"]::-moz-range-track,
+.filter-range input[type="range"]::-moz-range-progress {
+  background: transparent;
+}
+.filter-range input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.filter-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+}
+.filter-range input[type="range"]:focus-visible {
+  outline: none;
+}
+.filter-range input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 1px solid #e6c5a8;
+  outline-offset: 4px;
+}
+.filter-control .control-label output {
+  font-size: 10px;
+}

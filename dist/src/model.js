@@ -55,14 +55,25 @@ export const PARAMETERS = [
   },
   {
     id: "cutoff",
-    label: "Filter cutoff",
+    label: "High cutoff",
     group: "source",
-    min: 120,
+    min: 20,
     max: 18000,
     value: 18000,
     unit: "Hz",
     scale: "log",
-    description: "Low-pass filter frequency.",
+    description: "Upper edge of the pass band. Frequencies above it fade out.",
+  },
+  {
+    id: "cutoffLow",
+    label: "Low cutoff",
+    group: "source",
+    min: 20,
+    max: 18000,
+    value: 20,
+    unit: "Hz",
+    scale: "log",
+    description: "Lower edge of the pass band. Frequencies below it fade out.",
   },
   {
     id: "resonance",
@@ -71,9 +82,9 @@ export const PARAMETERS = [
     min: 0.1,
     max: 16,
     value: 0.1,
-    unit: "Q",
+    unit: "dB",
     scale: "log",
-    description: "Emphasizes frequencies around the filter cutoff.",
+    description: "Boosts frequency bands near the low and high cutoffs.",
   },
   {
     id: "drive",
@@ -226,6 +237,23 @@ export const BASE = Object.freeze(
 );
 export const TARGETS = [
   {
+    id: "spectralLow",
+    label: "Low-frequency fade",
+    description: "Attenuates inner frequency bands below a cutoff.",
+  },
+  {
+    id: "spectralHigh",
+    label: "High-frequency fade",
+    default: 1,
+    description: "Attenuates outer frequency bands above a cutoff.",
+  },
+  {
+    id: "spectralPeak",
+    label: "Cutoff resonance",
+    description: "Boosts bands near the cutoff frequencies.",
+  },
+
+  {
     id: "thickness",
     label: "Line thickness",
     description: "Width of the primary white line.",
@@ -331,8 +359,8 @@ const pairs = [
   ["harmonics", "body"],
   ["noise", "grain"],
   ["detune", "twist"],
-  ["cutoff", "detail"],
-  ["resonance", "edge"],
+  ["cutoff", "spectralHigh"],
+  ["resonance", "spectralPeak"],
   ["volume", "brightness"],
   ["width", "spread"],
   ["attack", "onset"],
@@ -362,6 +390,15 @@ DEFAULT_ROUTES.push({
   source: "drive",
   target: "edge",
   amount: 0.45,
+  invert: false,
+  curve: 1,
+  smoothing: 0.08,
+});
+DEFAULT_ROUTES.push({
+  id: "route-cutoff-low",
+  source: "cutoffLow",
+  target: "spectralLow",
+  amount: 1,
   invert: false,
   curve: 1,
   smoothing: 0.08,
@@ -433,7 +470,10 @@ export function resolveMappings(params, routes) {
     if (r.invert) n = 1 - n;
     values[r.target] += n ** r.curve * r.amount;
   }
-  for (const id in values) values[id] = clamp(values[id]);
+  for (const target of TARGETS)
+    values[target.id] = routes.some((r) => r.target === target.id)
+      ? clamp(values[target.id])
+      : (target.default ?? 0);
   return values;
 }
 export function validateDocument(input) {
@@ -445,13 +485,16 @@ export function validateDocument(input) {
     input.routes.length > 100
   )
     throw new Error("Missing sound parameters or valid connections.");
+  const legacyFilter = !Object.hasOwn(input.params, "cutoffLow");
   const params = {};
   for (const p of PARAMETERS) {
-    const v = input.params[p.id];
+    const v = p.id === "cutoffLow" && legacyFilter ? 20 : input.params[p.id];
     if (typeof v !== "number" || !Number.isFinite(v) || v < p.min || v > p.max)
       throw new Error(`Invalid ${p.label.toLowerCase()} value.`);
     params[p.id] = v;
   }
+  if (params.cutoffLow > params.cutoff)
+    throw new Error("Low cutoff must not exceed high cutoff.");
   const routes = input.routes.map((r, i) => {
     if (
       !r ||
@@ -475,13 +518,30 @@ export function validateDocument(input) {
     return {
       id,
       source: r.source,
-      target: r.target,
+      target:
+        legacyFilter &&
+        r.amount === 1 &&
+        !r.invert &&
+        r.curve === 1 &&
+        r.smoothing === 0.08
+          ? r.source === "cutoff" && r.target === "detail"
+            ? "spectralHigh"
+            : r.source === "resonance" && r.target === "edge"
+              ? "spectralPeak"
+              : r.target
+          : r.target,
       amount: r.amount,
       curve: r.curve,
       smoothing: r.smoothing,
       invert: r.invert,
     };
   });
+  if (
+    legacyFilter &&
+    routes.some((r) => r.target === "spectralHigh" && r.source === "cutoff") &&
+    !routes.some((r) => r.source === "cutoffLow")
+  )
+    routes.push({ ...DEFAULT_ROUTES.find((r) => r.source === "cutoffLow") });
   return {
     schema: SCHEMA,
     name: typeof input.name === "string" ? input.name.slice(0, 60) : "Untitled",

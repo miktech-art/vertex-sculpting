@@ -1,3 +1,4 @@
+import { FilterRange, constrainCutoff } from "./ui/filter-range.js";
 import {
   PARAMETERS,
   PRESETS,
@@ -49,6 +50,7 @@ let mode = "sculpt",
   gestureVoice = null,
   gestureTicket = 0;
 const inputs = new Map();
+let filterRange = null;
 function toast(message) {
   $("#toast").textContent = message;
   $("#toast").classList.add("visible");
@@ -59,7 +61,29 @@ function makeControls() {
   const container = $("#parameter-controls");
   container.replaceChildren();
   inputs.clear();
+  filterRange = null;
   for (const p of PARAMETERS.filter((p) => p.group === group)) {
+    if (p.id === "cutoffLow") continue;
+    if (p.id === "cutoff") {
+      filterRange = new FilterRange({
+        onEdit: (id, value) =>
+          store.edit((doc) => {
+            doc.params[id] = value;
+          }, "parameter"),
+        onCommit: () => store.commit(),
+        onReset: (id) =>
+          store.transaction((doc) => {
+            doc.params[id] = constrainCutoff(
+              doc.params,
+              id,
+              store.initial.params[id],
+            );
+          }, "parameter"),
+      });
+      filterRange.update(store.document.params);
+      container.append(filterRange.element);
+      continue;
+    }
     const wrapper = document.createElement("div");
     wrapper.className = "parameter-control";
     const row = document.createElement("div");
@@ -115,6 +139,7 @@ function makeControls() {
   }
 }
 function syncControls() {
+  filterRange?.update(store.document.params);
   for (const [id, { input, output }] of inputs) {
     const value = store.document.params[id],
       n = normalize(id, value);
@@ -177,6 +202,9 @@ function sync(doc, kind) {
   // Pitch is the first parameter with a live audio path; all input sources share it.
   audio.setPitch(doc.params.pitch);
   audio.setRelease(doc.params.release);
+  audio.setFilter(doc.params);
+  renderer.setSampleRate(audio.context?.sampleRate ?? 48000);
+  miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
@@ -199,6 +227,8 @@ async function play() {
     if (!looping) audio.stop();
     const params = compare ? store.initial.params : store.document.params;
     const event = await audio.trigger(params);
+    renderer.setSampleRate(audio.context.sampleRate);
+    miniRenderer.setSampleRate(audio.context.sampleRate);
     if (document.hidden || ticket !== playbackTicket) {
       audio.disposeVoice(event);
       return;
@@ -270,7 +300,8 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source: "Pitch changes live. Other settings apply on the next play.",
+      source:
+        "Pitch, filter band and resonance change live. Other settings apply on the next play.",
       contour: "Drag the ADSR handles to change the envelope.",
       space: "Delay and reverb settings.",
     }[group];
@@ -549,6 +580,8 @@ async function startGestureNote() {
   const ticket = ++gestureTicket;
   try {
     const event = await audio.trigger(store.document.params, { held: true });
+    renderer.setSampleRate(audio.context.sampleRate);
+    miniRenderer.setSampleRate(audio.context.sampleRate);
     if (ticket !== gestureTicket || !hands.gate || document.hidden) {
       audio.disposeVoice(event);
       return;
