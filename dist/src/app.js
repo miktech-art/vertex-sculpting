@@ -325,6 +325,10 @@ document.querySelectorAll("[data-mode]").forEach((button) =>
     } else renderer.resize();
   }),
 );
+$("#fit-time").addEventListener("click", () => {
+  renderer.fitTimeline();
+  $("#view-label").textContent = "FRONT VIEW";
+});
 $("#front-view").addEventListener("click", () => {
   renderer.frontView();
   $("#view-label").textContent = "FRONT VIEW";

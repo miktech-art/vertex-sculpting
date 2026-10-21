@@ -1,3 +1,4 @@
+import { buildEchoLayout, presentProgress, timeTickStep } from "./echoes.js";
 import {
   createFilterResponse,
   HARMONIC_BANDS,
@@ -167,9 +168,11 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     total,
     thickness: 0.65 + m.thickness * 4.4,
     brightness: clamp(m.brightness / normalize("volume", BASE.volume), 0, 1.5),
-    echoes: m.echoes,
-    echoSpacing: 25 + m.echoSpacing * 90,
-    persistence: m.persistence,
+    echoLayout: buildEchoLayout(total, length, {
+      mix: denormalize("delayMix", m.echoes),
+      delay: denormalize("delayTime", m.echoSpacing),
+      feedback: denormalize("feedback", m.persistence),
+    }),
     halo: m.halo,
   };
 }
@@ -181,6 +184,8 @@ export class SculptureRenderer {
     this.yaw = 0;
     this.pitch = 0;
     this.zoom = 1;
+    this.pan = { x: 0, y: 0 };
+    this.autoFit = true;
     this.targets = {};
     this.routeValues = new Map();
     this.geometry = null;
@@ -200,12 +205,19 @@ export class SculptureRenderer {
         y: e.clientY,
         yaw: this.yaw,
         pitch: this.pitch,
+        pan: { ...this.pan },
+        panning: e.shiftKey,
       };
       canvas.setPointerCapture(e.pointerId);
       canvas.classList.add("dragging");
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!this.drag) return;
+      if (this.drag.panning) {
+        this.pan.x = this.drag.pan.x + e.clientX - this.drag.x;
+        this.pan.y = this.drag.pan.y + e.clientY - this.drag.y;
+        return;
+      }
       this.yaw = this.drag.yaw + (e.clientX - this.drag.x) * 0.007;
       this.pitch = clamp(
         this.drag.pitch + (e.clientY - this.drag.y) * 0.006,
@@ -223,7 +235,10 @@ export class SculptureRenderer {
       "wheel",
       (e) => {
         e.preventDefault();
-        this.zoom = clamp(this.zoom * Math.exp(-e.deltaY * 0.001), 0.45, 2.4);
+        const before = this.zoom;
+        this.zoom = clamp(this.zoom * Math.exp(-e.deltaY * 0.001), 0.02, 2.4);
+        this.pan.x *= this.zoom / before;
+        this.pan.y *= this.zoom / before;
       },
       { passive: false },
     );
@@ -233,11 +248,28 @@ export class SculptureRenderer {
     this.yaw = 0;
     this.pitch = 0;
     this.zoom = 1;
+    this.pan = { x: 0, y: 0 };
+    this.autoFit = true;
   }
   frontView() {
+    this.resetView();
+  }
+  fitTimeline() {
+    const g = this.geometry;
+    if (!g || !this.size.width || !this.size.height) return;
     this.yaw = 0;
     this.pitch = 0;
-    this.zoom = 1;
+    const base = Math.min(this.size.width / 680, this.size.height / 180);
+    this.zoom = clamp(
+      (this.size.width * 0.85) / (g.echoLayout.length * base),
+      0.02,
+      1,
+    );
+    this.pan = {
+      x: (-(g.echoLayout.length - g.length) * base * this.zoom) / 2,
+      y: 0,
+    };
+    this.autoFit = false;
   }
   resize() {
     const r = this.canvas.getBoundingClientRect();
@@ -246,6 +278,7 @@ export class SculptureRenderer {
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (this.autoFit && this.geometry) this.fitTimeline();
   }
   setSampleRate(rate) {
     if (this.sampleRate !== rate) {
@@ -256,7 +289,10 @@ export class SculptureRenderer {
   setDocument(doc, instant = false) {
     this.document = doc;
     this.needsBuild = true;
-    if (instant) this.routeValues.clear();
+    if (instant) {
+      this.routeValues.clear();
+      this.autoFit = true;
+    }
   }
   setCompare(doc) {
     this.compare = doc;
@@ -305,6 +341,7 @@ export class SculptureRenderer {
       this.targets = vals;
       this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000);
       this.needsBuild = false;
+      if (this.autoFit) this.fitTimeline();
     }
     return moving;
   }
@@ -324,8 +361,8 @@ export class SculptureRenderer {
     const camera = 1000 / (1000 + depth);
     const fit = Math.min(w / 680, h / 180) * this.zoom;
     return {
-      x: w / 2 + xx * fit * camera,
-      y: h / 2 + yy * fit * camera,
+      x: w / 2 + this.pan.x + xx * fit * camera,
+      y: h / 2 + this.pan.y + yy * fit * camera,
       depth,
     };
   }
@@ -339,58 +376,57 @@ export class SculptureRenderer {
     if (!g) return;
     c.clearRect(0, 0, w, h);
     this.events = this.events.filter((e) => now - e.start < e.total + 0.25);
-    const p = (this.compare || this.document).params;
-    // The paused object is always fully present. Playback only lights its existing geometry.
-    const echoCount =
-      g.echoes > 0.001 ? Math.min(6, 2 + Math.round(g.persistence * 5)) : 0;
-    for (let i = echoCount; i >= 1; i--) {
-      const alpha = g.echoes * 0.38 * (0.22 + g.persistence * 0.7) ** (i - 1);
-      this.drawObject(
-        g,
-        alpha,
-        { x: i * g.echoSpacing * 0.25, y: i * 7, z: i * g.echoSpacing },
-        1 - i * 0.025,
-        now,
-        p,
-        true,
-      );
-    }
-    this.drawObject(g, 1, { x: 0, y: 0, z: 0 }, 1, now, p, false);
-    for (const event of this.events) {
-      const t = now - event.start;
-      if (t < 0) continue;
-      const ep = event.params;
-      const repetitions =
-        ep.delayMix > 0 ? Math.min(6, 1 + Math.ceil(ep.feedback * 7)) : 0;
-      for (let i = 1; i <= repetitions; i++) {
-        const age = t - ep.delayTime * i;
-        if (age < 0 || age > event.duration + 0.25) continue;
-        const energy =
-          ep.delayMix *
-          ep.feedback ** (i - 1) *
-          Math.max(0, 1 - age / (event.duration + 0.25));
-        if (energy > 0.004)
-          this.drawObject(
-            g,
-            energy * 1.6,
-            { x: i * g.echoSpacing * 0.25, y: i * 7, z: i * g.echoSpacing },
-            1 - i * 0.025,
-            now,
-            p,
-            true,
-            true,
-          );
-      }
+    // Echoes are translations in time, with a small transverse separation.
+    // Draw every static copy once; the present slice then intersects each copy.
+    for (const copy of [...g.echoLayout.copies].reverse())
+      this.drawObject(g, copy, now);
+    this.drawTimeAxis(g);
+  }
+  drawTimeAxis(g) {
+    if (g.echoLayout.copies.length === 1) return;
+    const c = this.ctx,
+      { width: w, height: h } = this.size,
+      y = h - 72;
+    const x = (seconds) =>
+      this.project({
+        x: -g.length / 2 + seconds * g.echoLayout.unitsPerSecond,
+        y: 0,
+        z: 0,
+      }).x;
+    c.lineWidth = 0.6;
+    c.strokeStyle = "#343934";
+    c.fillStyle = "#737b70";
+    c.font = "10px SFMono-Regular,Consolas,monospace";
+    c.textAlign = "center";
+    c.beginPath();
+    c.moveTo(Math.max(14, x(0)), y);
+    c.lineTo(Math.min(w - 14, x(g.echoLayout.duration)), y);
+    c.stroke();
+    const base = Math.min(w / 680, h / 180) * this.zoom;
+    const step = timeTickStep(w / (base * g.echoLayout.unitsPerSecond));
+    let lastX = -Infinity;
+    for (let t = 0; t <= g.echoLayout.duration + step * 0.01; t += step) {
+      const xx = x(t);
+      if (xx < 18 || xx > w - 18 || xx - lastX < 40) continue;
+      lastX = xx;
+      c.beginPath();
+      c.moveTo(xx, y);
+      c.lineTo(xx, y + 4);
+      c.stroke();
+      c.fillText(`${Number(t.toFixed(3))} s`, xx, y + 17);
     }
   }
-  drawObject(g, opacity, offset, scale, now, p, ghost = false, lit = false) {
+  drawObject(g, copy, now) {
+    const opacity = copy.gain ** 0.7,
+      offset = copy.offset,
+      scale = copy.scale;
     const c = this.ctx;
     for (const line of g.lines) {
       const pts = line.points;
       const amplitude = Math.min(3, line.filterGain ?? 1) ** 0.7;
 
       if (amplitude < 0.002) continue;
-      c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
+      c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
       c.lineCap = "round";
       if (line.kind === "core") {
         // One filled ribbon avoids overlapping translucent caps and their visible texture.
@@ -404,10 +440,7 @@ export class SculptureRenderer {
           const dx = after.x - before.x,
             dy = after.y - before.y,
             len = Math.max(0.001, Math.hypot(dx, dy));
-          const half =
-            (0.12 +
-              g.thickness * (ghost ? 0.65 : 1) * Math.max(0.015, pts[i].e)) /
-            2;
+          const half = (0.12 + g.thickness * Math.max(0.015, pts[i].e)) / 2;
           upper.push({
             x: v.x - (dy / len) * half,
             y: v.y + (dx / len) * half,
@@ -422,7 +455,7 @@ export class SculptureRenderer {
         for (const v of upper) c.lineTo(v.x, v.y);
         for (const v of lower.reverse()) c.lineTo(v.x, v.y);
         c.closePath();
-        c.fillStyle = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity * (lit ? 1.8 : 1))})`;
+        c.fillStyle = `rgba(255,255,255,${clamp(amplitude * g.brightness * opacity)})`;
         c.fill();
         c.shadowBlur = 0;
       } else {
@@ -436,13 +469,16 @@ export class SculptureRenderer {
         c.stroke();
         c.shadowBlur = 0;
       }
-      if (!ghost) {
+      {
         for (const event of this.events) {
-          const t = now - event.start;
-          if (t < 0 || t > event.duration) continue;
-          const u = event.held
-            ? (t % duration(event.params)) / duration(event.params)
-            : t / event.duration;
+          const u = presentProgress(
+            now - event.start,
+            copy.time,
+            g.total,
+            g.echoLayout.duration,
+            event.held,
+          );
+          if (u === null) continue;
           c.beginPath();
           let started = false;
           for (const pt of pts) {
@@ -466,7 +502,7 @@ export class SculptureRenderer {
         }
       }
     }
-    if (!ghost) {
+    {
       for (const pt of g.particles) {
         const v = this.project(pt, offset, scale);
         c.fillStyle = `rgba(229,229,223,${pt.alpha * opacity * g.brightness})`;
