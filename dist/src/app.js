@@ -176,6 +176,7 @@ function renderReadouts(p) {
 function sync(doc, kind) {
   // Pitch is the first parameter with a live audio path; all input sources share it.
   audio.setPitch(doc.params.pitch);
+  audio.setRelease(doc.params.release);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
@@ -546,7 +547,6 @@ document.addEventListener("visibilitychange", () => {
 async function startGestureNote() {
   stop({ keepBinding: true });
   const ticket = ++gestureTicket;
-  store.begin();
   try {
     const event = await audio.trigger(store.document.params, { held: true });
     if (ticket !== gestureTicket || !hands.gate || document.hidden) {
@@ -568,11 +568,16 @@ function releaseGestureNote() {
     audio.release(gestureVoice);
     gestureVoice = null;
   }
-  store.commit();
 }
 hands = new HandController({
   onEnable: () => audio.init(),
   getPitch: () => store.document.params.pitch,
+  getRelease: () => store.document.params.release,
+  onEditing: (active) => (active ? store.begin() : store.commit()),
+  onRelease: (release) => {
+    store.document.params.release = release;
+    store.emit("gesture");
+  },
   onGate: (active) => {
     if (active) startGestureNote();
     else releaseGestureNote();

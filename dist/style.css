@@ -1802,3 +1802,19 @@ dialog input:not([type]) {
     margin-right: 161px;
   }
 }
+
+.release-indicators {
+  display: flex;
+  gap: 4px;
+  font: 9px var(--mono);
+}
+.release-indicators span {
+  border: 1px solid #3d4438;
+  border-radius: 3px;
+  padding: 3px;
+  color: #697360;
+}
+.release-indicators [data-valid="true"] {
+  color: #e6c5a8;
+  border-color: #a68c74;
+}

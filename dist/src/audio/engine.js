@@ -201,6 +201,10 @@ export class NativeAudioEngine {
       voice.params.pitch = pitch;
     }
   }
+  setRelease(seconds) {
+    for (const voice of this.voices)
+      if (voice.held) voice.params.release = clamp(seconds, 0.02, 3);
+  }
   release(voice) {
     if (!voice || !voice.held || !this.voices.has(voice)) return;
     const now = this.now(),

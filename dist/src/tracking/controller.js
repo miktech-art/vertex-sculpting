@@ -1,4 +1,10 @@
-import { GestureBinding, inspectRightHand, PITCH_BINDING } from "./gesture.js";
+import {
+  GestureBinding,
+  ReleaseBinding,
+  inspectRightHand,
+  inspectReleaseHands,
+  PITCH_BINDING,
+} from "./gesture.js";
 
 const EDGES = [
   [0, 1],
@@ -30,11 +36,18 @@ export class HandController {
     onPitch = () => {},
     onGate = () => {},
     getPitch = () => 220,
+    getRelease = () => 1,
+    onRelease = () => {},
+    onEditing = () => {},
   } = {}) {
     this.onEnable = onEnable;
     this.onPitch = onPitch;
     this.onGate = onGate;
     this.getPitch = getPitch;
+    this.getRelease = getRelease;
+    this.onRelease = onRelease;
+    this.onEditing = onEditing;
+    this.editing = false;
     this.button = document.querySelector("#camera-button");
     this.panel = document.querySelector("#camera-panel");
     this.video = document.querySelector("#camera-video");
@@ -42,6 +55,7 @@ export class HandController {
     this.status = document.querySelector("#camera-status");
     this.placeholder = document.querySelector("#camera-placeholder");
     this.binding = new GestureBinding();
+    this.releaseBinding = new ReleaseBinding();
     this.active = false;
     this.starting = false;
     this.blocked = false;
@@ -153,6 +167,7 @@ export class HandController {
       this.overlay.height = height;
       this.video.parentElement.style.aspectRatio = `${width}/${height}`;
       this.binding.reset(this.getPitch());
+      this.releaseBinding.reset(this.getRelease());
       this.active = true;
       this.starting = false;
       this.blocked = false;
@@ -194,8 +209,8 @@ export class HandController {
       const c = this.frameContext,
         w = this.frameCanvas.width,
         h = this.frameCanvas.height;
-      // Mirror pixels before inference so handedness and the mirrored preview agree.
-      c.setTransform(-1, 0, 0, 1, w, 0);
+      // Task handedness follows unmirrored camera input. Mirror only the preview/overlay.
+      c.setTransform(1, 0, 0, 1, 0, 0);
       c.drawImage(this.video, 0, 0, w, h);
       const frame = this.frameCanvas.transferToImageBitmap();
       this.worker.postMessage({ type: "frame", frame, timestamp: now }, [
@@ -206,20 +221,30 @@ export class HandController {
   };
   consume(result, time) {
     if (!this.active) return;
+    const releasePose = inspectReleaseHands(result);
     if (this.blocked) {
       const sample = inspectRightHand(result);
-      this.draw(sample, false);
-      this.indicators(sample);
-      if (sample.allowed) {
-        this.setStatus("Open your hand to resume", "ready");
+      this.draw(sample, false, releasePose);
+      this.indicators(sample, releasePose);
+      if (sample.allowed || releasePose.allowed) {
+        this.setStatus("Relax both hands to resume", "ready");
         return;
       }
       this.blocked = false;
       this.binding.reset(this.getPitch());
+      this.releaseBinding.reset(this.getRelease());
     }
-    const sample = this.binding.update(result, time);
-    this.draw(sample, sample.active && sample.allowed);
-    this.indicators(sample);
+    // Release takes priority: a right-hand pinch must never also move pitch.
+    const sample = this.binding.update(releasePose.allowed ? {} : result, time);
+    const release = this.releaseBinding.update(result, time);
+    const editing = sample.active || release.active;
+    const wasEditing = this.editing;
+    if (editing !== this.editing) {
+      this.editing = editing;
+      if (editing) this.onEditing(true);
+    }
+    this.draw(sample, sample.active && sample.allowed, release);
+    this.indicators(sample, release);
     if (sample.active !== this.gate) {
       this.gate = sample.active;
       this.onGate(this.gate);
@@ -230,51 +255,97 @@ export class HandController {
         this.onPitch(sample.pitch);
       }
       this.setStatus(`Pitch active · ${Math.round(sample.pitch)} Hz`, "active");
-    } else
+    } else if (release.release !== null && release.allowed) {
+      this.onRelease(release.release);
       this.setStatus(
-        !sample.hasRight
-          ? "Show your right hand"
-          : sample.allowed
-            ? "Hold pose…"
-            : "Curl middle, ring and little fingers",
+        `Release active · ${release.release.toFixed(2)} s`,
+        "active",
+      );
+    } else {
+      this.setStatus(
+        release.allowed || sample.allowed
+          ? "Hold pose…"
+          : release.leftOpen
+            ? "Pinch right thumb + index for release"
+            : !sample.hasRight
+              ? "Show your right hand"
+              : !sample.indexExtended
+                ? "Straighten your right index finger"
+                : "Press right middle, ring + pinky tips into palm",
         "ready",
       );
+    }
+    if (!editing && wasEditing) this.onEditing(false);
   }
-  indicators(sample) {
-    document.querySelectorAll("[data-finger]").forEach((node, i) => {
-      node.dataset.curled = sample.curled[i] ? "true" : "false";
+  indicators(sample, release = {}) {
+    document.querySelectorAll("[data-finger]").forEach((node) => {
+      const index = ["middle", "ring", "pinky"].indexOf(node.dataset.finger);
+      const valid = index < 0 ? sample.indexExtended : sample.curled[index];
+      node.dataset.curled = valid ? "true" : "false";
       node.setAttribute(
         "aria-label",
-        `${["Middle", "Ring", "Little"][i]} finger ${sample.curled[i] ? "curled" : "open"}`,
+        index < 0
+          ? `Index ${valid ? "extended" : "bent"}`
+          : `${["Middle", "Ring", "Pinky"][index]} fingertip ${valid ? "at palm" : "away from palm"}`,
       );
     });
+    for (const [id, valid] of [
+      ["left-open", release.leftOpen],
+      ["right-pinch", release.pinched],
+    ]) {
+      const node = document.getElementById(id);
+      node.dataset.valid = valid ? "true" : "false";
+      node.setAttribute(
+        "aria-label",
+        `${id === "left-open" ? "Left hand open and upright" : "Right thumb and index pinched"}: ${valid ? "yes" : "no"}`,
+      );
+    }
   }
-  draw(sample, active) {
+  draw(sample, active, release = {}) {
     const c = this.overlay.getContext("2d"),
       w = this.overlay.width,
       h = this.overlay.height;
     c.clearRect(0, 0, w, h);
-    if (!sample.landmarks) return;
-    const points = sample.landmarks;
-    c.lineWidth = 1.3;
-    c.strokeStyle = active ? "#e7c3a1" : "#ffffffa0";
-    c.beginPath();
-    for (const [a, b] of EDGES) {
-      c.moveTo(points[a].x * w, points[a].y * h);
-      c.lineTo(points[b].x * w, points[b].y * h);
-    }
-    c.stroke();
-    for (let i = 0; i < points.length; i++) {
+    const drawHand = (points, label, highlighted) => {
+      if (!points) return;
+      const x = (i) => (1 - points[i].x) * w,
+        y = (i) => points[i].y * h;
+      c.lineWidth = 1.3;
+      c.strokeStyle = highlighted ? "#e7c3a1" : "#ffffffa0";
       c.beginPath();
-      c.arc(
-        points[i].x * w,
-        points[i].y * h,
-        i === 8 ? 5 : 2.1,
-        0,
-        Math.PI * 2,
-      );
-      c.fillStyle = i === 8 && active ? "#e7c3a1" : "#fff";
-      c.fill();
+      for (const [a, b] of EDGES) {
+        c.moveTo(x(a), y(a));
+        c.lineTo(x(b), y(b));
+      }
+      c.stroke();
+      for (let i = 0; i < points.length; i++) {
+        c.beginPath();
+        c.arc(x(i), y(i), i === 8 ? 5 : 2.1, 0, Math.PI * 2);
+        c.fillStyle = highlighted ? "#e7c3a1" : "#fff";
+        c.fill();
+      }
+      c.font = "18px monospace";
+      c.fillText(label, x(0) + 8, y(0) - 8);
+    };
+    drawHand(release.left?.landmarks, "L", release.leftOpen);
+    drawHand(
+      release.right?.landmarks || sample.landmarks,
+      "R",
+      active || (release.active && release.allowed),
+    );
+    if (
+      release.leftOpen &&
+      release.pinched &&
+      release.anchor &&
+      release.pinch
+    ) {
+      c.strokeStyle = "#e7c3a1";
+      c.setLineDash([5, 5]);
+      c.beginPath();
+      c.moveTo((1 - release.anchor.x) * w, release.anchor.y * h);
+      c.lineTo((1 - release.pinch.x) * w, release.anchor.y * h);
+      c.stroke();
+      c.setLineDash([]);
     }
     c.setLineDash([3, 5]);
     c.strokeStyle = "#ffffff35";
@@ -289,11 +360,16 @@ export class HandController {
   disarm() {
     this.blocked = true;
     this.binding.reset(this.getPitch());
+    this.releaseBinding.reset(this.getRelease());
+    if (this.editing) {
+      this.editing = false;
+      this.onEditing(false);
+    }
     if (this.gate) {
       this.gate = false;
       this.onGate(false);
     }
-    if (this.active) this.setStatus("Open your hand to resume", "ready");
+    if (this.active) this.setStatus("Relax both hands to resume", "ready");
   }
   stop() {
     this.epoch++;
@@ -304,6 +380,10 @@ export class HandController {
     if (this.gate) {
       this.gate = false;
       this.onGate(false);
+    }
+    if (this.editing) {
+      this.editing = false;
+      this.onEditing(false);
     }
     this.cancelLoad?.();
     this.cancelLoad = null;
@@ -320,6 +400,7 @@ export class HandController {
       .clearRect(0, 0, this.overlay.width, this.overlay.height);
     this.indicators({ curled: [false, false, false] });
     this.binding.reset(this.getPitch());
+    this.releaseBinding.reset(this.getRelease());
     this.button.textContent = "Enable";
     this.setStatus("Camera off");
   }

@@ -165,13 +165,16 @@
               ></video>
               <canvas
                 id="hand-overlay"
-                aria-label="Detected right hand landmarks"
+                aria-label="Detected left and right hand landmarks"
               ></canvas>
               <div id="camera-placeholder">Camera off</div>
             </div>
             <div class="camera-binding">
               <span>Right index Y → Pitch</span>
-              <div class="finger-indicators" aria-label="Finger curl state">
+              <div
+                class="finger-indicators"
+                aria-label="Pitch pose requirements"
+              >
                 <span
                   data-finger="middle"
                   data-curled="false"
@@ -183,18 +186,33 @@
                   aria-label="Ring finger open"
                   >R</span
                 ><span
-                  data-finger="little"
+                  data-finger="pinky"
                   data-curled="false"
-                  aria-label="Little finger open"
-                  >L</span
+                  aria-label="Pinky fingertip away from palm"
+                  >P</span
+                ><span
+                  data-finger="index"
+                  data-curled="false"
+                  aria-label="Index bent"
+                  >I</span
                 >
+              </div>
+            </div>
+            <div class="camera-binding">
+              <span>Hand distance → Release</span>
+              <div class="release-indicators">
+                <span id="left-open" data-valid="false">L ↑</span
+                ><span id="right-pinch" data-valid="false">R pinch</span>
               </div>
             </div>
             <p id="camera-status" role="status" aria-live="polite">
               Camera off
             </p>
             <p class="camera-instruction">
-              Curl M/R/L to hold a note. Index up raises pitch.
+              Pitch: right M/R/P tips to palm, index straight. Up raises
+              pitch.<br />
+              Release: left hand fully open and upright + right pinch. Spread
+              apart for longer release.
             </p>
           </section>
           <div id="sound-inspector">

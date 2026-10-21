@@ -221,3 +221,17 @@ test("WAV export interleaves stereo samples with a valid PCM header", async () =
   assert.equal(v.getInt16(50, true), -16384);
   assert.equal(v.getInt16(52, true), -32768);
 });
+
+test("release edits apply to held voices at gate-off without altering already scheduled notes", async () => {
+  const engine = new NativeAudioEngine();
+  const held = await engine.trigger(PRESETS[0].params, { held: true });
+  const finite = await engine.trigger(PRESETS[0].params);
+  const original = finite.params.release;
+  engine.setRelease(2.5);
+  assert.equal(held.params.release, 2.5);
+  assert.equal(finite.params.release, original);
+  engine.release(held);
+  assert.equal(held.envelope.gain.events.at(-1).time, engine.now() + 2.5);
+  engine.disposeVoice(held);
+  engine.disposeVoice(finite);
+});
