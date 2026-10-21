@@ -99,7 +99,7 @@ This is an STFT-inspired, model-based harmonic view, not a measured spectrogram 
 
 ## Echoes on the time axis (v0.6)
 
-Echoes translate longitudinally by `repeat index × delay time × units per second`, while keeping the original geometry, length and line thickness. Each repeat has gain `delay mix × feedback^(index−1)`, represented with the same visual amplitude compression. Each copy has a transverse separation of at least 32 units, increasing with the sound body, with no depth offset or artificial shrinking. The visible train ends below 0.008 gain (maximum 10 echoes, covering the supported parameter range).
+Echoes translate longitudinally by `repeat index × delay time × units per second`, while keeping the original geometry, length and line thickness. Each repeat has gain `delay mix × cbrt(feedback)^(index−1)`, represented with the same visual amplitude compression. Each copy has a transverse separation of at least 32 units, increasing with the sound body, with no depth offset or artificial shrinking. The visible train ends below 0.008 gain (maximum 30 echoes, covering the supported parameter range).
 
 A shared seconds scale extends through the last visible echo. The narrow present-moment window is one third of its original temporal width, and intersects every copy at its local sound time; it continues across echoes after the source envelope finishes. Held-note previews cycle across the full displayed timeline. The ADSR editor remains the source envelope only.
 
@@ -114,3 +114,7 @@ All native sliders capture pointer movement and emit input continuously; keyboar
 ADSR changes cancel future automation, bridge the current level over 20 ms, and reschedule only the envelope landmarks ahead of the elapsed note time. Sources remain available until voice cleanup so an unfinished envelope can be extended. Finished source envelopes do not restart when editing effect tails, and repeated edits do not indefinitely extend old tail lifetimes. Volume controls both dry sound and tails. Stop fades each voice's complete bus and cleans its nodes and pending tasks.
 
 Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy, rather than the former 4 units. Fit time considers the full transverse stack as well as its longitudinal extent.
+
+## Expanded delay (v0.7.1)
+
+The shared `src/delay.js` response stretches repeat decay by three times: actual audio feedback is the cube root of the stored Feedback control value. The first repeat level and delay interval stay unchanged. This produces roughly 2–3 times as many audible/visible repeats at nonzero feedback, up to 30. Zero feedback still produces one repeat. Live audio, offline WAV tail length, and sculpture copies use the same decay and threshold; saved parameter values and mappings are preserved.

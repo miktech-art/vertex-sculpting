@@ -1,5 +1,5 @@
-export const MAX_ECHOES = 10;
-export const MIN_ECHO_LEVEL = 0.008;
+import { delayEchoes } from "../delay.js";
+export { MAX_ECHOES, MIN_ECHO_LEVEL } from "../delay.js";
 
 // All copies share one seconds-to-longitudinal-distance scale and identical size.
 export function buildEchoLayout(
@@ -11,9 +11,7 @@ export function buildEchoLayout(
     copies = [
       { index: 0, time: 0, gain: 1, scale: 1, offset: { x: 0, y: 0, z: 0 } },
     ];
-  for (let i = 1; i <= MAX_ECHOES; i++) {
-    const gain = mix * feedback ** (i - 1);
-    if (gain < MIN_ECHO_LEVEL) break;
+  for (const { index: i, gain } of delayEchoes(mix, feedback)) {
     copies.push({
       index: i,
       time: i * delay,

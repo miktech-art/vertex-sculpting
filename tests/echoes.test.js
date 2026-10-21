@@ -24,7 +24,7 @@ test("echo starts follow exact delay intervals on the same longitudinal time sca
     assert.equal(copy.offset.z, 0);
     assert.equal(
       copy.gain,
-      copy.index === 0 ? 1 : 0.4 * 0.5 ** (copy.index - 1),
+      copy.index === 0 ? 1 : 0.4 * Math.cbrt(0.5) ** (copy.index - 1),
     );
     assert.equal(copy.offset.y, copy.index * 32);
   }

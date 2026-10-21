@@ -1,3 +1,5 @@
+import { delayEchoes } from "./delay.js";
+
 // Sound definitions are independent of UI, renderer, and audio backend.
 export const SCHEMA = "sound-form/preset-v1";
 export const PARAMETERS = [
@@ -208,7 +210,7 @@ export const PARAMETERS = [
     max: 0.65,
     value: 0.3,
     unit: "%",
-    description: "Amount passed from one repeat to the next.",
+    description: "Repeat persistence, with an expanded decay range.",
   },
   {
     id: "reverbMix",
@@ -445,18 +447,7 @@ export function envelopeAt(p, t) {
   return t < p.release ? p.sustain * (1 - t / p.release) : 0;
 }
 export function tailDuration(p) {
-  const repeats =
-    p.delayMix > 0
-      ? p.delayTime *
-        (1 +
-          Math.min(
-            10,
-            Math.ceil(
-              Math.log(0.008 / Math.max(0.008, p.delayMix)) /
-                Math.log(Math.max(0.001, p.feedback)),
-            ),
-          ))
-      : 0;
+  const repeats = p.delayTime * delayEchoes(p.delayMix, p.feedback).length;
   return duration(p) + Math.max(repeats, p.reverbMix > 0 ? p.reverbDecay : 0);
 }
 export function noteName(hz) {

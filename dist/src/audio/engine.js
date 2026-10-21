@@ -1,3 +1,4 @@
+import { delayFeedback } from "../delay.js";
 import { filterSettings, harmonicAmplitude } from "../spectral/filter.js";
 import { duration, tailDuration, clamp } from "../model.js";
 import { voiceEnvelopeAt, futureEnvelope } from "./live-envelope.js";
@@ -263,7 +264,7 @@ export class NativeAudioEngine {
       feedback = v.own(this.context.createGain()),
       wet = v.own(this.context.createGain());
     node.delayTime.value = v.params.delayTime;
-    feedback.gain.value = v.params.feedback;
+    feedback.gain.value = delayFeedback(v.params.feedback);
     wet.gain.value = initial ? v.params.delayMix : 0;
     v.output.connect(node);
     node.connect(feedback).connect(node);
@@ -396,7 +397,7 @@ export class NativeAudioEngine {
         if (v.delay) {
           v.delay.node.delayTime.setTargetAtTime(params.delayTime, now, 0.03);
           v.delay.wet.gain.setTargetAtTime(params.delayMix, now, RAMP);
-          v.delay.feedback.gain.setTargetAtTime(params.feedback, now, RAMP);
+          v.delay.feedback.gain.setTargetAtTime(delayFeedback(params.feedback), now, RAMP);
         }
       }
       if (["reverbMix", "reverbDecay"].some(changed)) {

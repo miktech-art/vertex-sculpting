@@ -156,6 +156,7 @@ test("effects only create feedback loops when delay is enabled", async () => {
     const delays = event.nodes.filter((n) => n.type === "delay");
     assert.equal(delays.length, mix ? 1 : 0);
     if (mix) {
+      assert.equal(event.delay.feedback.gain.value, Math.cbrt(BASE.feedback));
       assert.ok(
         event.nodes.some(
           (n) => n.type === "gain" && n.connections.includes(delays[0]),
@@ -300,7 +301,7 @@ test("all source and effect edits update the existing voice at the current clock
   assert.equal(voice.noise.gain.gain.events.at(-1).value, 0.2 * 0.65);
   assert.equal(voice.motion.source.frequency.events.at(-1).value, 7);
   assert.equal(voice.delay.node.delayTime.events.at(-1).value, 0.6);
-  assert.equal(voice.delay.feedback.gain.events.at(-1).value, 0.5);
+  assert.equal(voice.delay.feedback.gain.events.at(-1).value, Math.cbrt(0.5));
   assert.equal(voice.reverb.wet.gain.events.at(-1).value, 0.4);
   assert.equal(voice.drive.shaper.curve.length, 2048);
   engine.disposeVoice(voice);
