@@ -27,9 +27,9 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
 });
 
-test("the only bundled sound is sine", () => {
+test("the only bundled sound is saw", () => {
   assert.equal(PRESETS.length, 1);
-  assert.equal(PRESETS[0].name, "sine");
+  assert.equal(PRESETS[0].name, "saw");
 });
 
 test("all factory sounds round-trip through the public preset format", () => {
@@ -154,11 +154,11 @@ test("session undo, redo and load retain independent documents", () => {
   assert.equal(store.initial.name, "loaded sine");
   store.edit((d) => (d.params.pitch = 880));
   store.commit();
-  assert.equal(store.initial.params.pitch, 220);
+  assert.equal(store.initial.params.pitch, PRESETS[0].params.pitch);
   store.undo();
   store.undo();
-  assert.equal(store.document.name, "sine");
-  assert.equal(store.initial.name, "sine");
+  assert.equal(store.document.name, "saw");
+  assert.equal(store.initial.name, "saw");
   store.redo();
   assert.equal(store.document.name, "loaded sine");
   assert.equal(store.initial.name, "loaded sine");
@@ -176,8 +176,8 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
     JSON.stringify({ document: legacy, saved: [legacy] }),
   );
   const first = new Store();
-  assert.equal(first.document.name, "sine");
-  assert.equal(first.document.params.harmonics, 0);
+  assert.equal(first.document.name, "saw");
+  assert.equal(first.document.params.harmonics, PRESETS[0].params.harmonics);
   assert.equal(first.saved.length, 0);
   assert.deepEqual(first.document.routes, DEFAULT_ROUTES);
   assert.equal(
@@ -190,5 +190,29 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
   const second = new Store();
   assert.equal(second.document.params.attack, 0.25);
   assert.equal(second.document.routes[0].amount, 0.5);
+  storage.clear();
+});
+
+test("the saw update replaces the active sine and preserves saved sounds and connection edits", () => {
+  storage.clear();
+  const previous = makeDocument();
+  previous.name = "sine";
+  previous.params = { ...BASE };
+  previous.routes[0].amount = 0.6;
+  storage.set(
+    "sound-form:session:v1",
+    JSON.stringify({
+      revision: 2,
+      document: previous,
+      initial: previous,
+      saved: [previous],
+    }),
+  );
+  const store = new Store();
+  assert.equal(store.document.name, "saw");
+  assert.equal(store.document.params.harmonics, PRESETS[0].params.harmonics);
+  assert.equal(store.saved.length, 1);
+  assert.equal(store.saved[0].name, "sine");
+  assert.equal(store.document.routes[0].amount, 0.6);
   storage.clear();
 });

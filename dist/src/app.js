@@ -15,6 +15,7 @@ import { NativeAudioEngine, encodeWav } from "./audio/engine.js";
 import { SculptureRenderer } from "./visual/sculpture.js";
 import { MappingEditor } from "./ui/mapping.js";
 import { ContourView } from "./ui/contour.js";
+import { HandController } from "./tracking/controller.js";
 
 const $ = (selector) => document.querySelector(selector);
 const store = new Store(),
@@ -43,7 +44,10 @@ let mode = "sculpt",
   playingPromise = false,
   playbackTicket = 0,
   toastTimer = null,
-  frameTime = 0;
+  frameTime = 0,
+  hands = null,
+  gestureVoice = null,
+  gestureTicket = 0;
 const inputs = new Map();
 function toast(message) {
   $("#toast").textContent = message;
@@ -120,7 +124,9 @@ function syncControls() {
     output.textContent = formatValue(id, value);
   }
 }
-const thumbnailPaths = { sine: "M4 16 H116" };
+const thumbnailPaths = {
+  saw: "M4 16 Q30 1 60 7 T116 16 M4 16 Q30 31 60 25 T116 16 M4 16 Q60 5 116 16 M4 16 Q60 27 116 16 M4 16H116",
+};
 function renderPresets() {
   const cards = $("#preset-cards");
   cards.replaceChildren();
@@ -168,6 +174,8 @@ function renderReadouts(p) {
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
 }
 function sync(doc, kind) {
+  // Pitch is the first parameter with a live audio path; all input sources share it.
+  audio.setPitch(doc.params.pitch);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
@@ -183,6 +191,7 @@ sync(store.document, "load");
 
 async function play() {
   if (playingPromise) return;
+  hands?.disarm();
   playingPromise = true;
   const ticket = playbackTicket;
   try {
@@ -213,7 +222,10 @@ function scheduleNext(immediate = false) {
     : (duration(store.document.params) + 0.18) * 1000;
   loopTimer = setTimeout(() => play(), interval);
 }
-function stop() {
+function stop({ keepBinding = false } = {}) {
+  gestureTicket++;
+  gestureVoice = null;
+  if (!keepBinding) hands?.disarm();
   playbackTicket++;
   clearTimeout(loopTimer);
   loopTimer = null;
@@ -257,7 +269,7 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source: "Sound changes apply on the next play.",
+      source: "Pitch changes live. Other settings apply on the next play.",
       contour: "Drag the ADSR handles to change the envelope.",
       space: "Delay and reverb settings.",
     }[group];
@@ -313,6 +325,7 @@ $("#reset-mappings").addEventListener("click", () => {
 });
 function beginCompare() {
   if (compare) return;
+  hands?.disarm();
   compareWasPlaying =
     !!activeEvent && audio.now() - activeEvent.start < activeEvent.total;
   compare = true;
@@ -529,6 +542,47 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stop();
 });
+
+async function startGestureNote() {
+  stop({ keepBinding: true });
+  const ticket = ++gestureTicket;
+  store.begin();
+  try {
+    const event = await audio.trigger(store.document.params, { held: true });
+    if (ticket !== gestureTicket || !hands.gate || document.hidden) {
+      audio.disposeVoice(event);
+      return;
+    }
+    gestureVoice = event;
+    activeEvent = event;
+    renderer.trigger(event);
+    miniRenderer.trigger(event);
+  } catch (error) {
+    hands.disarm();
+    toast(error.message || "Gesture audio could not start.");
+  }
+}
+function releaseGestureNote() {
+  gestureTicket++;
+  if (gestureVoice) {
+    audio.release(gestureVoice);
+    gestureVoice = null;
+  }
+  store.commit();
+}
+hands = new HandController({
+  onEnable: () => audio.init(),
+  getPitch: () => store.document.params.pitch,
+  onGate: (active) => {
+    if (active) startGestureNote();
+    else releaseGestureNote();
+  },
+  onPitch: (pitch) => {
+    store.document.params.pitch = pitch;
+    store.emit("gesture");
+  },
+});
+
 function animate(ms) {
   const now = audio.context ? audio.now() : ms / 1000;
   const playing =
@@ -543,7 +597,9 @@ function animate(ms) {
     $("#play-button").classList.toggle("playing", !!playing);
     $(".state-dot").classList.toggle("playing", !!playing);
     $("#stage-state").textContent = playing
-      ? "PLAYING"
+      ? activeEvent.held
+        ? "GESTURE"
+        : "PLAYING"
       : compare
         ? "ORIGINAL FORM"
         : "PAUSED";
@@ -553,7 +609,12 @@ function animate(ms) {
           .padStart(2, "0"),
         seconds = (elapsed % 60).toFixed(2).padStart(5, "0");
       $("#transport-time").textContent = `${minutes}:${seconds}`;
-      contour.draw(elapsed / activeEvent.duration);
+      contour.draw(
+        activeEvent.held
+          ? (elapsed % duration(activeEvent.params)) /
+              duration(activeEvent.params)
+          : elapsed / activeEvent.duration,
+      );
     } else {
       $("#transport-time").textContent = "00:00.00";
       contour.draw();

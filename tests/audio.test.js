@@ -17,6 +17,12 @@ class Param {
   setTargetAtTime(value, time) {
     this.events.push({ type: "target", value, time });
   }
+  cancelAndHoldAtTime(time) {
+    this.events.push({ type: "hold", time });
+  }
+  cancelScheduledValues(time) {
+    this.events.push({ type: "cancel", time });
+  }
 }
 class Node {
   constructor(type) {
@@ -156,6 +162,43 @@ test("effects only create feedback loops when delay is enabled", async () => {
     }
     engine.disposeVoice(event);
   }
+});
+test("the default sound has a broad harmonic spectrum and active modulation/effects", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger(PRESETS[0].params);
+  const oscillator = voice.pitchedSources[0];
+  assert.equal(oscillator.wave.imag.length, 97);
+  assert.ok(oscillator.wave.imag[64] > 0);
+  assert.ok(voice.nodes.some((n) => n.type === "convolver"));
+  assert.ok(voice.nodes.some((n) => n.type === "delay"));
+  assert.ok(voice.sources.some((n) => n.type === "bufferSource"));
+  engine.disposeVoice(voice);
+});
+test("live pitch updates pitched voices without changing the tremolo rate", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger(PRESETS[0].params);
+  const lfo = voice.sources.find((s) => s.type === "oscillator" && !s.wave);
+  engine.setPitch(440);
+  assert.ok(
+    voice.pitchedSources.every((s) => s.frequency.events.at(-1).value === 440),
+  );
+  assert.equal(lfo.frequency.events.length, 0);
+  engine.disposeVoice(voice);
+});
+test("gesture voices sustain until released and then have a finite effect tail", async () => {
+  const engine = new NativeAudioEngine(),
+    voice = await engine.trigger(PRESETS[0].params, { held: true });
+  assert.equal(voice.held, true);
+  assert.equal(voice.total, Infinity);
+  assert.ok(voice.sources.every((source) => source.stopTime === undefined));
+  engine.context.currentTime += 2;
+  engine.release(voice);
+  assert.equal(voice.held, false);
+  assert.equal(voice.released, true);
+  assert.ok(Number.isFinite(voice.total) && voice.total > voice.duration);
+  assert.equal(voice.envelope.gain.events.at(-1).value, 0);
+  assert.ok(voice.sources.every((source) => source.stopTime > engine.now()));
+  engine.disposeVoice(voice);
 });
 test("WAV export interleaves stereo samples with a valid PCM header", async () => {
   const buffer = {

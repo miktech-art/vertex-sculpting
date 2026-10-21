@@ -45,7 +45,7 @@
           <div class="stage-header">
             <div>
               <h1 id="preset-title">
-                sine<span class="modified" id="modified-indicator" hidden
+                saw<span class="modified" id="modified-indicator" hidden
                   >·</span
                 >
               </h1>
@@ -143,6 +143,60 @@
           </div>
         </main>
         <aside class="inspector" aria-label="Sound controls">
+          <section
+            id="camera-panel"
+            class="camera-panel"
+            aria-label="Webcam and hand tracking"
+            data-state="off"
+            data-model="unloaded"
+          >
+            <div class="camera-heading">
+              <span class="eyebrow">CAMERA</span
+              ><button id="camera-button" class="text-button">Enable</button>
+            </div>
+            <div class="camera-frame">
+              <video
+                id="camera-video"
+                autoplay
+                playsinline
+                muted
+                hidden
+                aria-label="Mirrored webcam video"
+              ></video>
+              <canvas
+                id="hand-overlay"
+                aria-label="Detected right hand landmarks"
+              ></canvas>
+              <div id="camera-placeholder">Camera off</div>
+            </div>
+            <div class="camera-binding">
+              <span>Right index Y → Pitch</span>
+              <div class="finger-indicators" aria-label="Finger curl state">
+                <span
+                  data-finger="middle"
+                  data-curled="false"
+                  aria-label="Middle finger open"
+                  >M</span
+                ><span
+                  data-finger="ring"
+                  data-curled="false"
+                  aria-label="Ring finger open"
+                  >R</span
+                ><span
+                  data-finger="little"
+                  data-curled="false"
+                  aria-label="Little finger open"
+                  >L</span
+                >
+              </div>
+            </div>
+            <p id="camera-status" role="status" aria-live="polite">
+              Camera off
+            </p>
+            <p class="camera-instruction">
+              Curl M/R/L to hold a note. Index up raises pitch.
+            </p>
+          </section>
           <div id="sound-inspector">
             <div class="inspector-heading">
               <span class="eyebrow">PARAMETERS</span>
@@ -168,7 +222,9 @@
             <div id="parameter-controls" class="parameter-controls"></div>
             <div class="inspector-note">
               <span>↳</span>
-              <p id="parameter-note">Sound changes apply on the next play.</p>
+              <p id="parameter-note">
+                Pitch changes live. Other settings apply on the next play.
+              </p>
             </div>
           </div>
           <div id="route-inspector" hidden>

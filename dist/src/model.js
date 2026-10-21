@@ -31,7 +31,7 @@ export const PARAMETERS = [
     max: 1,
     value: 0,
     unit: "%",
-    description: "Adds twelve harmonics to the fundamental.",
+    description: "Adds up to 96 harmonics to the fundamental.",
   },
   {
     id: "detune",
@@ -489,7 +489,36 @@ export function validateDocument(input) {
     routes,
   };
 }
-export const PRESETS = [{ id: "sine", name: "sine", params: { ...BASE } }];
+export const PRESETS = [
+  {
+    id: "saw",
+    name: "saw",
+    params: {
+      ...BASE,
+      pitch: 146.83,
+      volume: 0.3,
+      harmonics: 0.86,
+      detune: 9,
+      noise: 0.018,
+      cutoff: 4400,
+      resonance: 1.1,
+      drive: 0.12,
+      width: 0.65,
+      attack: 0.08,
+      decay: 0.45,
+      sustain: 0.72,
+      hold: 0.9,
+      release: 1.05,
+      motion: 0.09,
+      rate: 2.7,
+      delayMix: 0.14,
+      delayTime: 0.32,
+      feedback: 0.28,
+      reverbMix: 0.2,
+      reverbDecay: 2.1,
+    },
+  },
+];
 export function makeDocument(preset = PRESETS[0]) {
   return {
     schema: SCHEMA,

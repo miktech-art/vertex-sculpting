@@ -376,7 +376,9 @@ export class SculptureRenderer {
         for (const event of this.events) {
           const t = now - event.start;
           if (t < 0 || t > event.duration) continue;
-          const u = t / event.duration;
+          const u = event.held
+            ? (t % duration(event.params)) / duration(event.params)
+            : t / event.duration;
           c.beginPath();
           let started = false;
           for (const pt of pts) {

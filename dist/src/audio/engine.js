@@ -58,13 +58,14 @@ export class NativeAudioEngine {
       this.impulses.delete(this.impulses.keys().next().value);
     return b;
   }
-  async trigger(params) {
+  async trigger(params, { held = false } = {}) {
     await this.init();
     const p = { ...params },
       c = this.context,
       start = c.currentTime + 0.015,
       nodes = [],
-      sources = [];
+      sources = [],
+      pitchedSources = [];
     const own = (n) => {
       nodes.push(n);
       return n;
@@ -93,10 +94,10 @@ export class NativeAudioEngine {
       .connect(amp)
       .connect(output);
     output.gain.value = 0.52;
-    const real = new Float32Array(14),
-      imag = new Float32Array(14);
+    const real = new Float32Array(97),
+      imag = new Float32Array(97);
     imag[1] = 1;
-    for (let h = 2; h < 14; h++)
+    for (let h = 2; h < 97; h++)
       imag[h] = p.harmonics / h ** (1.1 + (1 - p.harmonics) * 1.5);
     const wave = c.createPeriodicWave(real, imag);
     for (let v = 0; v < 2; v++) {
@@ -111,6 +112,7 @@ export class NativeAudioEngine {
       osc.connect(gain).connect(pan).connect(input);
       osc.start(start);
       sources.push(osc);
+      pitchedSources.push(osc);
     }
     if (p.noise > 0) {
       const noise = own(c.createBufferSource()),
@@ -135,8 +137,10 @@ export class NativeAudioEngine {
       p.volume * p.sustain,
       start + p.attack + p.decay,
     );
-    env.gain.setValueAtTime(p.volume * p.sustain, start + gate);
-    env.gain.linearRampToValueAtTime(0, start + end);
+    if (!held) {
+      env.gain.setValueAtTime(p.volume * p.sustain, start + gate);
+      env.gain.linearRampToValueAtTime(0, start + end);
+    }
     amp.gain.value = 1 - p.motion / 2;
     if (p.motion > 0) {
       const lfo = own(c.createOscillator()),
@@ -166,21 +170,66 @@ export class NativeAudioEngine {
       wet.gain.value = p.reverbMix;
       output.connect(convolver).connect(wet).connect(this.master);
     }
-    for (const source of sources) source.stop(start + end + 0.03);
+    if (!held) for (const source of sources) source.stop(start + end + 0.03);
     const voice = {
       start,
-      duration: end,
-      total: tailDuration(p),
+      duration: held ? Infinity : end,
+      total: held ? Infinity : tailDuration(p),
       params: p,
       nodes,
       sources,
+      pitchedSources,
+      envelope: env,
+      held,
+      released: false,
     };
     this.voices.add(voice);
+    if (!held)
+      voice.timer = setTimeout(
+        () => this.disposeVoice(voice),
+        (voice.total + 0.3) * 1000,
+      );
+    return voice;
+  }
+  setPitch(hz) {
+    const pitch = clamp(hz, 55, 1760),
+      now = this.now();
+    for (const voice of this.voices) {
+      if (voice.released) continue;
+      for (const source of voice.pitchedSources)
+        source.frequency.setTargetAtTime(pitch, now, 0.03);
+      voice.params.pitch = pitch;
+    }
+  }
+  release(voice) {
+    if (!voice || !voice.held || !this.voices.has(voice)) return;
+    const now = this.now(),
+      p = voice.params,
+      elapsed = Math.max(0, now - voice.start),
+      gain = voice.envelope.gain;
+    if (typeof gain.cancelAndHoldAtTime === "function")
+      gain.cancelAndHoldAtTime(now);
+    else {
+      gain.cancelScheduledValues(now);
+      const level =
+        elapsed < p.attack
+          ? elapsed / p.attack
+          : elapsed < p.attack + p.decay
+            ? 1 - ((1 - p.sustain) * (elapsed - p.attack)) / p.decay
+            : p.sustain;
+      gain.setValueAtTime(p.volume * level, now);
+    }
+    gain.linearRampToValueAtTime(0, now + p.release);
+    for (const source of voice.sources) source.stop(now + p.release + 0.03);
+    voice.held = false;
+    voice.released = true;
+    voice.duration = elapsed + p.release;
+    const effectTail = tailDuration(p) - duration(p);
+    voice.total = voice.duration + effectTail;
     voice.timer = setTimeout(
       () => this.disposeVoice(voice),
-      (voice.total + 0.3) * 1000,
+      (p.release + effectTail + 0.3) * 1000,
     );
-    return voice;
   }
   disposeVoice(v) {
     clearTimeout(v.timer);
