@@ -21,7 +21,17 @@ const store = new Store(),
   audio = new NativeAudioEngine(),
   renderer = new SculptureRenderer($("#sculpture")),
   miniRenderer = new SculptureRenderer($("#mini-sculpture")),
-  contour = new ContourView($("#envelope-canvas"));
+  contour = new ContourView($("#envelope-canvas"), {
+    onEdit: (changes) =>
+      store.edit((doc) => Object.assign(doc.params, changes), "parameter"),
+    onCommit: () => {
+      store.commit();
+      if (looping) scheduleNext(true);
+    },
+    onScaleChange: (seconds) => {
+      $("#timeline-end").textContent = `${seconds.toFixed(2)} s`;
+    },
+  });
 const mapping = new MappingEditor(store);
 let mode = "sculpt",
   group = "source",
@@ -110,16 +120,7 @@ function syncControls() {
     output.textContent = formatValue(id, value);
   }
 }
-const thumbnailPaths = {
-  origin: "M4 16 H116",
-  velvet:
-    "M4 16 Q30 3 61 4 Q88 5 116 16 M4 16 Q30 29 61 28 Q88 26 116 16 M4 16 Q50 0 116 16 M4 16 Q50 32 116 16 M4 16 H116 M4 16 Q70 5 116 16 M4 16 Q70 27 116 16",
-  reese:
-    "M4 16 Q20 4 33 13 T60 13 T88 13 T116 16 M4 16 Q20 28 33 19 T60 19 T88 19 T116 16 M4 16 Q40 -2 76 18 T116 16 M4 16 Q40 34 76 14 T116 16 M4 16 H116",
-  bell: "M4 16 Q18 -2 40 10 T116 16 M4 16 Q18 34 40 22 T116 16 M4 16 H116 M38 16 Q45 7 60 12 T116 16 M38 16 Q45 25 60 20 T116 16 M65 16 Q74 8 116 16",
-  cloud:
-    "M4 16 L8 14 L12 17 L16 11 L20 19 L24 8 L28 22 L32 11 L36 25 L40 6 L44 24 L48 8 L52 28 L56 4 L60 25 L64 7 L68 22 L72 9 L76 25 L80 13 L84 22 L88 12 L92 20 L96 13 L100 18 L104 14 L108 17 L116 16 M4 16 H116",
-};
+const thumbnailPaths = { sine: "M4 16 H116" };
 function renderPresets() {
   const cards = $("#preset-cards");
   cards.replaceChildren();
@@ -127,9 +128,9 @@ function renderPresets() {
     const button = document.createElement("button");
     button.className = "preset-card";
     button.dataset.preset = preset.id;
-    button.title = preset.description;
-    button.setAttribute("aria-label", `Load ${preset.name}, ${preset.family}`);
-    button.innerHTML = `<svg viewBox="0 0 120 32" aria-hidden="true"><path d="${thumbnailPaths[preset.id]}"/></svg><span class="preset-number">0${i + 1}</span><span>${preset.name}</span>`;
+    button.title = `Load ${preset.name}`;
+    button.setAttribute("aria-label", `Load ${preset.name}`);
+    button.innerHTML = `<svg viewBox="0 0 120 32" aria-hidden="true"><path d="${thumbnailPaths[preset.id]}"/></svg><span>${preset.name}</span>`;
     button.addEventListener("click", () => loadPreset(preset));
     cards.append(button);
   });
@@ -146,12 +147,6 @@ function renderHeader() {
   const doc = store.document;
   $("#preset-title").firstChild.textContent = doc.name;
   const factory = PRESETS.find((p) => p.name === doc.name);
-  $("#preset-family").textContent = factory
-    ? factory.family.toUpperCase()
-    : "YOUR EXPLORATION";
-  $("#preset-description").textContent = factory
-    ? factory.description
-    : "An exploration in sound and form. Make it your own.";
   $("#modified-indicator").hidden =
     JSON.stringify(doc.params) === JSON.stringify(store.initial.params) &&
     JSON.stringify(doc.routes) === JSON.stringify(store.initial.routes);
@@ -171,7 +166,6 @@ function renderReadouts(p) {
   $("#pitch-label").textContent = formatValue("pitch", p.pitch);
   const d = duration(p);
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
-  $("#timeline-end").textContent = d.toFixed(2);
 }
 function sync(doc, kind) {
   renderer.setDocument(doc, kind === "load");
@@ -228,7 +222,7 @@ function stop() {
   renderer.stop();
   miniRenderer.stop();
   setLoop(false);
-  $("#audio-status").textContent = "READY WHEN YOU ARE";
+  $("#audio-status").textContent = "READY";
 }
 function setLoop(value) {
   looping = value;
@@ -263,9 +257,9 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source: "Change a quality. The sound updates on the next play.",
-      contour: "The outline of a sound, from first breath to last.",
-      space: "A sound and the impressions it leaves behind.",
+      source: "Sound changes apply on the next play.",
+      contour: "Drag the ADSR handles to change the envelope.",
+      space: "Delay and reverb settings.",
     }[group];
   }),
 );
@@ -293,13 +287,13 @@ $("#front-view").addEventListener("click", () => {
 });
 $("#reset-view").addEventListener("click", () => {
   renderer.resetView();
-  $("#view-label").textContent = "PERSPECTIVE";
+  $("#view-label").textContent = "FRONT VIEW";
 });
 $("#sculpture").addEventListener("pointermove", (e) => {
   if (e.buttons) $("#view-label").textContent = "PERSPECTIVE";
 });
 $("#sculpture").addEventListener("dblclick", () => {
-  $("#view-label").textContent = "PERSPECTIVE";
+  $("#view-label").textContent = "FRONT VIEW";
 });
 $("#undo-button").addEventListener("click", () => store.undo());
 $("#redo-button").addEventListener("click", () => store.redo());
@@ -408,8 +402,7 @@ function renderLibrary() {
   if (!store.saved.length) {
     const p = document.createElement("p");
     p.className = "library-empty";
-    p.textContent =
-      "Your saved sounds will appear here. Explore a preset, change its qualities, then choose Save sound.";
+    p.textContent = "No saved sounds. Use Save sound to add one.";
     list.append(p);
     return;
   }
@@ -550,10 +543,10 @@ function animate(ms) {
     $("#play-button").classList.toggle("playing", !!playing);
     $(".state-dot").classList.toggle("playing", !!playing);
     $("#stage-state").textContent = playing
-      ? "SOUND IN MOTION"
+      ? "PLAYING"
       : compare
         ? "ORIGINAL FORM"
-        : "STATIC FORM";
+        : "PAUSED";
     if (playing) {
       const minutes = Math.floor(elapsed / 60)
           .toString()
@@ -565,9 +558,7 @@ function animate(ms) {
       $("#transport-time").textContent = "00:00.00";
       contour.draw();
       if (!looping)
-        $("#audio-status").textContent = audio.muted
-          ? "AUDIO MUTED"
-          : "READY WHEN YOU ARE";
+        $("#audio-status").textContent = audio.muted ? "AUDIO MUTED" : "READY";
     }
   }
   requestAnimationFrame(animate);

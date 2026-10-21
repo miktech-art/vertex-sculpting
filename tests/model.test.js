@@ -17,6 +17,20 @@ import {
 } from "../dist/src/model.js";
 import { buildGeometry } from "../dist/src/visual/sculpture.js";
 import { Store } from "../dist/src/state.js";
+const storage = new Map();
+Object.defineProperty(globalThis, "localStorage", {
+  value: {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  },
+  configurable: true,
+});
+
+test("the only bundled sound is sine", () => {
+  assert.equal(PRESETS.length, 1);
+  assert.equal(PRESETS[0].name, "sine");
+});
 
 test("all factory sounds round-trip through the public preset format", () => {
   for (const preset of PRESETS) {
@@ -53,14 +67,16 @@ test("parameter normalization preserves physical units across every range", () =
         p.id,
       );
 });
-test("the pure origin is a single line and pitch changes only its thickness", () => {
+test("sine is one white line and lower pitch makes it thicker", () => {
   const low = { ...BASE, pitch: 55 },
     high = { ...BASE, pitch: 1760 },
     a = buildGeometry(low, resolveMappings(low, DEFAULT_ROUTES)),
     b = buildGeometry(high, resolveMappings(high, DEFAULT_ROUTES));
   assert.equal(a.lines.length, 1);
   assert.equal(a.particles.length, 0);
-  assert.ok(b.thickness > a.thickness * 3);
+  assert.ok(a.thickness > b.thickness * 3);
+  assert.equal(a.brightness, 1);
+  assert.equal(a.lines[0].alpha, 1);
   assert.deepEqual(a.lines, b.lines);
 });
 test("envelope endpoints agree with a complete finite sound event", () => {
@@ -134,17 +150,45 @@ test("session undo, redo and load retain independent documents", () => {
   assert.equal(store.document.params.pitch, initial);
   store.redo();
   assert.equal(store.document.params.pitch, 440);
-  store.load(makeDocument(PRESETS[0]));
-  assert.equal(store.initial.name, "Origin");
+  store.load(makeDocument({ ...PRESETS[0], name: "loaded sine" }));
+  assert.equal(store.initial.name, "loaded sine");
   store.edit((d) => (d.params.pitch = 880));
   store.commit();
   assert.equal(store.initial.params.pitch, 220);
   store.undo();
   store.undo();
-  assert.equal(store.document.name, "Velvet");
-  assert.equal(store.initial.name, "Velvet");
+  assert.equal(store.document.name, "sine");
+  assert.equal(store.initial.name, "sine");
   store.redo();
-  assert.equal(store.document.name, "Origin");
-  assert.equal(store.initial.name, "Origin");
+  assert.equal(store.document.name, "loaded sine");
+  assert.equal(store.initial.name, "loaded sine");
   clearTimeout(store.persistTimer);
+});
+
+test("the update clears legacy sounds and routes once, then preserves new edits", () => {
+  storage.clear();
+  const legacy = makeDocument();
+  legacy.name = "Velvet";
+  legacy.params.harmonics = 0.8;
+  legacy.routes = [];
+  storage.set(
+    "sound-form:session:v1",
+    JSON.stringify({ document: legacy, saved: [legacy] }),
+  );
+  const first = new Store();
+  assert.equal(first.document.name, "sine");
+  assert.equal(first.document.params.harmonics, 0);
+  assert.equal(first.saved.length, 0);
+  assert.deepEqual(first.document.routes, DEFAULT_ROUTES);
+  assert.equal(
+    first.document.routes.find((r) => r.source === "pitch").invert,
+    true,
+  );
+  first.document.params.attack = 0.25;
+  first.document.routes[0].amount = 0.5;
+  first.persist();
+  const second = new Store();
+  assert.equal(second.document.params.attack, 0.25);
+  assert.equal(second.document.routes[0].amount, 0.5);
+  storage.clear();
 });

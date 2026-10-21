@@ -1,5 +1,6 @@
 import { makeDocument, validateDocument } from "./model.js";
 const KEY = "sound-form:session:v1";
+const REVISION = 2;
 export class Store {
   constructor() {
     this.listeners = new Set();
@@ -8,9 +9,12 @@ export class Store {
     let initial;
     try {
       const data = JSON.parse(localStorage.getItem(KEY));
-      if (data?.document) this.document = validateDocument(data.document);
-      if (data?.initial) initial = validateDocument(data.initial);
-      if (Array.isArray(data?.saved))
+      // Apply the requested sound/library/connection reset once, then persist new edits normally.
+      if (data?.revision === REVISION && data?.document)
+        this.document = validateDocument(data.document);
+      if (data?.revision === REVISION && data?.initial)
+        initial = validateDocument(data.initial);
+      if (data?.revision === REVISION && Array.isArray(data?.saved))
         this.saved = data.saved.slice(0, 40).map(validateDocument);
     } catch {
       /* Invalid or unavailable storage starts clean. */
@@ -19,6 +23,7 @@ export class Store {
     this.undoStack = [];
     this.redoStack = [];
     this.checkpoint = null;
+    this.persist();
   }
   subscribe(fn) {
     this.listeners.add(fn);
@@ -27,18 +32,20 @@ export class Store {
   emit(kind = "change") {
     for (const fn of this.listeners) fn(this.document, kind);
     clearTimeout(this.persistTimer);
-    this.persistTimer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          KEY,
-          JSON.stringify({
-            document: this.document,
-            initial: this.initial,
-            saved: this.saved,
-          }),
-        );
-      } catch {}
-    }, 200);
+    this.persistTimer = setTimeout(() => this.persist(), 200);
+  }
+  persist() {
+    try {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({
+          revision: REVISION,
+          document: this.document,
+          initial: this.initial,
+          saved: this.saved,
+        }),
+      );
+    } catch {}
   }
   begin() {
     if (!this.checkpoint) this.checkpoint = this.snapshot();

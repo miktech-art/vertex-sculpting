@@ -1,5 +1,6 @@
 import {
   TARGETS,
+  BASE,
   normalize,
   clamp,
   denormalize,
@@ -46,7 +47,7 @@ export function buildGeometry(params, m) {
       e = envelopeAt(contour, Math.min(total - 0.00001, u * total)) * wave;
     return { x: (u - 0.5) * length, y: 0, z: 0, u, e };
   });
-  lines.push({ points: center, alpha: 0.8, width: 1, kind: "core" });
+  lines.push({ points: center, alpha: 1, width: 1, kind: "core" });
   for (let j = 0; j < strands; j++) {
     const line = [],
       angle0 = (j / strands) * TAU;
@@ -111,7 +112,11 @@ export function buildGeometry(params, m) {
     length,
     total,
     thickness: 0.65 + m.thickness * 4.4,
-    brightness: 0.35 + m.brightness * 0.65,
+    brightness: clamp(
+      1 + (m.brightness - normalize("volume", BASE.volume)) * 0.8,
+      0.25,
+      1,
+    ),
     echoes: m.echoes,
     echoSpacing: 25 + m.echoSpacing * 90,
     persistence: m.persistence,
@@ -123,8 +128,8 @@ export class SculptureRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
-    this.yaw = 0.22;
-    this.pitch = -0.16;
+    this.yaw = 0;
+    this.pitch = 0;
     this.zoom = 1;
     this.targets = {};
     this.routeValues = new Map();
@@ -175,8 +180,8 @@ export class SculptureRenderer {
     canvas.addEventListener("dblclick", () => this.resetView());
   }
   resetView() {
-    this.yaw = 0.22;
-    this.pitch = -0.16;
+    this.yaw = 0;
+    this.pitch = 0;
     this.zoom = 1;
   }
   frontView() {
@@ -326,20 +331,37 @@ export class SculptureRenderer {
       c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * g.brightness * opacity * (lit ? 1.8 : 1))})`;
       c.lineCap = "round";
       if (line.kind === "core") {
-        let previous = this.project(pts[0], offset, scale);
-        for (let i = 1; i < pts.length; i++) {
-          const v = this.project(pts[i], offset, scale);
-          c.beginPath();
-          c.moveTo(previous.x, previous.y);
-          c.lineTo(v.x, v.y);
-          c.lineWidth =
-            0.12 +
-            g.thickness *
-              (ghost ? 0.65 : 1) *
-              Math.max(0.015, (pts[i].e + pts[i - 1].e) / 2);
-          c.stroke();
-          previous = v;
+        // One filled ribbon avoids overlapping translucent caps and their visible texture.
+        const projected = pts.map((pt) => this.project(pt, offset, scale));
+        const upper = [],
+          lower = [];
+        for (let i = 0; i < pts.length; i++) {
+          const before = projected[Math.max(0, i - 1)],
+            after = projected[Math.min(pts.length - 1, i + 1)],
+            v = projected[i];
+          const dx = after.x - before.x,
+            dy = after.y - before.y,
+            len = Math.max(0.001, Math.hypot(dx, dy));
+          const half =
+            (0.12 +
+              g.thickness * (ghost ? 0.65 : 1) * Math.max(0.015, pts[i].e)) /
+            2;
+          upper.push({
+            x: v.x - (dy / len) * half,
+            y: v.y + (dx / len) * half,
+          });
+          lower.push({
+            x: v.x + (dy / len) * half,
+            y: v.y - (dx / len) * half,
+          });
         }
+        c.beginPath();
+        c.moveTo(upper[0].x, upper[0].y);
+        for (const v of upper) c.lineTo(v.x, v.y);
+        for (const v of lower.reverse()) c.lineTo(v.x, v.y);
+        c.closePath();
+        c.fillStyle = `rgba(255,255,255,${clamp(g.brightness * opacity * (lit ? 1.8 : 1))})`;
+        c.fill();
       } else {
         c.beginPath();
         for (let i = 0; i < pts.length; i++) {
@@ -368,10 +390,10 @@ export class SculptureRenderer {
               started = true;
             } else c.lineTo(v.x, v.y);
           }
-          c.strokeStyle = `rgba(255,248,231,${line.kind === "core" ? 0.95 : 0.75})`;
+          c.strokeStyle = `rgba(255,255,255,${line.kind === "core" ? 0.95 : 0.75})`;
           c.lineWidth =
             (line.kind === "core" ? g.thickness : line.width) + 1.05;
-          c.shadowColor = "rgba(255,240,212,.7)";
+          c.shadowColor = "rgba(255,255,255,.7)";
           c.shadowBlur = 9;
           c.stroke();
           c.shadowBlur = 0;

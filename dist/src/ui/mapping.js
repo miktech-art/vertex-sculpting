@@ -138,8 +138,7 @@ export class MappingEditor {
       this.selected = route.id;
     }
     this.pending = null;
-    this.hint.textContent =
-      "Connection made. Select its line to shape the response.";
+    this.hint.textContent = "Connected. Select the line to edit its settings.";
     this.renderDetails();
     this.draw();
     this.onChange();
@@ -258,7 +257,7 @@ export class MappingEditor {
     );
     if (!route) {
       this.details.innerHTML =
-        '<div class="empty-connection"><p class="eyebrow">YOUR VISUAL LANGUAGE</p><h2 class="connection-title">Everything is connected.</h2><p class="connection-description">Select a line to adjust its relationship.<br><br>Connect one sound quality to several visual properties, or let several qualities shape the same property.</p><p class="connection-meta">PITCH → LINE THICKNESS<br>THE STARTING POINT, ALWAYS EDITABLE.</p></div>';
+        '<div class="empty-connection"><h2 class="connection-title">Connection settings</h2><p class="connection-description">Select a line to edit strength, curve, inversion, and smoothing.</p></div>';
       return;
     }
     const source = PARAMETERS.find((p) => p.id === route.source),

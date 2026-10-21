@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#080909" />
     <meta
       name="description"
-      content="An instrument for exploring the form of sound. Sculpt native sounds and compose your own sound-to-visual mappings."
+      content="Native sound synthesis and sound-to-visual mapping editor."
     />
-    <title>Sound / Form — a study in sound</title>
+    <title>Sound / Form</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080909'/%3E%3Cpath d='M5 16h22' stroke='white' stroke-width='2'/%3E%3C/svg%3E"
@@ -21,8 +21,7 @@
         <a class="wordmark" href="./" aria-label="Sound Form home"
           ><span class="brand-symbol" aria-hidden="true">╱</span> SOUND
           <span class="wordmark-slash">/</span> FORM
-          <span class="version">STUDY 001</span></a
-        >
+        </a>
         <nav class="mode-switch" aria-label="Workspace">
           <button class="active" data-mode="sculpt" aria-pressed="true">
             Sculpt</button
@@ -45,18 +44,11 @@
         <main id="sculpt-workspace" class="sculpt-workspace">
           <div class="stage-header">
             <div>
-              <p class="eyebrow">
-                SOUND SCULPTURE <span class="small-line"></span>
-                <span id="preset-family">HARMONIC STAB</span>
-              </p>
               <h1 id="preset-title">
-                Velvet<span class="modified" id="modified-indicator" hidden
+                sine<span class="modified" id="modified-indicator" hidden
                   >·</span
                 >
               </h1>
-              <p id="preset-description" class="preset-description">
-                A bowed bundle of harmonics with a soft trailing edge.
-              </p>
             </div>
             <button
               id="compare-button"
@@ -69,11 +61,11 @@
           <section class="stage" aria-label="Interactive sound sculpture">
             <div class="stage-coordinate top-left">
               <span class="crosshair">+</span>
-              <span id="view-label">PERSPECTIVE</span>
+              <span id="view-label">FRONT VIEW</span>
             </div>
             <div class="stage-coordinate top-right">
               <span class="state-dot"></span
-              ><span id="stage-state">STATIC FORM</span>
+              ><span id="stage-state">PAUSED</span>
             </div>
             <canvas
               id="sculpture"
@@ -81,9 +73,9 @@
               tabindex="0"
             ></canvas>
             <div class="stage-coordinate bottom-left">
-              <span id="note-label">E3</span
+              <span id="note-label">A3</span
               ><span class="coordinate-separator">/</span
-              ><span id="pitch-label">165 Hz</span>
+              ><span id="pitch-label">220 Hz</span>
             </div>
             <div class="stage-tools">
               <button id="front-view" class="text-button">Front</button
@@ -106,23 +98,20 @@
           >
             <div class="section-caption">
               <span>CONTOUR <span class="caption-muted">/ ADSR</span></span
-              ><span id="duration-label">1.37 s</span>
+              ><span id="duration-label">0.86 s</span>
             </div>
             <canvas
               id="envelope-canvas"
-              aria-label="Amplitude envelope over time"
+              aria-label="Interactive ADSR envelope. Drag A for attack, D for decay and sustain, S for hold and sustain, R for release."
+              tabindex="0"
             ></canvas>
             <div class="timeline-labels">
               <span>0.00</span
-              ><span id="envelope-segments"
-                >ATTACK — DECAY — SUSTAIN — RELEASE</span
-              ><span id="timeline-end">1.37</span>
+              ><span id="envelope-segments">DRAG A · D · S · R</span
+              ><span id="timeline-end">1.20 s</span>
             </div>
           </section>
           <section class="preset-strip" aria-label="Factory presets">
-            <div class="preset-strip-label">
-              STARTING<br />POINTS <span>↘</span>
-            </div>
             <div id="preset-cards" class="preset-cards"></div>
             <button id="library-button" class="library-button">
               <span>▤</span> My sounds <span id="saved-count">0</span>
@@ -130,13 +119,7 @@
           </section>
         </main>
         <main id="mapping-workspace" class="mapping-workspace" hidden>
-          <div class="mapping-heading">
-            <p class="eyebrow">THE RELATIONSHIP BETWEEN</p>
-            <h1>Sound & form<span class="heading-dot">.</span></h1>
-            <p class="preset-description">
-              Make a connection. Discover a different way of seeing.
-            </p>
-          </div>
+          <div class="mapping-heading"><h1>Connections</h1></div>
           <div class="mapping-legend">
             <span>SOUND PARAMETERS <small>OUTPUT</small></span
             ><span>VISUAL PROPERTIES <small>INPUT</small></span>
@@ -162,8 +145,7 @@
         <aside class="inspector" aria-label="Sound controls">
           <div id="sound-inspector">
             <div class="inspector-heading">
-              <span class="eyebrow">THE INSTRUMENT</span
-              ><span class="fine-print">01 — 03</span>
+              <span class="eyebrow">PARAMETERS</span>
             </div>
             <div
               class="control-tabs"
@@ -186,9 +168,7 @@
             <div id="parameter-controls" class="parameter-controls"></div>
             <div class="inspector-note">
               <span>↳</span>
-              <p id="parameter-note">
-                Change a quality. The sound updates on the next play.
-              </p>
+              <p id="parameter-note">Sound changes apply on the next play.</p>
             </div>
           </div>
           <div id="route-inspector" hidden>
@@ -276,12 +256,10 @@
           ><span class="transport-time" id="transport-time">00:00.00</span>
         </div>
         <div class="transport-center">
-          <span class="keyboard-key">space</span><span>to play</span
-          ><span class="shortcut-divider">/</span
-          ><span>every sound has a shape</span>
+          <span class="keyboard-key">space</span><span>to play</span>
         </div>
         <div class="transport-right">
-          <span id="audio-status">READY WHEN YOU ARE</span
+          <span id="audio-status">READY</span
           ><button
             id="mute-button"
             class="icon-button"
@@ -303,8 +281,8 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <dialog id="save-dialog">
       <form method="dialog" id="save-form">
-        <p class="eyebrow">KEEP AN EXPLORATION</p>
-        <h2>Give it a name.</h2>
+        <p class="eyebrow">SAVE SOUND</p>
+        <h2>Save sound</h2>
         <label for="save-name">Sound name</label
         ><input id="save-name" maxlength="60" required autocomplete="off" />
         <p class="dialog-description">
@@ -324,7 +302,7 @@
     </dialog>
     <dialog id="library-dialog">
       <div class="dialog-top">
-        <span class="eyebrow">YOUR EXPLORATIONS</span
+        <span class="eyebrow">SAVED SOUNDS</span
         ><button
           class="icon-button"
           aria-label="Close library"
@@ -333,12 +311,12 @@
           ×
         </button>
       </div>
-      <h2>My sounds.</h2>
+      <h2>My sounds</h2>
       <div id="library-list"></div>
     </dialog>
     <dialog id="help-dialog">
       <div class="dialog-top">
-        <span class="eyebrow">SOUND / FORM — STUDY 001</span
+        <span class="eyebrow">SOUND / FORM</span
         ><button
           class="icon-button"
           aria-label="Close help"
@@ -347,21 +325,19 @@
           ×
         </button>
       </div>
-      <h2>A sound you can see.</h2>
+      <h2>Controls</h2>
       <p>
-        Begin with Origin: a pure tone drawn as a single white line. Raise its
-        pitch and the line becomes thicker. Add harmonics, noise, contour, and
-        space to discover a more complex form.
+        Drag A to change attack time. Drag D to change decay time and sustain
+        level. Drag S to change hold time and sustain level. Drag R to change
+        release time. Sound settings apply on the next trigger.
       </p>
       <p>
-        The whole sculpture stays visible in silence. Playing the sound sends a
-        light through it; delay leaves repeated impressions. Drag the sculpture
-        to rotate it.
+        Lower pitch maps to greater line thickness by default. Drag the visual
+        to rotate it; scroll to zoom.
       </p>
       <p>
-        Connections define your own visual language. Drag or click between a
-        sound parameter and a visual property. Select a line to adjust its
-        strength, curve, inversion, and smoothing.
+        In Connections, connect sound parameters to visual properties. Select a
+        line to adjust strength, response curve, inversion, and smoothing.
       </p>
       <div class="shortcut-list">
         <span>Play / retrigger</span><kbd>Space</kbd><span>Stop</span

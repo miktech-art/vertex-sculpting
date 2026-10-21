@@ -1,6 +1,6 @@
 # Sound / Form
 
-A native browser instrument for exploring sound → visual mappings. Version 0.1.
+A native browser instrument for exploring sound → visual mappings. Version 0.2.
 
 ## Run locally
 
@@ -14,8 +14,8 @@ Open http://localhost:5177. Run the automated checks with `npm test` (Node 20+).
 
 ## Use
 
-- Five starting sounds: Origin, Velvet, Fold, Afterimage, and Porous.
-- Origin is a pure sine tone represented by a white line. Higher pitch increases line thickness under the default mapping.
+- One starting sound: sine. It is represented by a continuous white line. Lower pitch increases line thickness under the default mapping.
+- Drag the A, D, S, and R envelope handles to edit attack, decay/sustain level, hold/sustain level, and release. Arrow keys adjust the focused handle; Shift uses larger increments.
 - Source, Contour and Space expose 21 editable parameters. Audio changes take effect on the next trigger. Loop to audition changes repeatedly.
 - Space / Play triggers the current sound; L toggles looping; Escape stops. Undo / redo uses Command/Ctrl Z and Shift Command/Ctrl Z.
 - Drag to orbit; scroll to zoom; double-click to reset. Front gives an unrotated view.
@@ -27,12 +27,12 @@ Open http://localhost:5177. Run the automated checks with `npm test` (Node 20+).
 
 The app deliberately has no framework or runtime dependencies. `dist/` is the complete deployable app and also its source.
 
-- `src/model.js`: parameter definitions, normalization, physical units, ADSR, route resolver, factory presets, strict versioned file validation.
+- `src/model.js`: parameter definitions, normalization, physical units, ADSR, route resolver, the sine preset, strict versioned file validation.
 - `src/state.js`: document state, transactions, undo/redo and browser persistence.
 - `src/audio/engine.js`: native Web Audio adapter, voice lifecycle, effects, offline rendering and WAV encoding.
 - `src/visual/sculpture.js`: deterministic geometry independent of audio nodes; a canvas renderer with 3D projection and playback lighting. Geometry generation can be moved to WebGL without changing the audio or document format.
 - `src/ui/mapping.js`: accessible connection endpoints, wires and route controls.
-- `src/ui/contour.js`: amplitude envelope timeline.
+- `src/ui/contour.js`: pointer and keyboard envelope editing, bounded stage updates, and playback timeline.
 - `src/app.js`: interface composition, transport and file actions.
 
 The audio adapter contract is `trigger(params) -> Promise<{start, duration, total, params}>`, `now()`, and `stop()`. A future DAW adapter can supply events and timing through this boundary. External parameter names, limits and capabilities should be translated into the parameter model rather than coupled to the renderer.
@@ -55,8 +55,10 @@ Session and saved sounds live in localStorage. There is no account database or c
 
 ## Validation
 
-Automated checks cover preset/import constraints, parameter scale round trips, pitch → thickness, Origin's single line, ADSR timing, mapping composition, deterministic finite geometry, session undo/redo, voice scheduling/cleanup, conditional delay graphs, and stereo WAV encoding. Browser interaction and visual QA are performed against the private hosted app.
+Automated checks cover preset/import constraints, parameter scale round trips, pitch → thickness, sine's single line, ADSR timing, mapping composition, deterministic finite geometry, session undo/redo, voice scheduling/cleanup, conditional delay graphs, and stereo WAV encoding. Browser interaction and visual QA are performed against the private hosted app.
 
 ## Reference
 
 Visual direction informed by Chronophase and the user's local VoidWave sculpture designs. This implementation uses original procedural geometry and does not bundle source or media from those projects.
+
+Version 0.2 resets prior browser sounds and custom connections once, keeps only the sine factory preset, inverts the pitch/thickness default connection, and increases interface fonts by 2 px. New saves and mapping edits persist normally after the reset.
