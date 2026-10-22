@@ -33,12 +33,9 @@ export class MappingEditor {
       );
       const label = document.createElement("span");
       label.textContent = p.label;
-      const value = document.createElement("span");
-      value.className = "node-value";
-      value.dataset.nodeValue = p.id;
       const dot = document.createElement("span");
       dot.className = "node-dot";
-      button.append(label, value, dot);
+      button.append(label, dot);
       this.sources.append(button);
       button.addEventListener("pointerdown", (e) => this.startDrag(e, p.id));
       button.addEventListener("click", () => {
@@ -156,10 +153,6 @@ export class MappingEditor {
       !this.store.document.routes.some((r) => r.id === this.selected)
     )
       this.selected = null;
-    for (const p of PARAMETERS) {
-      const value = this.sources.querySelector(`[data-node-value="${p.id}"]`);
-      value.textContent = formatValue(p.id, this.store.document.params[p.id]);
-    }
     this.draw();
   }
   draw() {

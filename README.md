@@ -142,3 +142,5 @@ Loop now uses the anatomical left hand, including M/R/P indicators and the highl
 ## Visual examples (v0.9)
 
 Connections labels are Sounds and Visuals. Each of the 23 visual properties has a small SVG comparison on its right, showing lower → higher values. These procedural examples explain the property independently of current route values and do not affect sound or sculpture geometry. Filter fade diagrams attenuate the relevant bands; cutoff resonance crinkles only nearby bands. Connection gestures and route settings are unchanged. Removed visible connection helper instructions and the leading slash symbol beside the Sound/Sculpt wordmark.
+
+The Connections Sounds column now shows labels and connection points only; numeric sound values and units are removed (v0.9.1).
