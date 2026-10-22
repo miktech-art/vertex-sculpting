@@ -410,7 +410,8 @@ addEventListener('keyup', e => { mouseCtrl = e.ctrlKey || e.metaKey; });
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
   if (!started) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); begin(); } return; }
-  const k = e.code, ctrl = e.ctrlKey || e.metaKey; mouseCtrl = ctrl;
+  // letter keys by the letter printed on them, so a German (QWERTZ) Z is Z; everything else by position
+  const k = /^[a-z]$/i.test(e.key) ? 'Key' + e.key.toUpperCase() : e.code, ctrl = e.ctrlKey || e.metaKey; mouseCtrl = ctrl;
   if (k === 'F1') { e.preventDefault(); toggleHelp(); return; }
   if ($('help').style.display === 'flex' && k === 'Escape') { toggleHelp(false); return; }
   if (fxOpen) { if ((k === 'KeyN' && !e.shiftKey) || k === 'Escape') toggleFx(false); e.preventDefault(); return; }
