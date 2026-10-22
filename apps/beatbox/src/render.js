@@ -161,7 +161,7 @@ const focusMat = new THREE.ShaderMaterial({
     }`,
 });
 // selection (Blender's way): an orange line just outside the silhouette of every selected form, lighter for the active one
-const SEL = { col: new THREE.Color('#e8641c'), act: new THREE.Color('#ffa64d'), w: 1.6 };   // w = line width in CSS px
+const SEL = { col: new THREE.Color('#e8641c'), act: new THREE.Color('#ffa64d'), w: 1.1 };   // w = line width in CSS px
 const selMaskMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, depthTest: false, depthWrite: false });
 const outlineMat = new THREE.ShaderMaterial({
   uniforms: { tMask: { value: null }, texel: { value: new THREE.Vector2() }, uW: { value: 1 }, uCol: { value: SEL.col }, uAct: { value: SEL.act } },

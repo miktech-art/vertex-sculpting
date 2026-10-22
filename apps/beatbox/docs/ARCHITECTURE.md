@@ -117,7 +117,7 @@ Effect sweeps are scheduled from `bars` each frame, the same phase the star shad
    form is grey meanwhile (`Shape.focus`).
 8. object mode, something selected: every selected form's pick mesh (also open curves) drawn flat on `L_SEL` → `rtSel`
    (r = selected, g = active); `outlineMat` draws an orange line just outside each silhouette (`SEL` in render.js: #e8641c,
-   the active form #ffa64d, 1.6 px), then the overlay.
+   the active form #ffa64d, 1.1 px), then the overlay.
 - The solid prism mesh is never drawn: it stays for picking, edit-mode faces and framing; the milk mesh shares its geometry.
 - The star: one inflated star per closed form (a unit sphere whose footprint follows an arm toward each note that plays,
   each arm leaning to its note's height), `FX.layers` nested shells; each shell's colour gathers at its silhouette so the
