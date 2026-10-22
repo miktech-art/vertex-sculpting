@@ -1,3 +1,5 @@
+> Historical upstream README, retained for reference. File paths, sample availability, and standalone commands below may differ from this repository. Follow the current app README and root README.
+
 ## Sound/Sculpt integration
 
 This private Site includes the user-supplied WAVs in `public/stems/`. The root build copies the standalone Beatbox to `dist/beatbox/`.

@@ -4,12 +4,12 @@ import {
   buildEchoLayout,
   presentProgress,
   timeTickStep,
-} from "../dist/src/visual/echoes.js";
-import { PRESETS, DEFAULT_ROUTES, resolveMappings } from "../dist/src/model.js";
+} from "../apps/sculpt/src/visual/echoes.js";
+import { PRESETS, DEFAULT_ROUTES, resolveMappings } from "../apps/sculpt/src/model.js";
 import {
   buildGeometry,
   SculptureRenderer,
-} from "../dist/src/visual/sculpture.js";
+} from "../apps/sculpt/src/visual/sculpture.js";
 
 test("echo starts follow exact delay intervals on the same longitudinal time scale", () => {
   const layout = buildEchoLayout(2, 500, {

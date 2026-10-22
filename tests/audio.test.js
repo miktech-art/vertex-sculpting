@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NativeAudioEngine, encodeWav } from "../dist/src/audio/engine.js";
-import { BASE, PRESETS, duration } from "../dist/src/model.js";
+import { NativeAudioEngine, encodeWav } from "../apps/sculpt/src/audio/engine.js";
+import { BASE, PRESETS, duration } from "../apps/sculpt/src/model.js";
 
 class Param {
   constructor() {

@@ -26,7 +26,7 @@ function stems(inline) {
     load(s) {
       if (s !== '\0' + id) return null;
       if (!inline) return 'export default {};';
-      if (!existsSync(dir)) this.error('public/stems/*.wav is missing (it is not in git) — see README → "Stems"');
+      if (!existsSync(dir)) this.error('public/stems/*.wav is missing — see README → "Stems"');
       const out = {};
       for (const f of readdirSync(dir).filter(f => f.endsWith('.wav'))) out[f.slice(0, -4)] = readFileSync(`${dir}/${f}`).toString('base64');
       return `export default ${JSON.stringify(out)};`;

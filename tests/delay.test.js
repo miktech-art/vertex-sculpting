@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { delayEchoes, delayFeedback, MAX_ECHOES, MIN_ECHO_LEVEL } from "../dist/src/delay.js";
-import { BASE, duration, tailDuration } from "../dist/src/model.js";
-import { buildEchoLayout } from "../dist/src/visual/echoes.js";
+import { delayEchoes, delayFeedback, MAX_ECHOES, MIN_ECHO_LEVEL } from "../apps/sculpt/src/delay.js";
+import { BASE, duration, tailDuration } from "../apps/sculpt/src/model.js";
+import { buildEchoLayout } from "../apps/sculpt/src/visual/echoes.js";
 
 test("expanded delay yields about three times the repeats, including low feedback", () => {
   for (const [mix, feedback] of [[0.25575, 0.0156], [0.14, 0.28], [0.4, 0.5], [0.55, 0.65]]) {

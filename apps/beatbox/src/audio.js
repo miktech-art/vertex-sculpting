@@ -1,6 +1,6 @@
 // load order: this import must stay first — modules run in the chain core → render → … → loop (npm run lint checks it)
 import './cloud.js';
-import { NativeAudioEngine } from '../../dist/src/audio/engine.js';
+import { NativeAudioEngine } from '../../sculpt/src/audio/engine.js';
 import { settings, STEM_BYTES, LA, noteFor, clamp, V3, SOUNDS, sampleRoot, $ } from './core.js';
 import { canvas } from './render.js';
 import { chainLevels } from './shape.js';

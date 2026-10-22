@@ -1,3 +1,5 @@
+> Archived upstream notes supplied with Vertex Sequencer. These describe the original standalone app, not repository-wide instructions. Use the root README and CONTRIBUTING.md for the integrated project.
+
 # CLAUDE.md — Vertex Sequencer
 
 Instructions for Claude Code working in this repo. Read this file first, then `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`.

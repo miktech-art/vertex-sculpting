@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { installLiveRange } from "../dist/src/ui/live-range.js";
+import { installLiveRange } from "../apps/sculpt/src/ui/live-range.js";
 
 test("pointer movement emits live input before pointer release; release commits once", () => {
   const listeners = new Map(),

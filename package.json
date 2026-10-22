@@ -1,12 +1,17 @@
 {
-  "name": "sound-sculpt",
+  "name": "vertex-sculpting",
   "private": true,
   "version": "0.11.0",
   "type": "module",
+  "engines": { "node": ">=24" },
   "scripts": {
-    "dev": "python3 -m http.server 5177 --directory dist",
-    "test": "node --test tests/*.test.js",
+    "setup": "npm --prefix apps/beatbox ci",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "preview": "node scripts/server.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.js apps/beatbox/test/*.test.mjs",
+    "test:sculpt": "node --test tests/*.test.js",
     "build:beatbox": "node scripts/build-beatbox.mjs",
-    "test:beatbox": "npm --prefix beatbox-src test"
+    "test:beatbox": "npm --prefix apps/beatbox test"
   }
 }

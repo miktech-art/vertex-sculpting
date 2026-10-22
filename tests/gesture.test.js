@@ -7,7 +7,7 @@ import {
   AttackBinding,
   LoopBinding,
   ReleaseBinding,
-} from "../dist/src/tracking/gesture.js";
+} from "../apps/sculpt/src/tracking/gesture.js";
 
 import { fixture, combine, releaseFixture, attackFixture, loopFixture } from "./hand-fixtures.js";
 test("a single raised anatomical left index gates Loop, without requiring palm contact", () => {

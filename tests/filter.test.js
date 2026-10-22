@@ -5,7 +5,7 @@ import {
   filterCoefficients,
   responseMagnitude,
   HARMONIC_BANDS,
-} from "../dist/src/spectral/filter.js";
+} from "../apps/sculpt/src/spectral/filter.js";
 import {
   BASE,
   PRESETS,
@@ -13,9 +13,9 @@ import {
   resolveMappings,
   makeDocument,
   validateDocument,
-} from "../dist/src/model.js";
-import { buildGeometry } from "../dist/src/visual/sculpture.js";
-import { constrainCutoff } from "../dist/src/ui/filter-range.js";
+} from "../apps/sculpt/src/model.js";
+import { buildGeometry } from "../apps/sculpt/src/visual/sculpture.js";
+import { constrainCutoff } from "../apps/sculpt/src/ui/filter-range.js";
 
 const geometry = (params) =>
   buildGeometry(params, resolveMappings(params, DEFAULT_ROUTES));

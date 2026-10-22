@@ -6,7 +6,7 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import INLINE_STEMS from 'virtual:stems';
-import { readSculptures, mergeSculptures, sculptSoundId, sculptureSound, nearestTonic } from '../../dist/src/sculpt-instruments.js';
+import { readSculptures, mergeSculptures, sculptSoundId, sculptureSound, nearestTonic } from '../../sculpt/src/sculpt-instruments.js';
 import { readSession } from './lib/session.js';
 import { degreeAt as stepsAbove, noteOfDegree } from './lib/pitch.js';
 

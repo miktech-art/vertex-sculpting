@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BASE, duration } from "../dist/src/model.js";
-import { editEnvelopeHandle, envelopeExtent } from "../dist/src/ui/contour.js";
+import { BASE, duration } from "../apps/sculpt/src/model.js";
+import { editEnvelopeHandle, envelopeExtent } from "../apps/sculpt/src/ui/contour.js";
 
 test("attack handle changes attack without changing the other stages", () => {
   const p = { ...BASE };

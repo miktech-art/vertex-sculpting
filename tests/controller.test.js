@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HandController } from "../dist/src/tracking/controller.js";
+import { HandController } from "../apps/sculpt/src/tracking/controller.js";
 import { fixture, releaseFixture, attackFixture, loopFixture } from "./hand-fixtures.js";
 
 function controller() {

@@ -14,9 +14,9 @@ import {
   envelopeAt,
   duration,
   tailDuration,
-} from "../dist/src/model.js";
-import { buildGeometry } from "../dist/src/visual/sculpture.js";
-import { Store } from "../dist/src/state.js";
+} from "../apps/sculpt/src/model.js";
+import { buildGeometry } from "../apps/sculpt/src/visual/sculpture.js";
+import { Store } from "../apps/sculpt/src/state.js";
 const storage = new Map();
 Object.defineProperty(globalThis, "localStorage", {
   value: {

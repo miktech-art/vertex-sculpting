@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { installPlayOnceShortcut } from "../dist/src/ui/play-once.js";
+import { installPlayOnceShortcut } from "../apps/sculpt/src/ui/play-once.js";
 
 test("Space plays once from buttons and sliders, suppresses native activation and ignores key repeat", () => {
   let listener, calls = 0;

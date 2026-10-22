@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeDocument } from '../dist/src/model.js';
-import { readSculptures, mergeSculptures, sculptureSound, sculptSoundId, nearestTonic } from '../dist/src/sculpt-instruments.js';
+import { makeDocument } from '../apps/sculpt/src/model.js';
+import { readSculptures, mergeSculptures, sculptureSound, sculptSoundId, nearestTonic } from '../apps/sculpt/src/sculpt-instruments.js';
 const sound = (id, name = 'Saved sound') => ({ ...makeDocument(), libraryId: id, name });
 test('Beatbox reads saved Sculpt sounds without rewriting either library or working sound', () => {
   const doc = sound('one'); const raw = JSON.stringify({revision: 5, document: makeDocument(), saved: [doc]});

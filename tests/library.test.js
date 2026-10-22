@@ -1,7 +1,7 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store } from '../dist/src/state.js';
-import { BASE, makeDocument } from '../dist/src/model.js';
+import { Store } from '../apps/sculpt/src/state.js';
+import { BASE, makeDocument } from '../apps/sculpt/src/model.js';
 const data = new Map();
 let blocked = false;
 globalThis.localStorage = {
