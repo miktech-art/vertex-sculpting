@@ -30,6 +30,9 @@ export const pivot = new THREE.Object3D(); scene.add(pivot);
 export const tc = new TransformControls(camera, canvas);
 tc.setSpace('world'); tc.setSize(0.85);
 overlay.add(tc.getHelper());
+// Rhino's colours: the arrow that points up is Z, so blue; the one pointing into the scene is Y, so green (three.js has them swapped)
+{ const done = new Set(); tc.getHelper().traverse(o => { const m = o.material; if (!m || !m.color || done.has(m)) return; done.add(m);
+  const h = m.color.getHex(); if (h === 0x00ff00) m.color.setHex(0x0000ff); else if (h === 0x0000ff) m.color.setHex(0x00ff00); }); }
 const snapOn = () => settings.snap !== mouseCtrl;     // Ctrl inverts the snap
 export const snapv = v => Math.round(v / SNAP) * SNAP;
 
@@ -60,18 +63,28 @@ export function setPlane(k) {
   const a = Math.abs(k);
   flashMsg(k ? `PLANE ${k > 0 ? '+' : '−'}${a} · ${a} OCTAVE${a > 1 ? 'S' : ''} ${k > 0 ? 'UP' : 'DOWN'}` : 'PLANE 0 · THE FLOOR', 900);
 }
-// ↑ / ↓: the selected forms an octave up or down (plane to plane); the work plane goes with them, so you keep working on them
-export function octaveSel(dir) {
-  if (mode !== 'object' || !selected.size || xf || modal) return;
-  const oh = octaveH(), list = [...selected];
-  if (list.some(s => { const p = planeOf(s.dy + dir * oh); return p < PLANES.lo || p > PLANES.hi; })) { flashMsg(dir > 0 ? 'THE HIGHEST PLANE' : 'THE LOWEST PLANE', 900); return; }
-  list.forEach(s => { s.dy = cleanDy(s.dy + dir * oh); s.group.position.y += dir * oh; s.group.updateMatrixWorld(true); });   // moved now, so the panel reads the new notes
+// ↑ / ↓ = an octave, ⇧↑ / ⇧↓ = one scale step: the selected forms (object mode; when one crosses into another octave the work
+// plane goes with it, so you keep working on it) or the selected notes (edit mode, points)
+export function raiseSel(steps) {
+  if (xf || modal) return;
+  const dy = steps * PITCH.step, by = Math.abs(steps) === 7 ? `AN OCTAVE ${steps > 0 ? 'UP' : 'DOWN'}` : `A STEP ${steps > 0 ? 'UP' : 'DOWN'}`;
+  if (mode === 'edit' && selMode === 'p' && active && active.noteSel.size) {
+    const s = active, ks = [...s.noteSel].filter(k => s.notes[k]);
+    ks.forEach(k => { s.notes[k].y += dy / Math.max(1e-6, Math.abs(s.group.scale.y)); });
+    s.ringKey = ''; s.star.key = ''; s.updateLines(); pushUndo(); refreshPanel();
+    flashMsg(`${ks.length > 1 ? ks.length + ' NOTES' : 'NOTE ' + noteName(noteFor(s, ks[0]))} · ${by}`, 1100);
+    return;
+  }
+  if (mode !== 'object' || !selected.size) return;
+  const list = [...selected];
+  if (list.some(s => { const p = planeOf(s.dy + dy); return p < PLANES.lo || p > PLANES.hi; })) { flashMsg(dy > 0 ? 'THE HIGHEST PLANE' : 'THE LOWEST PLANE', 900); return; }
+  list.forEach(s => { s.dy = cleanDy(s.dy + dy); s.group.position.y += dy; s.group.updateMatrixWorld(true); });   // moved now, so the panel reads the new notes
   const lead = active && selected.has(active) ? active : list[0];
   setPlane(planeOf(lead.dy));
   pushUndo(); refreshPanel();
-  flashMsg(`${list.length > 1 ? list.length + ' FORMS' : lead.name} · AN OCTAVE ${dir > 0 ? 'UP' : 'DOWN'} · PLANE ${work.plane > 0 ? '+' : ''}${work.plane}`, 1100);
+  flashMsg(`${list.length > 1 ? list.length + ' FORMS' : lead.name} · ${by} · PLANE ${work.plane > 0 ? '+' : ''}${work.plane}`, 1100);
 }
-const Z_PX = 20;                                     // notes: mouse travel per scale step with Z
+const Z_PX = 20;                                     // up / down with Z (notes, forms, corners): mouse travel per scale step
 export function flashMsg(t, ms = 1600) {
   const h = $('modalHdr'); h.textContent = t; h.style.display = 'block';
   clearTimeout(flashMsg.tm); flashMsg.tm = setTimeout(() => { if (!modal && !mrec) h.style.display = 'none'; }, ms);
@@ -557,7 +570,10 @@ export function startModal(type) {
   modal = { type, axis: null, exclude: false, p, ps, m0: { x: mouse.x, y: mouse.y } };
   tc.detach(); updateModal(); showModalHdr();
 }
-const AX = { x: V3(1, 0, 0), y: V3(0, 1, 0), z: V3(0, 0, 1) };
+// the axis keys follow Rhino: X right, Y into the scene (north in the top view), Z up
+const AX = { x: V3(1, 0, 0), y: V3(0, 0, -1), z: V3(0, 1, 0) };
+const COMP = { x: 'x', y: 'z', z: 'y' };            // Rhino axis -> three.js component
+const rhino = v => `${v.x.toFixed(2)} ${(v === modal.val && modal.type === 'G' ? -v.z : v.z).toFixed(2)} ${v.y.toFixed(2)}`;   // x y z as Rhino shows them
 export function updateModal() {
   if (!modal) return;
   const { p, ps, m0 } = modal, M = new THREE.Matrix4();
@@ -590,6 +606,9 @@ export function updateModal() {
     const d = (a && b) ? b.sub(a) : V3();
     if (axis && !modal.exclude) { const k = d.dot(axis); d.copy(axis).multiplyScalar(k); }
     if (axis && modal.exclude) d.addScaledVector(axis, -d.dot(axis));
+    if (modal.axis === 'z' && !modal.exclude) {      // up / down like a knob: Z_PX of mouse travel per scale step, at any zoom
+      modal.zy ??= mouse.y; const st = (modal.zy - mouse.y) / Z_PX; d.set(0, st * PITCH.step, 0);
+    } else modal.zy = null;
     // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
     if (snapOn()) { d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / PITCH.step) * PITCH.step; }
     M.makeTranslation(d.x, d.y, d.z); modal.val = d;
@@ -598,7 +617,7 @@ export function updateModal() {
     let ax = camDir.clone();
     if (axis) { ax = axis.clone(); if (axis.dot(camDir) < 0) ang = -ang; }
     // turning a form around its vertical axis moves its start (rotation = start offset): snap to the 1/16 grid of its cycle
-    const turn = mode === 'object' && active && ((modal.axis === 'y' && !modal.exclude) || (!axis && viewMode === 'top'));
+    const turn = mode === 'object' && active && ((modal.axis === 'z' && !modal.exclude) || (!axis && viewMode === 'top'));
     const st = turn ? 2 * Math.PI / Math.max(1, Math.round(active.loopBars() * 16)) : Math.PI / 12;
     if (snapOn()) ang = Math.round(ang / st) * st;
     M.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(ax.normalize(), ang)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
@@ -607,11 +626,11 @@ export function updateModal() {
     const d0 = Math.max(4, Math.hypot(m0.x - ps.x, m0.y - ps.y));
     let f = Math.hypot(mouse.x - ps.x, mouse.y - ps.y) / d0;
     // uniform (or XZ) scaling snaps so the loop lands on a whole number of sixteenths
-    const ringScales = !axis || (modal.axis === 'y' && modal.exclude);
+    const ringScales = !axis || (modal.axis === 'z' && modal.exclude);
     if (snapOn() && ringScales && xf.per0 > 1e-4) { const tgt = Math.max(SNAP, Math.round(xf.per0 * f / SNAP) * SNAP); f = tgt / xf.per0; }
     else if (snapOn()) f = Math.round(f * 10) / 10;
     const sv = V3(f, f, f);
-    if (axis) { const k = modal.axis; if (modal.exclude) sv[k] = 1; else { sv.set(1, 1, 1); sv[k] = f; } }
+    if (axis) { const k = COMP[modal.axis]; if (modal.exclude) sv[k] = 1; else { sv.set(1, 1, 1); sv[k] = f; } }
     M.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeScale(Math.max(sv.x, 0.01), Math.max(sv.y, 0.01), Math.max(sv.z, 0.01))).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
     modal.val = sv;
   }
@@ -635,9 +654,9 @@ function showModalHdr() {
   const nm = { G: 'MOVE', R: 'ROTATE', S: 'SCALE' }[modal.type];
   const ax = modal.axis ? ` · ${modal.exclude ? 'PLANE ⊥' : 'AXIS'} ${modal.axis.toUpperCase()}` : '';
   let v = '';
-  if (modal.type === 'G' && modal.val) v = `${modal.val.x.toFixed(2)} ${modal.val.y.toFixed(2)} ${modal.val.z.toFixed(2)}`;
+  if (modal.type === 'G' && modal.val) v = rhino(modal.val);
   if (modal.type === 'R' && modal.val !== undefined) v = `${THREE.MathUtils.radToDeg(modal.val).toFixed(1)}°`;
-  if (modal.type === 'S' && modal.val) v = `${modal.val.x.toFixed(2)} ${modal.val.y.toFixed(2)} ${modal.val.z.toFixed(2)}`;
+  if (modal.type === 'S' && modal.val) v = rhino(modal.val);
   const len = active ? ` · ${fmtBars(active.loopBars())}` : '';
   h.textContent = `${nm} ${v}${ax}${len}  ·  X/Y/Z AXIS · ⇧+AXIS PLANE · CTRL ${settings.snap ? 'FREE' : 'SNAP'} · LMB CONFIRM · RMB/ESC CANCEL`;
 }
