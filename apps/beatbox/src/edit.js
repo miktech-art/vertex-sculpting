@@ -12,7 +12,6 @@ import { viewMode, trans, ex, view } from './view.js';
 import { mouseCtrl, fxOpen, fmtBars, refreshPanel, setHint } from './ui.js';
 import { snapFrac } from './lib/pitch.js';
 import { takeBars, tapNotes } from './lib/rhythm.js';
-import { audio } from './audio.js';
 import { simTime, bars, setSimTime, setBars } from './loop.js';
 
 /* =========================================================
