@@ -3,13 +3,16 @@ import './view.js';
 import { audio } from './audio.js';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { settings, SNAP, V3, $, UNITS_PER_BAR, clamp, barLen, PITCH, octaveH, noteFor, noteName, work, PLANES, planeOf } from './core.js';
+import { settings, SNAP, V3, $, UNITS_PER_BAR, clamp, barLen, PITCH, octaveH, noteFor, noteName, work, PLANES, planeOf, PALETTE, SOUNDS,
+  padNote, LA } from './core.js';
 import { scene, camera, canvas, overlay } from './render.js';
 import { stacks, aboveMap, rootOf, rebuildStacks, shapes, Shape, addShape, nextName, removeShape, barPrism, rectPrism,
   prismName, freeSpot, clearRow, standsAt, fitThickness, replaceShape, notesAt } from './shape.js';
 import { viewMode, trans, ex, view } from './view.js';
 import { mouseCtrl, fxOpen, fmtBars, refreshPanel, setHint } from './ui.js';
 import { snapFrac } from './lib/pitch.js';
+import { takeBars, tapNotes } from './lib/rhythm.js';
+import { audio } from './audio.js';
 import { simTime, bars, setSimTime, setBars } from './loop.js';
 
 /* =========================================================
@@ -19,7 +22,7 @@ export const selected = new Set();
 export let active = null;
 export let mode = 'object';        // 'object' | 'edit'
 export let selMode = 'p';          // 'p' points (notes) | 'v' vertices | 'e' edges
-let gumMode = 'translate';  // 'translate' | 'rotate' | 'scale' | null
+let gumMode = 'translate';  // 'translate' | 'scale' | null
 export let playing = true;
 export let started = false;
 // setters for the modules that write these (an imported binding is read-only)
@@ -53,7 +56,6 @@ export function updateGumball() {
   if (tc.object !== pivot) tc.attach(pivot);
   tc.setMode(gumMode);
   tc.setTranslationSnap(settings.snap ? SNAP : null);
-  tc.setRotationSnap(settings.snap ? Math.PI / 12 : null);
   tc.showY = !(viewMode === 'top' && gumMode === 'translate');
 }
 // Alt+wheel: the octave you work on (the camera rides along, forms on other planes go grey)
@@ -612,16 +614,6 @@ export function updateModal() {
     // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
     if (snapOn()) { d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / PITCH.step) * PITCH.step; }
     M.makeTranslation(d.x, d.y, d.z); modal.val = d;
-  } else if (modal.type === 'R') {
-    let ang = Math.atan2(mouse.y - ps.y, mouse.x - ps.x) - Math.atan2(m0.y - ps.y, m0.x - ps.x);
-    let ax = camDir.clone();
-    if (axis) { ax = axis.clone(); if (axis.dot(camDir) < 0) ang = -ang; }
-    // turning a form around its vertical axis moves its start (rotation = start offset): snap to the 1/16 grid of its cycle
-    const turn = mode === 'object' && active && ((modal.axis === 'z' && !modal.exclude) || (!axis && viewMode === 'top'));
-    const st = turn ? 2 * Math.PI / Math.max(1, Math.round(active.loopBars() * 16)) : Math.PI / 12;
-    if (snapOn()) ang = Math.round(ang / st) * st;
-    M.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(ax.normalize(), ang)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
-    modal.val = ang;
   } else {
     const d0 = Math.max(4, Math.hypot(m0.x - ps.x, m0.y - ps.y));
     let f = Math.hypot(mouse.x - ps.x, mouse.y - ps.y) / d0;
@@ -651,11 +643,10 @@ function showModalHdr() {
       : `SLIDE · ${fmtBars(s.notes[k].f * s.perim / UNITS_PER_BAR)} INTO THE LOOP  ·  Z = NOTE UP / DOWN · CTRL ${settings.snap ? 'FREE' : 'SNAP'} · LMB / RELEASE CONFIRM · RMB / ESC CANCEL`;
     return;
   }
-  const nm = { G: 'MOVE', R: 'ROTATE', S: 'SCALE' }[modal.type];
+  const nm = { G: 'MOVE', S: 'SCALE' }[modal.type];
   const ax = modal.axis ? ` · ${modal.exclude ? 'PLANE ⊥' : 'AXIS'} ${modal.axis.toUpperCase()}` : '';
   let v = '';
   if (modal.type === 'G' && modal.val) v = rhino(modal.val);
-  if (modal.type === 'R' && modal.val !== undefined) v = `${THREE.MathUtils.radToDeg(modal.val).toFixed(1)}°`;
   if (modal.type === 'S' && modal.val) v = rhino(modal.val);
   const len = active ? ` · ${fmtBars(active.loopBars())}` : '';
   h.textContent = `${nm} ${v}${ax}${len}  ·  X/Y/Z AXIS · ⇧+AXIS PLANE · CTRL ${settings.snap ? 'FREE' : 'SNAP'} · LMB CONFIRM · RMB/ESC CANCEL`;
@@ -802,6 +793,51 @@ export function addPrism(kind) {
 export function addPreset(key) {
   const s = addFromData(PRESETS[key].make()); pushUndo();
   if (viewMode === 'top') flashMsg(`${s.name} · ${fmtBars(s.loopBars())} · ADDED TO THE COMMON CENTRE`);
+}
+/* =========================================================
+   PADS + TAKES — 1…5 play the five stems (in colour order); R records a take from the next bar line, R again ends it
+   (rounded to whole bars). Every instrument tapped becomes one square loop as long as the take, a note on each tap (1/16).
+   ========================================================= */
+export const PADS = PALETTE.map(p => p.sounds[0]);
+export let take = null;                              // { start: bar, taps: { sound: [bar positions as heard] } }
+// the transport position you hear right now: `bars` belongs to simTime (LA ahead of the audio clock), and the speakers lag
+// the audio clock by the output latency
+const heardBar = () => bars - ((simTime ?? 0) - (audio.ctx?.currentTime ?? 0) + (audio.ctx?.outputLatency || audio.ctx?.baseLatency || 0)) / barLen();
+export function pad(i) {
+  const snd = PADS[i]; if (!snd || !audio.ctx) return;
+  audio.play(snd, 440 * Math.pow(2, (padNote(snd) - 69) / 12), 0.6, audio.ctx.currentTime, audio.dry);
+  if (take) (take.taps[snd] ??= []).push(heardBar());
+}
+export function toggleTake() {
+  if (take) { finishTake(true); return; }
+  if (!playing) togglePlay(true);
+  take = { start: Math.ceil(heardBar() - 1 / 32), taps: {} };   // just after a bar line still starts on it
+  showTakeBadge();
+}
+export function finishTake(commit) {
+  const T = take; take = null; hideRecBadge();
+  if (!T || !commit) return;
+  const now = heardBar(); if (now <= T.start) return;   // stopped during the count-in
+  const len = takeBars(T.start, now), at = viewMode === '3d' ? groundHit(mouse.x, mouse.y) : null, made = [];
+  if (mode === 'edit') setMode('object');
+  selected.clear();
+  PADS.forEach(snd => {
+    const fs = tapNotes(T.taps[snd] ?? [], T.start, len); if (!fs.length) return;
+    const L = SOUNDS[snd].label, s = addShape({ name: nextName(L[0] + L.slice(1).toLowerCase()), ...barPrism(4, len, PITCH.thick),
+      sound: snd, notes: notesAt(fs), anchor: [0, 0], dy: work.plane * octaveH() });
+    landFree(s, at); selected.add(s); active = s; made.push(s);
+  });
+  if (!made.length) { flashMsg('NOTHING RECORDED · TAP 1–5 WHILE RECORDING'); return; }
+  pushUndo(); refreshPanel(); updateGumball();
+  flashMsg(`${made.map(s => s.name.toUpperCase()).join(' · ')} · ${fmtBars(len)}`, 2400);
+}
+export function showTakeBadge() {
+  if (!take || mrec) return;
+  const b = heardBar() - take.start;
+  if (b >= 16) { finishTake(true); return; }
+  const h = $('modalHdr'); h.style.display = 'block'; h.style.borderColor = '#c8473b'; h.style.color = '#c8473b';
+  const got = PADS.filter(s => take.taps[s]?.length).map(s => `${SOUNDS[s].label} ${take.taps[s].length}`).join(' · ');
+  h.textContent = (b < 0 ? `● REC IN ${Math.ceil(-b * 4)}` : `● REC BAR ${Math.floor(b) + 1}`) + `  ·  ${got || '1 KICK · 2 CLAP · 3 CYMBAL · 4 SYNTH · 5 BASS'}  ·  R STOP · ESC CANCEL`;
 }
 export function duplicateSel(thenGrab = true) {
   if (mode !== 'object' || !selected.size) return;

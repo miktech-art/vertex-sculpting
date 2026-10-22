@@ -7,7 +7,7 @@ import { lineMat, L_SHARP, scene, renderFrame, persp, renderer, makeTargets, lin
 import { stacks, rebuildStacks, shapes, layout, idMap, fitThickness, veinAt, startW } from './shape.js';
 import { audio, visualEvents, rec } from './audio.js';
 import { stepView, ex, viewMode, trans, setViewMode, topv, view, applyView } from './view.js';
-import { playing, mrec, sampleMotion, showRecBadge, xf, selected, active, tc, modal, mode, selCentroid, pivot,
+import { playing, mrec, sampleMotion, showRecBadge, showTakeBadge, xf, selected, active, tc, modal, mode, selCentroid, pivot,
   updateOverlays, toScreen, pickObject } from './edit.js';
 import { fxOpen, fxPreview, refreshLoopInfo } from './ui.js';
 
@@ -92,6 +92,7 @@ function frame(now) {
   if (playing && sdt > 0) bars += sdt / bl;
   const bVis = bars - LA / bl;
   if (mrec) { sampleMotion(); showRecBadge(); }
+  showTakeBadge();
 
   rebuildStacks();
   if (PITCH.thick !== thickNow) { thickNow = PITCH.thick; shapes.forEach(s => { fitThickness(s); s.rebuild(); }); }   // _dbg.pitch.thick
