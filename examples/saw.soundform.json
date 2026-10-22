@@ -1,7 +1,8 @@
 {
-  "schema": "sound-sculpt/visual-preset-v2",
+  "schema": "sound-form/preset-v1",
   "name": "saw",
   "params": {
+    "pitch": 146.83,
     "volume": 0.3,
     "harmonics": 0.86,
     "detune": 9,
@@ -27,7 +28,7 @@
   "routes": [
     {
       "id": "route-0",
-      "source": "notePitch",
+      "source": "pitch",
       "target": "thickness",
       "amount": 1,
       "invert": true,

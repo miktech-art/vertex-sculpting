@@ -1,6 +1,6 @@
 import { createVisualExample } from "./visual-examples.js";
 import {
-  SOURCES,
+  PARAMETERS,
   TARGETS,
   formatValue,
   normalize,
@@ -21,7 +21,7 @@ export class MappingEditor {
     this.targets = document.querySelector("#visual-nodes");
     this.details = document.querySelector("#connection-details");
     let lastGroup = "";
-    for (const p of SOURCES) {
+    for (const p of PARAMETERS) {
       const button = document.createElement("button");
       button.className = `node${lastGroup !== p.group ? " node-group-start" : ""}`;
       lastGroup = p.group;
@@ -208,7 +208,7 @@ export class MappingEditor {
       hit.setAttribute("role", "button");
       hit.setAttribute(
         "aria-label",
-        `Edit ${SOURCES.find((p) => p.id === r.source).label} to ${TARGETS.find((t) => t.id === r.target).label}`,
+        `Edit ${PARAMETERS.find((p) => p.id === r.source).label} to ${TARGETS.find((t) => t.id === r.target).label}`,
       );
       const select = () => {
         this.selected = r.id;
@@ -248,7 +248,7 @@ export class MappingEditor {
         '<div class="empty-connection"><h2 class="connection-title">Connection settings</h2></div>';
       return;
     }
-    const source = SOURCES.find((p) => p.id === route.source),
+    const source = PARAMETERS.find((p) => p.id === route.source),
       target = TARGETS.find((t) => t.id === route.target);
     const eyebrow = document.createElement("p");
     eyebrow.className = "eyebrow";
@@ -265,61 +265,51 @@ export class MappingEditor {
     description.className = "connection-description";
     description.textContent = target.description;
     this.details.append(eyebrow, title, description);
-    if (!source.dynamic) {
-      const audition = document.createElement("div");
-      audition.className = "route-control";
-      const auditionLabel = document.createElement("label");
-      auditionLabel.htmlFor = "route-source-value";
-      auditionLabel.textContent = `Source / ${source.label}`;
-      const auditionOutput = document.createElement("output");
-      auditionOutput.htmlFor = "route-source-value";
-      const auditionValue = this.store.document.params[source.id];
-      auditionOutput.textContent = formatValue(source.id, auditionValue);
-      const auditionRow = document.createElement("div");
-      auditionRow.className = "control-label";
-      auditionRow.append(auditionLabel, auditionOutput);
-      const auditionInput = document.createElement("input");
-      auditionInput.type = "range";
-      auditionInput.id = "route-source-value";
-      auditionInput.min = 0;
-      auditionInput.max = 1000;
-      auditionInput.step = 1;
-      auditionInput.value = normalize(source.id, auditionValue) * 1000;
-      auditionInput.style.setProperty(
-        "--fill",
-        `${normalize(source.id, auditionValue) * 100}%`,
-      );
+    const audition = document.createElement("div");
+    audition.className = "route-control";
+    const auditionLabel = document.createElement("label");
+    auditionLabel.htmlFor = "route-source-value";
+    auditionLabel.textContent = `Source / ${source.label}`;
+    const auditionOutput = document.createElement("output");
+    auditionOutput.htmlFor = "route-source-value";
+    const auditionValue = this.store.document.params[source.id];
+    auditionOutput.textContent = formatValue(source.id, auditionValue);
+    const auditionRow = document.createElement("div");
+    auditionRow.className = "control-label";
+    auditionRow.append(auditionLabel, auditionOutput);
+    const auditionInput = document.createElement("input");
+    auditionInput.type = "range";
+    auditionInput.id = "route-source-value";
+    auditionInput.min = 0;
+    auditionInput.max = 1000;
+    auditionInput.step = 1;
+    auditionInput.value = normalize(source.id, auditionValue) * 1000;
+    auditionInput.style.setProperty(
+      "--fill",
+      `${normalize(source.id, auditionValue) * 100}%`,
+    );
+    auditionInput.setAttribute(
+      "aria-valuetext",
+      formatValue(source.id, auditionValue),
+    );
+    auditionInput.addEventListener("input", () => {
+      const value = denormalize(source.id, Number(auditionInput.value) / 1000);
+      auditionOutput.textContent = formatValue(source.id, value);
       auditionInput.setAttribute(
         "aria-valuetext",
-        formatValue(source.id, auditionValue),
+        formatValue(source.id, value),
       );
-      auditionInput.addEventListener("input", () => {
-        const value = denormalize(
-          source.id,
-          Number(auditionInput.value) / 1000,
-        );
-        auditionOutput.textContent = formatValue(source.id, value);
-        auditionInput.setAttribute(
-          "aria-valuetext",
-          formatValue(source.id, value),
-        );
-        auditionInput.style.setProperty(
-          "--fill",
-          `${Number(auditionInput.value) / 10}%`,
-        );
-        this.store.edit((doc) => {
-          doc.params[source.id] = value;
-        }, "parameter");
-      });
-      auditionInput.addEventListener("change", () => this.store.commit());
-      audition.append(auditionRow, auditionInput);
-      this.details.append(audition);
-    } else {
-      const note = document.createElement("p");
-      note.className = "connection-description";
-      note.textContent = "Follows the played note. Preview with A–K.";
-      this.details.append(note);
-    }
+      auditionInput.style.setProperty(
+        "--fill",
+        `${Number(auditionInput.value) / 10}%`,
+      );
+      this.store.edit((doc) => {
+        doc.params[source.id] = value;
+      }, "parameter");
+    });
+    auditionInput.addEventListener("change", () => this.store.commit());
+    audition.append(auditionRow, auditionInput);
+    this.details.append(audition);
     for (const spec of [
       {
         key: "amount",

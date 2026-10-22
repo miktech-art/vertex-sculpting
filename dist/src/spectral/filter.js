@@ -1,4 +1,4 @@
-// Visual transfer model. Resonance uses Web Audio low/high-pass Q
+// Shared audio/visual transfer model. Resonance uses Web Audio low/high-pass Q
 // in dB: https://www.w3.org/TR/webaudio-1.0/#filters-characteristics
 export const FILTER_MIN = 20;
 export const FILTER_MAX = 18000;
@@ -56,7 +56,7 @@ export const harmonicAmplitude = (h, amount) =>
   h === 1 ? 1 : amount / h ** (1.1 + (1 - amount) * 1.5);
 
 // Individual low partials and grouped higher partials keep the form readable.
-// Every represented harmonic belongs to exactly one fixed frequency band.
+// Every synthesized harmonic belongs to exactly one fixed frequency band.
 const CENTERS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 19, 23, 28, 34, 41, 50, 61, 74,
   88, 96,
@@ -71,13 +71,13 @@ export const HARMONIC_BANDS = CENTERS.map((center, i) => ({
     return nearest === i;
   }),
 }));
-export function bandAmplitude(band, params, response, noteFrequency = 220) {
+export function bandAmplitude(band, params, response) {
   let before = 0,
     after = 0;
   for (const h of band.partials) {
     const amplitude = harmonicAmplitude(h, params.harmonics);
     before += amplitude * amplitude;
-    after += (amplitude * response(noteFrequency * h)) ** 2;
+    after += (amplitude * response(params.pitch * h)) ** 2;
   }
   return {
     source: Math.sqrt(before / band.partials.length),

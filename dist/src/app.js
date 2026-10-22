@@ -2,6 +2,7 @@ import { installPlayOnceShortcut } from "./ui/play-once.js";
 import { installLiveRange } from "./ui/live-range.js";
 import { FilterRange, constrainCutoff } from "./ui/filter-range.js";
 import {
+  BASE,
   PARAMETERS,
   PRESETS,
   DEFAULT_ROUTES,
@@ -12,16 +13,17 @@ import {
   formatValue,
   duration,
   noteName,
-  tailDuration,
 } from "./model.js";
 import { Store } from "./state.js";
-import { NoteInput, PIANO_NOTES, installNoteKeyboard } from "./notes.js";
+import { NativeAudioEngine, encodeWav } from "./audio/engine.js";
 import { SculptureRenderer } from "./visual/sculpture.js";
 import { MappingEditor } from "./ui/mapping.js";
 import { ContourView } from "./ui/contour.js";
+import { HandController } from "./tracking/controller.js";
 
 const $ = (selector) => document.querySelector(selector);
 const store = new Store(),
+  audio = new NativeAudioEngine(),
   renderer = new SculptureRenderer($("#sculpture")),
   miniRenderer = new SculptureRenderer($("#mini-sculpture")),
   contour = new ContourView($("#envelope-canvas"), {
@@ -42,16 +44,11 @@ let mode = "sculpt",
   loopTimer = null,
   compare = false,
   compareWasPlaying = false,
+  playingPromise = false,
+  playbackTicket = 0,
   toastTimer = null,
-  frameTime = 0;
-const clock = () => performance.now() / 1000;
-const notes = new NoteInput({
-  onChange: updateNote,
-  onTrigger: () => {
-    setLoop(false);
-    play();
-  },
-});
+  frameTime = 0,
+  hands = null;
 const inputs = new Map();
 let filterRange = null;
 function toast(message) {
@@ -165,7 +162,7 @@ function renderPresets() {
     button.title = `Load ${preset.name}`;
     button.setAttribute("aria-label", `Load ${preset.name}`);
     button.innerHTML = `<svg viewBox="0 0 120 32" aria-hidden="true"><path d="${thumbnailPaths[preset.id]}"/></svg><span>${preset.name}</span>`;
-    button.addEventListener("click", () => loadPreset(preset));
+    button.addEventListener("click", () => switchSound(() => loadPreset(preset)));
     cards.append(button);
   });
 }
@@ -185,7 +182,7 @@ function renderHeader() {
     JSON.stringify(doc.params) === JSON.stringify(store.initial.params) &&
     JSON.stringify(doc.routes) === JSON.stringify(store.initial.routes);
   for (const card of document.querySelectorAll(".preset-card")) {
-    const active = card.dataset.preset === factory?.id;
+    const active = !store.activeSavedId && card.dataset.preset === factory?.id;
     card.classList.toggle("active", active);
     card.setAttribute("aria-pressed", active);
   }
@@ -196,24 +193,23 @@ function renderHeader() {
   $("#redo-button").disabled = !store.redoStack.length;
 }
 function renderReadouts(p) {
-  $("#note-label").textContent = noteName(notes.frequency);
-  $("#pitch-label").textContent = `${Math.round(notes.frequency)} Hz`;
+  $("#note-label").textContent = noteName(p.pitch);
+  $("#pitch-label").textContent = formatValue("pitch", p.pitch);
   const d = duration(p);
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
 }
 function sync(doc, kind) {
+  if (!compare) audio.update(doc.params);
+  renderer.setSampleRate(audio.context?.sampleRate ?? 48000);
+  miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
   renderHeader();
+  if (["save", "load"].includes(kind)) renderSavedCards();
   contour.setParams(compare ? store.initial.params : doc.params);
   mapping.update();
   if (kind === "load" || kind === "routes") mapping.renderDetails();
-  if (activeEvent) {
-    activeEvent.params = { ...(compare ? store.initial.params : doc.params) };
-    activeEvent.duration = duration(activeEvent.params);
-    activeEvent.total = tailDuration(activeEvent.params);
-  }
   if (looping && activeEvent) scheduleNext();
 }
 store.subscribe(sync);
@@ -221,42 +217,53 @@ makeControls();
 renderPresets();
 sync(store.document, "load");
 
-function play() {
-  if (document.hidden) return;
-  const params = {
-    ...(compare ? store.initial.params : store.document.params),
-  };
-  activeEvent = {
-    start: clock(),
-    duration: duration(params),
-    total: tailDuration(params),
-    params,
-  };
-  if (!looping) {
-    renderer.stop();
-    miniRenderer.stop();
+async function play({ fromGesture = false } = {}) {
+  if (playingPromise) return;
+  if (!fromGesture) hands?.disarm();
+  playingPromise = true;
+  const ticket = playbackTicket;
+  try {
+    if (!looping) audio.stop();
+    const params = compare ? store.initial.params : store.document.params;
+    const event = await audio.trigger(params);
+    renderer.setSampleRate(audio.context.sampleRate);
+    miniRenderer.setSampleRate(audio.context.sampleRate);
+    if (document.hidden || ticket !== playbackTicket) {
+      audio.disposeVoice(event);
+      return;
+    }
+    activeEvent = event;
+    renderer.trigger(event);
+    miniRenderer.trigger(event);
+    $("#audio-status").textContent = "AUDIO RUNNING";
+    if (looping) scheduleNext();
+  } catch (e) {
+    toast(e.message || "Audio could not start. Try pressing Play again.");
+    $("#audio-status").textContent = "AUDIO UNAVAILABLE";
+  } finally {
+    playingPromise = false;
   }
-  renderer.trigger(activeEvent);
-  miniRenderer.trigger(activeEvent);
-  if (looping) scheduleNext();
 }
 function scheduleNext() {
   clearTimeout(loopTimer);
   if (!looping || !activeEvent || activeEvent.held) return;
   const deadline = activeEvent.start + duration(activeEvent.params) + 0.18;
   loopTimer = setTimeout(
-    () => play(),
-    Math.max(30, (deadline - clock()) * 1000),
+    () => play({ fromGesture: true }),
+    Math.max(30, (deadline - audio.now()) * 1000),
   );
 }
 function stop() {
-  notes.clear();
+  hands?.disarm();
+  playbackTicket++;
   clearTimeout(loopTimer);
   loopTimer = null;
+  audio.stop();
   activeEvent = null;
   renderer.stop();
   miniRenderer.stop();
   setLoop(false);
+  $("#audio-status").textContent = "READY";
 }
 function setLoop(value) {
   looping = value;
@@ -273,6 +280,14 @@ $("#loop-button").addEventListener("click", () => {
   setLoop(!looping);
   if (looping) play();
 });
+$("#mute-button").addEventListener("click", () => {
+  audio.setMuted(!audio.muted);
+  $("#mute-button").setAttribute("aria-pressed", audio.muted);
+  $("#mute-button").setAttribute(
+    "aria-label",
+    audio.muted ? "Unmute audio" : "Mute audio",
+  );
+});
 document.querySelectorAll("[data-group]").forEach((button) =>
   button.addEventListener("click", () => {
     group = button.dataset.group;
@@ -283,7 +298,7 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source: "Parameters update the sculpture preview.",
+      source: "Parameters update the playing sound live.",
       contour: "Drag the ADSR handles to change the envelope.",
       space: "Delay and reverb settings.",
     }[group];
@@ -343,10 +358,13 @@ $("#reset-mappings").addEventListener("click", () => {
 });
 function beginCompare() {
   if (compare) return;
+  hands?.disarm();
   compareWasPlaying =
-    !!activeEvent && clock() - activeEvent.start < activeEvent.total;
+    !!activeEvent && audio.now() - activeEvent.start < activeEvent.total;
   compare = true;
   clearTimeout(loopTimer);
+  playbackTicket++;
+  audio.stop();
   renderer.stop();
   miniRenderer.stop();
   $("#compare-button").classList.add("comparing");
@@ -360,6 +378,8 @@ function beginCompare() {
 function endCompare() {
   if (!compare) return;
   compare = false;
+  playbackTicket++;
+  audio.stop();
   activeEvent = null;
   renderer.stop();
   miniRenderer.stop();
@@ -409,19 +429,94 @@ for (const dialog of document.querySelectorAll("dialog"))
         dialog.close();
     }
   });
-$("#save-button").addEventListener("click", () => {
+let pendingSoundAction = null;
+function switchSound(action) {
+  if (!store.hasUnsavedChanges) return action();
+  pendingSoundAction = action;
+  $("#unsaved-dialog").showModal();
+}
+function openSaveDialog(continuing = false) {
+  stop();
+  $("#save-name").setCustomValidity("");
+  if (!continuing) pendingSoundAction = null;
   $("#save-name").value = store.document.name;
+  $("#save-copy-option").hidden = !store.activeSavedId;
+  $("#save-copy").checked = false;
+  $("#save-error").hidden = true;
   $("#save-dialog").showModal();
   $("#save-name").select();
+}
+for (const id of ["save-button", "bar-save-button"])
+  document.getElementById(id).addEventListener("click", () => openSaveDialog());
+$("#new-sound-button").addEventListener("click", () => switchSound(() => {
+  stop();
+  mapping.selected = null;
+  store.load(makeDocument({ name: "Untitled", params: BASE }));
+  renderer.resetView();
+  miniRenderer.resetView();
+  toast("New sound ready — sculpt it, then save it below");
+}));
+$("#discard-changes").addEventListener("click", () => {
+  $("#unsaved-dialog").close();
+  const action = pendingSoundAction;
+  pendingSoundAction = null;
+  action?.();
+});
+$("#save-and-continue").addEventListener("click", () => {
+  $("#unsaved-dialog").close();
+  openSaveDialog(true);
 });
 $("#save-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = $("#save-name").value.trim();
-  if (!name) return;
-  store.save(name);
+  if (!name) {
+    $("#save-name").setCustomValidity("Enter a sound name.");
+    $("#save-name").reportValidity();
+    return;
+  }
+  try {
+    store.save(name, { asNew: $("#save-copy").checked });
+  } catch (error) {
+    $("#save-error").textContent = error.message;
+    $("#save-error").hidden = false;
+    return;
+  }
   $("#save-dialog").close();
   toast(`“${name}” saved in this browser`);
+  const action = pendingSoundAction;
+  pendingSoundAction = null;
+  action?.();
 });
+$("#save-name").addEventListener("input", () => $("#save-name").setCustomValidity(""));
+function loadSavedSound(doc) {
+  switchSound(() => {
+    stop();
+    mapping.selected = null;
+    store.load(doc, doc.libraryId);
+    renderer.resetView();
+    miniRenderer.resetView();
+    toast(`${doc.name} loaded`);
+  });
+}
+function renderSavedCards() {
+  const cards = $("#saved-cards");
+  cards.replaceChildren();
+  for (const doc of store.saved) {
+    const button = document.createElement("button");
+    button.className = "preset-card saved-card";
+    button.classList.toggle("active", store.activeSavedId === doc.libraryId);
+    button.setAttribute("aria-pressed", store.activeSavedId === doc.libraryId);
+    button.setAttribute("aria-label", `Load saved sound ${doc.name}`);
+    button.title = `Load ${doc.name}`;
+    const label = document.createElement("small");
+    label.textContent = "SAVED SOUND";
+    const name = document.createElement("span");
+    name.textContent = doc.name;
+    button.append(label, name);
+    button.addEventListener("click", () => loadSavedSound(doc));
+    cards.append(button);
+  }
+}
 function renderLibrary() {
   const list = $("#library-list");
   list.replaceChildren();
@@ -438,13 +533,11 @@ function renderLibrary() {
     const load = document.createElement("button");
     load.textContent = doc.name;
     const meta = document.createElement("small");
-    meta.textContent = `${duration(doc.params).toFixed(2)} s · ${doc.routes.length} connections`;
+    meta.textContent = `${formatValue("pitch", doc.params.pitch)} · ${duration(doc.params).toFixed(2)} s · ${doc.routes.length} connections`;
     load.append(meta);
     load.addEventListener("click", () => {
-      stop();
-      store.load(doc);
       $("#library-dialog").close();
-      toast(`${doc.name} loaded`);
+      loadSavedSound(doc);
     });
     const exportButton = document.createElement("button");
     exportButton.textContent = "JSON ↓";
@@ -489,9 +582,12 @@ $("#import-file").addEventListener("change", async (e) => {
     if (file.size > 500000)
       throw new Error("Preset files must be smaller than 500 KB.");
     const doc = validateDocument(JSON.parse(await file.text()));
-    stop();
-    store.load(doc);
-    toast(`${doc.name} imported`);
+    switchSound(() => {
+      stop();
+      mapping.selected = null;
+      store.load(doc);
+      toast(`${doc.name} imported`);
+    });
   } catch (error) {
     toast(
       error instanceof SyntaxError
@@ -502,14 +598,27 @@ $("#import-file").addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
-installPlayOnceShortcut(
-  document,
-  () => {
-    setLoop(false);
-    play();
-  },
-  () => !!document.querySelector("dialog[open]"),
-);
+$("#wav-button").addEventListener("click", async () => {
+  const button = $("#wav-button");
+  button.disabled = true;
+  button.textContent = "Rendering…";
+  const doc = structuredClone(store.document);
+  try {
+    const buffer = await audio.render(doc.params);
+    download(encodeWav(buffer), `${filename(doc.name)}.wav`);
+    toast("Stereo WAV rendered with effects");
+  } catch (e) {
+    toast(`Could not render audio: ${e.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "WAV ↓";
+  }
+});
+
+installPlayOnceShortcut(document, () => {
+  setLoop(false);
+  play();
+}, () => !!document.querySelector("dialog[open]"));
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(
@@ -537,69 +646,30 @@ document.addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    notes.clear();
-    stop();
-  }
+  if (document.hidden) stop();
 });
 
-function updateNote() {
-  renderer.setNoteFrequency(notes.frequency);
-  miniRenderer.setNoteFrequency(notes.frequency);
-  renderReadouts(compare ? store.initial.params : store.document.params);
-  for (const button of document.querySelectorAll("[data-note]"))
-    button.setAttribute(
-      "aria-pressed",
-      notes.active.has(Number(button.dataset.note)),
-    );
-}
-for (const { key, midi } of PIANO_NOTES) {
-  const button = document.createElement("button");
-  button.className = "note-key";
-  button.dataset.note = midi;
-  button.setAttribute("aria-pressed", "false");
-  button.setAttribute(
-    "aria-label",
-    `Preview ${noteName(440 * 2 ** ((midi - 69) / 12))} (${key.toUpperCase()})`,
-  );
-  const label = document.createElement("span");
-  label.textContent = noteName(440 * 2 ** ((midi - 69) / 12));
-  button.append(key.toUpperCase(), label);
-  button.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    button.setPointerCapture(e.pointerId);
-    notes.noteOn(midi, `pointer-${e.pointerId}`);
-  });
-  for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
-    button.addEventListener(type, (e) =>
-      notes.noteOff(midi, `pointer-${e.pointerId}`),
-    );
-  button.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.repeat) {
-      e.preventDefault();
-      notes.noteOn(midi, "button");
-    }
-  });
-  button.addEventListener("keyup", (e) => {
-    if (e.key === "Enter") notes.noteOff(midi, "button");
-  });
-  button.addEventListener("blur", () => notes.noteOff(midi, "button"));
-  $("#note-keys").append(button);
-}
-installNoteKeyboard(
-  document,
-  notes,
-  () => !!document.querySelector("dialog[open]"),
-);
-window.addEventListener("blur", () => {
-  notes.clear();
-  stop();
+hands = new HandController({
+  onEnable: () => audio.init(),
+  getRelease: () => store.document.params.release,
+  getAttack: () => store.document.params.attack,
+  onAttack: (attack) => {
+    store.document.params.attack = attack;
+    store.emit("gesture");
+  },
+  onEditing: (active) => (active ? store.begin() : store.commit()),
+  onRelease: (release) => {
+    store.document.params.release = release;
+    store.emit("gesture");
+  },
+  onLoop: (active) => {
+    setLoop(active);
+    if (active) play({ fromGesture: true });
+  },
 });
-updateNote();
 
 function animate(ms) {
-  const now = ms / 1000;
+  const now = audio.context ? audio.now() : ms / 1000;
   const playing =
     activeEvent &&
     now >= activeEvent.start &&
@@ -612,7 +682,9 @@ function animate(ms) {
     $("#play-button").classList.toggle("playing", !!playing);
     $(".state-dot").classList.toggle("playing", !!playing);
     $("#stage-state").textContent = playing
-      ? "PREVIEW"
+      ? activeEvent.held
+        ? "GESTURE"
+        : "PLAYING"
       : compare
         ? "ORIGINAL FORM"
         : "PAUSED";
@@ -631,6 +703,8 @@ function animate(ms) {
     } else {
       $("#transport-time").textContent = "00:00.00";
       contour.draw();
+      if (!looping)
+        $("#audio-status").textContent = audio.muted ? "AUDIO MUTED" : "READY";
     }
   }
   requestAnimationFrame(animate);

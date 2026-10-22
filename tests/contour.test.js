@@ -26,7 +26,7 @@ test("release is measured after note-off and can extend beyond the initial endpo
   assert.ok(Math.abs(edited.release - 0.8) < 1e-9);
   assert.ok(envelopeExtent(p) > duration(p));
 });
-test("dragging beyond the graph keeps every time and level within preview limits", () => {
+test("dragging beyond the graph keeps every time and level within synth limits", () => {
   for (const handle of ["attack", "decay", "hold", "release"]) {
     for (const [seconds, level] of [
       [-100, -100],

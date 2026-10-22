@@ -41,8 +41,9 @@ test("all factory sounds round-trip through the public preset format", () => {
     assert.equal(parsed.schema, SCHEMA);
   }
 });
-test("malformed imports cannot produce invalid visual or mapping states", () => {
+test("malformed imports cannot produce invalid audio or mapping states", () => {
   for (const mutate of [
+    (d) => (d.params.pitch = 0),
     (d) => (d.params.cutoff = Infinity),
     (d) => (d.params.sustain = 2),
     (d) => delete d.params.release,
@@ -67,18 +68,10 @@ test("parameter normalization preserves physical units across every range", () =
       );
 });
 test("sine is one white line and lower pitch makes it thicker", () => {
-  const a = buildGeometry(
-      BASE,
-      resolveMappings(BASE, DEFAULT_ROUTES, 55),
-      48000,
-      55,
-    ),
-    b = buildGeometry(
-      BASE,
-      resolveMappings(BASE, DEFAULT_ROUTES, 1760),
-      48000,
-      1760,
-    );
+  const low = { ...BASE, pitch: 55 },
+    high = { ...BASE, pitch: 1760 },
+    a = buildGeometry(low, resolveMappings(low, DEFAULT_ROUTES)),
+    b = buildGeometry(high, resolveMappings(high, DEFAULT_ROUTES));
   assert.equal(a.lines.length, 1);
   assert.equal(a.particles.length, 0);
   assert.ok(a.thickness > b.thickness * 3);
@@ -109,10 +102,10 @@ test("envelope endpoints agree with a complete finite sound event", () => {
   assert.ok(tailDuration({ ...p, delayMix: 0.4, feedback: 0.6 }) > duration(p));
 });
 test("summing, inverting, curving and disconnecting routes have distinct results", () => {
-  const p = { ...BASE };
+  const p = { ...BASE, pitch: 220 };
   const route = {
     id: "r",
-    source: "notePitch",
+    source: "pitch",
     target: "thickness",
     amount: 1,
     curve: 1,
@@ -152,19 +145,19 @@ test("geometry stays deterministic and finite for every preset and range boundar
 });
 test("session undo, redo and load retain independent documents", () => {
   const store = new Store();
-  const initial = store.document.params.detune;
-  store.edit((d) => (d.params.detune = 14));
+  const initial = store.document.params.pitch;
+  store.edit((d) => (d.params.pitch = 440));
   store.commit();
-  assert.equal(store.document.params.detune, 14);
+  assert.equal(store.document.params.pitch, 440);
   store.undo();
-  assert.equal(store.document.params.detune, initial);
+  assert.equal(store.document.params.pitch, initial);
   store.redo();
-  assert.equal(store.document.params.detune, 14);
+  assert.equal(store.document.params.pitch, 440);
   store.load(makeDocument({ ...PRESETS[0], name: "loaded sine" }));
   assert.equal(store.initial.name, "loaded sine");
-  store.edit((d) => (d.params.detune = 28));
+  store.edit((d) => (d.params.pitch = 880));
   store.commit();
-  assert.equal(store.initial.params.detune, PRESETS[0].params.detune);
+  assert.equal(store.initial.params.pitch, PRESETS[0].params.pitch);
   store.undo();
   store.undo();
   assert.equal(store.document.name, "saw");
@@ -191,7 +184,7 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
   assert.equal(first.saved.length, 0);
   assert.deepEqual(first.document.routes, DEFAULT_ROUTES);
   assert.equal(
-    first.document.routes.find((r) => r.source === "notePitch").invert,
+    first.document.routes.find((r) => r.source === "pitch").invert,
     true,
   );
   first.document.params.attack = 0.25;
@@ -224,54 +217,5 @@ test("the saw update replaces the active sine and preserves saved sounds and con
   assert.equal(store.saved.length, 1);
   assert.equal(store.saved[0].name, "sine");
   assert.equal(store.document.routes[0].amount, 0.6);
-  storage.clear();
-});
-
-test("note pitch is transient input and legacy presets migrate without losing other controls or routes", () => {
-  assert.equal(PARAMETERS.length, 21);
-  assert.equal(
-    PARAMETERS.some((p) => p.id === "pitch" || p.id === "notePitch"),
-    false,
-  );
-  const doc = makeDocument();
-  assert.equal("pitch" in doc.params, false);
-  doc.schema = "sound-form/preset-v1";
-  doc.params.pitch = 190;
-  doc.params.attack = 0.4;
-  doc.routes.find((r) => r.source === "notePitch").source = "pitch";
-  doc.routes[0].amount = 0.75;
-  const migrated = validateDocument(doc);
-  assert.equal(migrated.schema, SCHEMA);
-  assert.equal("pitch" in migrated.params, false);
-  assert.equal(migrated.params.attack, 0.4);
-  assert.equal(migrated.routes[0].source, "notePitch");
-  assert.equal(migrated.routes[0].amount, 0.75);
-  assert.equal(migrated.routes.length, doc.routes.length);
-});
-
-test("stored revision-three session and library both migrate pitch out of saved parameters", () => {
-  storage.clear();
-  const legacy = makeDocument();
-  legacy.schema = "sound-form/preset-v1";
-  legacy.params.pitch = 190;
-  legacy.params.release = 0.9;
-  legacy.routes[0].source = "pitch";
-  storage.set(
-    "sound-form:session:v1",
-    JSON.stringify({
-      revision: 3,
-      document: legacy,
-      initial: legacy,
-      saved: [legacy],
-    }),
-  );
-  const store = new Store();
-  assert.equal(store.document.params.release, 0.9);
-  for (const doc of [store.document, store.initial, ...store.saved]) {
-    assert.equal(doc.schema, SCHEMA);
-    assert.equal("pitch" in doc.params, false);
-    assert.equal(doc.routes[0].source, "notePitch");
-  }
-  assert.equal(JSON.parse(storage.get("sound-form:session:v1")).revision, 4);
   storage.clear();
 });

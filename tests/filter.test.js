@@ -68,7 +68,7 @@ test("fixed spectral bands cover each of the 96 synthesized partials exactly onc
   assert.deepEqual(HARMONIC_BANDS[0].partials, [1]);
 });
 test("filter attenuation changes band amplitude without rotating or moving harmonic points", () => {
-  const params = { ...PRESETS[0].params };
+  const params = { ...PRESETS[0].params, pitch: 220 };
   const open = geometry({
     ...params,
     cutoffLow: 20,
@@ -90,7 +90,7 @@ test("filter attenuation changes band amplitude without rotating or moving harmo
   }
 });
 test("low cutoff removes the central fundamental; high cutoff fades outer bands; zero level dims everything", () => {
-  const params = { ...PRESETS[0].params, resonance: 0.1 };
+  const params = { ...PRESETS[0].params, pitch: 220, resonance: 0.1 };
   const highpass = geometry({ ...params, cutoffLow: 2000, cutoff: 18000 });
   assert.ok(highpass.lines[0].filterGain < 0.02);
   assert.ok(
@@ -143,6 +143,7 @@ test("old presets gain a neutral low edge and replace only the old default filte
 test("resonance crinkles only bands near a cutoff, without adding brightness or glow", () => {
   const params = {
     ...PRESETS[0].params,
+    pitch: 220,
     cutoffLow: 20,
     cutoff: 3520,
     detune: 0,
