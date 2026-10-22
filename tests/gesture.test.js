@@ -1,84 +1,62 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  inspectRightHand,
+  inspectLoopHand,
   inspectReleaseHands,
   inspectAttackHands,
   AttackBinding,
-  GestureBinding,
+  LoopBinding,
   ReleaseBinding,
 } from "../dist/src/tracking/gesture.js";
 
 import { fixture, combine, releaseFixture, attackFixture } from "./hand-fixtures.js";
-test("pitch selects only anatomical right hand with all three fingertips at palm and straight index", () => {
-  assert.equal(inspectRightHand(fixture()).allowed, true);
-  assert.equal(inspectRightHand(fixture({ hand: "Left" })).allowed, false);
-  assert.equal(inspectRightHand(fixture({ score: 0.6 })).allowed, false);
-  for (const tip of [12, 16, 20]) {
-    const result = fixture();
-    result.worldLandmarks[0][tip].z = 0.5;
-    assert.equal(
-      inspectRightHand(result).allowed,
-      false,
-      `tip ${tip} lifted away from palm`,
-    );
+test("a single raised anatomical right index gates Loop, without requiring palm contact", () => {
+  assert.equal(inspectLoopHand(fixture()).allowed, true);
+  assert.equal(inspectLoopHand(fixture({hand:"Left"})).allowed, false);
+  assert.equal(inspectLoopHand(fixture({score:0.6})).allowed, false);
+  assert.equal(inspectLoopHand(fixture({closed:false})).allowed, false);
+  assert.equal(inspectLoopHand(fixture({indexStraight:false})).allowed, false);
+  const loose = fixture();
+  for (const tip of [12,16,20]) loose.worldLandmarks[0][tip].z = 0.5;
+  assert.equal(inspectLoopHand(loose).allowed, true, "loose curls need not touch the palm");
+  loose.worldLandmarks[0][4] = {x:0,y:0,z:2};
+  assert.equal(inspectLoopHand(loose).allowed, true, "thumb pose is unrestricted");
+});
+test("finger height and hand screen position cannot modify pitch or Loop recognition", () => {
+  for (const y of [0,0.2,0.5,0.8,1]) {
+    const sample = inspectLoopHand(fixture({y}));
+    assert.equal(sample.allowed, true);
+    assert.equal("pitch" in sample, false);
+    assert.equal("normalized" in sample, false);
   }
-  assert.equal(inspectRightHand(fixture({ closed: false })).allowed, false);
-  assert.equal(
-    inspectRightHand(fixture({ indexStraight: false })).allowed,
-    false,
-  );
+  for (const order of [false,true]) {
+    const result = combine(fixture({hand:"Left",x:0.8}),fixture({x:0.2}));
+    if (order) for (const key of ["landmarks","worldLandmarks","handedness"]) result[key].reverse();
+    assert.equal(inspectLoopHand(result).allowed,true);
+  }
 });
-test("a curled finger away from the palm surface cannot activate pitch", () => {
-  const result = fixture();
-  // Move the entire bent middle-finger chain beyond the palm, preserving joint angles.
-  for (const i of [9, 10, 11, 12]) result.worldLandmarks[0][i].x += 2;
-  assert.equal(inspectRightHand(result).allowed, false);
+test("loop index points upward independent of palm facing, and dropping it turns the gate off", () => {
+  for (const yaw of [0,90,180,270]) {
+    const result = fixture();
+    result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{yaw});
+    assert.equal(inspectLoopHand(result).allowed,true);
+    result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{tilt:90});
+    assert.equal(inspectLoopHand(result).allowed,false);
+  }
 });
-test("pitch ignores thumb pose but rejects a bent index joint", () => {
-  const result = fixture();
-  result.worldLandmarks[0][4] = { x: 0, y: 0, z: 2 };
-  assert.equal(inspectRightHand(result).allowed, true);
-  result.worldLandmarks[0][7].z = 0.6;
-  assert.equal(inspectRightHand(result).allowed, false);
-});
-test("palm contact and straightness are invariant to 3D rotation, translation and scale", () => {
-  const result = fixture();
-  result.worldLandmarks[0] = result.worldLandmarks[0].map((p) => ({
-    x: 4 + p.y * 0.03,
-    y: 2 - p.z * 0.03,
-    z: 9 - p.x * 0.03,
-  }));
-  assert.equal(inspectRightHand(result).allowed, true);
-});
-test("moving the index upward increases bounded logarithmic pitch", () => {
-  assert.equal(inspectRightHand(fixture({ y: 0 })).pitch, 1760);
-  assert.equal(inspectRightHand(fixture({ y: 1 })).pitch, 55);
-  assert.ok(
-    inspectRightHand(fixture({ y: 0.25 })).pitch >
-      inspectRightHand(fixture({ y: 0.75 })).pitch,
-  );
-});
-test("hand order and crossing left/right screen positions do not change anatomical assignment", () => {
-  for (const results of [
-    [fixture({ hand: "Left", y: 0.8, x: 0.8 }), fixture({ y: 0.2, x: 0.2 })],
-    [fixture({ y: 0.2, x: 0.8 }), fixture({ hand: "Left", y: 0.8, x: 0.2 })],
-  ])
-    assert.equal(
-      inspectRightHand(combine(...results)).normalized,
-      inspectRightHand(fixture({ y: 0.2 })).normalized,
-    );
-});
-test("stable pitch acquisition, invalid-pose freeze and delayed note release", () => {
-  const binding = new GestureBinding();
-  binding.reset(220);
-  assert.equal(binding.update(fixture({ y: 0.2 }), 0).active, false);
-  assert.equal(binding.update(fixture({ y: 0.2 }), 80).pitch, null);
-  assert.ok(binding.update(fixture({ y: 0.2 }), 160).pitch > 220);
-  const invalid = binding.update(fixture({ indexStraight: false }), 180);
-  assert.equal(invalid.pitch, null);
-  assert.equal(invalid.active, true);
-  assert.equal(binding.update({}, 300).active, false);
+test("Loop acquires once, tolerates brief jitter, and turns off after lowered or missing index", () => {
+  const binding = new LoopBinding();
+  assert.equal(binding.update(fixture(),0).active,false);
+  assert.equal(binding.update(fixture(),80).active,false);
+  assert.equal(binding.update(fixture(),160).active,true);
+  assert.equal(binding.update({},200).active,true);
+  assert.equal(binding.update(fixture(),240).active,true);
+  assert.equal(binding.update(fixture({indexStraight:false}),280).active,true);
+  assert.equal(binding.update(fixture({indexStraight:false}),400).active,false);
+  assert.equal(binding.update(fixture(),440).active,false);
+  assert.equal(binding.update(fixture(),600).active,true);
+  assert.equal(binding.update({},640).active,true);
+  assert.equal(binding.update({},760).active,false);
 });
 test("release requires an upright open left hand and right pinch, without thumb-orientation constraints", () => {
   assert.equal(inspectReleaseHands(releaseFixture()).allowed, true);
@@ -150,7 +128,7 @@ test("missing, malformed or degenerate landmarks cannot activate either binding"
     malformed,
     degenerate,
   ]) {
-    assert.equal(inspectRightHand(result).allowed, false);
+    assert.equal(inspectLoopHand(result).allowed, false);
     assert.equal(inspectReleaseHands(result).allowed, false);
   }
 });

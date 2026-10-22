@@ -1,13 +1,10 @@
 import { clamp, denormalize } from "../model.js";
 
-export const PITCH_BINDING = Object.freeze({
-  hand: "Right",
-  tip: 8,
-  top: 0.12,
-  bottom: 0.88,
+export const LOOP_BINDING = Object.freeze({
   acquireMs: 140,
   releaseMs: 100,
-  smoothingMs: 75,
+  enterDegrees: 40,
+  exitDegrees: 50,
 });
 export const RELEASE_BINDING = Object.freeze({
   near: 0.08,
@@ -44,24 +41,6 @@ const FINGERS = [
   [17, 18, 19, 20],
 ];
 
-function palmFrame(points) {
-  if (![0, 5, 9, 17].every((i) => finite(points?.[i]))) return null;
-  const across = sub(points[5], points[17]),
-    width = norm(across);
-  if (width < 1e-6) return null;
-  const u = unit(across),
-    lengthwise = sub(points[9], points[0]);
-  const along = lengthwise.map((x, i) => x - u[i] * dot(lengthwise, u)),
-    length = norm(along);
-  if (length < width * 0.3) return null;
-  const v = unit(along),
-    n = [
-      u[1] * v[2] - u[2] * v[1],
-      u[2] * v[0] - u[0] * v[2],
-      u[0] * v[1] - u[1] * v[0],
-    ];
-  return { u, v, n, width, length };
-}
 export function fingerExtended(points, mcp, pip, dip, tip) {
   if (![mcp, pip, dip, tip].every((i) => finite(points?.[i]))) return false;
   const chain =
@@ -75,35 +54,10 @@ export function fingerExtended(points, mcp, pip, dip, tip) {
     distance(points[mcp], points[tip]) >= chain * 0.94
   );
 }
-// Contact is inferred from a tight curl AND a fingertip in the palm surface region.
-// A webcam cannot measure skin contact; tolerance includes landmark/pad depth uncertainty.
-export function fingertipAtPalm(points, mcp, pip, dip, tip) {
-  if (![mcp, pip, dip, tip].every((i) => finite(points?.[i]))) return false;
-  const palm = palmFrame(points);
-  if (
-    !palm ||
-    angle(points[mcp], points[pip], points[dip]) > 105 ||
-    angle(points[pip], points[dip], points[tip]) > 115
-  )
-    return false;
-  const p = sub(points[tip], points[0]),
-    x = dot(p, palm.u),
-    y = dot(p, palm.v),
-    z = dot(p, palm.n);
-  const left = dot(sub(points[17], points[0]), palm.u),
-    right = dot(sub(points[5], points[0]), palm.u);
-  return (
-    y >= palm.length * 0.18 &&
-    y <= palm.length * 1.04 &&
-    x >= left - palm.width * 0.08 &&
-    x <= right + palm.width * 0.08 &&
-    Math.abs(z) <= palm.width * 0.18
-  );
-}
 export function selectHand(
   result,
   hand,
-  { minConfidence = 0.7, requirePalm = true } = {},
+  { minConfidence = 0.7 } = {},
 ) {
   let selected = null;
   for (let i = 0; i < (result?.handedness?.length || 0); i++) {
@@ -122,39 +76,55 @@ export function selectHand(
       result.worldLandmarks?.[i]?.length === 21
         ? result.worldLandmarks[i]
         : landmarks;
-    if (!shape.every(finite) || (requirePalm && !palmFrame(shape))) continue;
+    if (!shape.every(finite)) continue;
     if (!selected || category.score > selected.confidence)
       selected = { landmarks, shape, confidence: category.score };
   }
   return selected;
 }
-export function inspectRightHand(result) {
+// A single upward index, with the other long fingers bent. No palm contact test.
+export function inspectLoopHand(result, { latched = false } = {}) {
   const hand = selectHand(result, "Right");
-  if (!hand)
-    return {
-      hasRight: false,
-      allowed: false,
-      curled: [false, false, false],
-      indexExtended: false,
-      landmarks: null,
-    };
-  const curled = FINGERS.slice(1).map((ids) =>
-    fingertipAtPalm(hand.shape, ...ids),
-  );
-  const indexExtended = fingerExtended(hand.shape, ...FINGERS[0]);
-  const normalized = clamp(
-    (PITCH_BINDING.bottom - hand.landmarks[8].y) /
-      (PITCH_BINDING.bottom - PITCH_BINDING.top),
-  );
-  return {
-    ...hand,
-    hasRight: true,
-    allowed: curled.every(Boolean) && indexExtended,
-    curled,
-    indexExtended,
-    normalized,
-    pitch: denormalize("pitch", normalized),
+  if (!hand) return {
+    hasRight: false, allowed: false, curled: [false, false, false],
+    indexExtended: false, indexRaised: false, landmarks: null,
   };
+  const points = hand.shape;
+  const curled = FINGERS.slice(1).map(([m, p, d, t]) =>
+    !fingerExtended(points, m, p, d, t) &&
+    (angle(points[m], points[p], points[d]) < 145 ||
+      angle(points[p], points[d], points[t]) < 145),
+  );
+  const indexExtended = fingerExtended(points, ...FINGERS[0]);
+  const direction = sub(points[8], points[5]);
+  const tilt = Math.atan2(Math.hypot(direction[0], direction[2]), -direction[1]) * 180 / Math.PI;
+  const indexRaised = indexExtended && tilt <=
+    (latched ? LOOP_BINDING.exitDegrees : LOOP_BINDING.enterDegrees);
+  return {
+    ...hand, hasRight: true, curled, indexExtended, indexRaised,
+    allowed: indexRaised && curled.every(Boolean),
+  };
+}
+export class LoopBinding {
+  constructor() { this.reset(); }
+  reset() {
+    this.active = false;
+    this.readySince = null;
+    this.invalidSince = null;
+  }
+  update(result, time) {
+    const sample = inspectLoopHand(result, { latched: this.active });
+    if (sample.allowed) {
+      this.invalidSince = null;
+      if (this.readySince === null) this.readySince = time;
+      if (time - this.readySince >= LOOP_BINDING.acquireMs) this.active = true;
+    } else {
+      this.readySince = null;
+      if (this.invalidSince === null) this.invalidSince = time;
+      if (time - this.invalidSince >= LOOP_BINDING.releaseMs) this.active = false;
+    }
+    return { ...sample, active: this.active };
+  }
 }
 // A global 3D finger direction is unchanged by turning the palm toward/away from
 // the camera. Three clear long fingers suffice when the fourth is occluded.
@@ -210,8 +180,8 @@ function inspectEnvelopeHands(
   parameter,
 ) {
   // Envelope gestures do not require a well-conditioned palm plane (an edge-on hand can
-  // collapse its projected width). Pitch retains its stricter palm-contact checks.
-  const selection = { minConfidence: 0.55, requirePalm: false };
+  // collapse its projected width).
+  const selection = { minConfidence: 0.55 };
   const left = selectHand(result, "Left", selection),
     right = selectHand(result, "Right", selection);
   const upright = uprightSide === "Left" ? left : right,
@@ -332,11 +302,6 @@ class SmoothedBinding {
       [this.key]:
         this.active && sample.allowed ? Math.exp(this.logValue) : null,
     };
-  }
-}
-export class GestureBinding extends SmoothedBinding {
-  constructor() {
-    super(inspectRightHand, "pitch", PITCH_BINDING, 220);
   }
 }
 // Each pose has its own stable state, so alternating noisy frames do not force

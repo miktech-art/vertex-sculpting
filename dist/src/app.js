@@ -47,9 +47,7 @@ let mode = "sculpt",
   playbackTicket = 0,
   toastTimer = null,
   frameTime = 0,
-  hands = null,
-  gestureVoice = null,
-  gestureTicket = 0;
+  hands = null;
 const inputs = new Map();
 let filterRange = null;
 function toast(message) {
@@ -217,9 +215,9 @@ makeControls();
 renderPresets();
 sync(store.document, "load");
 
-async function play() {
+async function play({ fromGesture = false } = {}) {
   if (playingPromise) return;
-  hands?.disarm();
+  if (!fromGesture) hands?.disarm();
   playingPromise = true;
   const ticket = playbackTicket;
   try {
@@ -249,14 +247,12 @@ function scheduleNext() {
   if (!looping || !activeEvent || activeEvent.held) return;
   const deadline = activeEvent.start + duration(activeEvent.params) + 0.18;
   loopTimer = setTimeout(
-    () => play(),
+    () => play({ fromGesture: true }),
     Math.max(30, (deadline - audio.now()) * 1000),
   );
 }
-function stop({ keepBinding = false } = {}) {
-  gestureTicket++;
-  gestureVoice = null;
-  if (!keepBinding) hands?.disarm();
+function stop() {
+  hands?.disarm();
   playbackTicket++;
   clearTimeout(loopTimer);
   loopTimer = null;
@@ -575,36 +571,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) stop();
 });
 
-async function startGestureNote() {
-  stop({ keepBinding: true });
-  const ticket = ++gestureTicket;
-  try {
-    const event = await audio.trigger(store.document.params, { held: true });
-    renderer.setSampleRate(audio.context.sampleRate);
-    miniRenderer.setSampleRate(audio.context.sampleRate);
-    if (ticket !== gestureTicket || !hands.gate || document.hidden) {
-      audio.disposeVoice(event);
-      return;
-    }
-    gestureVoice = event;
-    activeEvent = event;
-    renderer.trigger(event);
-    miniRenderer.trigger(event);
-  } catch (error) {
-    hands.disarm();
-    toast(error.message || "Gesture audio could not start.");
-  }
-}
-function releaseGestureNote() {
-  gestureTicket++;
-  if (gestureVoice) {
-    audio.release(gestureVoice);
-    gestureVoice = null;
-  }
-}
 hands = new HandController({
   onEnable: () => audio.init(),
-  getPitch: () => store.document.params.pitch,
   getRelease: () => store.document.params.release,
   getAttack: () => store.document.params.attack,
   onAttack: (attack) => {
@@ -616,13 +584,9 @@ hands = new HandController({
     store.document.params.release = release;
     store.emit("gesture");
   },
-  onGate: (active) => {
-    if (active) startGestureNote();
-    else releaseGestureNote();
-  },
-  onPitch: (pitch) => {
-    store.document.params.pitch = pitch;
-    store.emit("gesture");
+  onLoop: (active) => {
+    setLoop(active);
+    if (active) play({ fromGesture: true });
   },
 });
 

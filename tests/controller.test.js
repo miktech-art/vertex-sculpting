@@ -11,8 +11,7 @@ function controller() {
   globalThis.window = { addEventListener() {} };
   const events = [];
   const hand = new HandController({
-    onGate: (active) => events.push(["note", active]),
-    onPitch: (value) => events.push(["pitch", value]),
+    onLoop: (active) => events.push(["loop", active]),
     onRelease: (value) => events.push(["release", value]),
     onAttack: (value) => events.push(["attack", value]),
     onEditing: (active) => events.push(["edit", active]),
@@ -23,26 +22,33 @@ function controller() {
   hand.setStatus = () => {};
   return { hand, events };
 }
-test("right pitch pose gates notes while release gesture only edits release", () => {
-  const { hand, events } = controller();
-  hand.consume(fixture(), 0);
-  hand.consume(fixture(), 160);
-  assert.ok(events.some(([kind, v]) => kind === "note" && v === true));
-  assert.ok(events.some(([kind]) => kind === "pitch"));
+test("right index emits one loop-on edge and one loop-off edge, without editing the preset", () => {
+  const {hand,events} = controller();
+  for (const t of [0,80,160,240,320,400]) hand.consume(fixture(),t);
+  assert.deepEqual(events,[["loop",true]]);
+  for (const t of [440,560,640]) hand.consume(fixture({indexStraight:false}),t);
+  assert.deepEqual(events,[["loop",true],["loop",false]]);
+});
+test("release takes priority over Loop and never turns Loop on", () => {
+  const {hand,events} = controller();
+  hand.consume(fixture(),0);
+  hand.consume(fixture(),160);
   events.length = 0;
-  hand.consume(releaseFixture(), 200);
-  hand.consume(releaseFixture(), 320);
-  hand.consume(releaseFixture(), 400);
-  assert.ok(events.some(([kind, v]) => kind === "note" && v === false));
-  assert.ok(events.some(([kind]) => kind === "release"));
-  assert.equal(
-    events.some(([kind]) => kind === "pitch"),
-    false,
-  );
-  assert.equal(
-    events.some(([kind, v]) => kind === "note" && v === true),
-    false,
-  );
+  for (const t of [200,280,360,440]) hand.consume(releaseFixture(),t);
+  assert.ok(events.some(([k,v]) => k === "loop" && v === false));
+  assert.ok(events.some(([k]) => k === "release"));
+  assert.equal(events.some(([k,v]) => k === "loop" && v === true),false);
+});
+test("manual disarm stops a raised-index loop and blocks it until lowered and raised again", () => {
+  const {hand,events} = controller();
+  hand.consume(fixture(),0);
+  hand.consume(fixture(),160);
+  hand.disarm();
+  for (const t of [200,400,600]) hand.consume(fixture(),t);
+  assert.deepEqual(events,[["loop",true],["loop",false]]);
+  hand.consume({},640);
+  for (const t of [680,760,840]) hand.consume(fixture(),t);
+  assert.deepEqual(events,[["loop",true],["loop",false],["loop",true]]);
 });
 test("one undo transaction covers a gesture and commits on loss or manual stop", () => {
   const { hand, events } = controller();
@@ -82,7 +88,7 @@ test("breaking either release pose freezes edits immediately, including release 
   events.length = 0;
   hand.consume(fixture({ hand: "Left", closed: false }), 220);
   assert.equal(
-    events.some(([k]) => k === "release" || k === "pitch"),
+    events.some(([k]) => k === "release" || k === "loop"),
     false,
   );
 });
@@ -91,7 +97,7 @@ test("attack edits only attack and transitions to release within one undo transa
   const { hand, events } = controller();
   for (const t of [0, 40, 80, 120, 160, 200]) hand.consume(attackFixture(), t);
   assert.ok(events.some(([k]) => k === "attack"));
-  assert.equal(events.some(([k]) => ["pitch", "release", "note"].includes(k)), false);
+  assert.equal(events.some(([k]) => ["loop", "release"].includes(k)), false);
   const attackCount = events.filter(([k]) => k === "attack").length;
   hand.consume({}, 220);
   assert.equal(events.filter(([k]) => k === "attack").length, attackCount);

@@ -1,9 +1,8 @@
 import {
-  GestureBinding,
+  LoopBinding,
   ReleaseBinding,
   AttackBinding,
-  inspectRightHand,
-  PITCH_BINDING,
+  inspectLoopHand,
 } from "./gesture.js";
 
 const EDGES = [
@@ -33,9 +32,7 @@ const EDGES = [
 export class HandController {
   constructor({
     onEnable = () => {},
-    onPitch = () => {},
-    onGate = () => {},
-    getPitch = () => 220,
+    onLoop = () => {},
     getRelease = () => 1,
     onRelease = () => {},
     getAttack = () => 0.08,
@@ -43,9 +40,7 @@ export class HandController {
     onEditing = () => {},
   } = {}) {
     this.onEnable = onEnable;
-    this.onPitch = onPitch;
-    this.onGate = onGate;
-    this.getPitch = getPitch;
+    this.onLoop = onLoop;
     this.getRelease = getRelease;
     this.onRelease = onRelease;
     this.getAttack = getAttack;
@@ -58,7 +53,7 @@ export class HandController {
     this.overlay = document.querySelector("#hand-overlay");
     this.status = document.querySelector("#camera-status");
     this.placeholder = document.querySelector("#camera-placeholder");
-    this.binding = new GestureBinding();
+    this.binding = new LoopBinding();
     this.releaseBinding = new ReleaseBinding();
     this.attackBinding = new AttackBinding();
     this.active = false;
@@ -171,7 +166,7 @@ export class HandController {
       this.overlay.width = width;
       this.overlay.height = height;
       this.video.parentElement.style.aspectRatio = `${width}/${height}`;
-      this.binding.reset(this.getPitch());
+      this.binding.reset();
       this.releaseBinding.reset(this.getRelease());
       this.attackBinding.reset(this.getAttack());
       this.active = true;
@@ -185,7 +180,7 @@ export class HandController {
       this.placeholder.hidden = true;
       this.video.hidden = false;
       this.button.textContent = "Disable";
-      this.setStatus("Show your right hand", "ready");
+      this.setStatus("Raise right index for Loop", "ready");
       for (const track of stream.getVideoTracks())
         track.addEventListener("ended", () => this.stop());
       this.watchdog = setInterval(() => {
@@ -230,7 +225,7 @@ export class HandController {
     let release = this.releaseBinding.update(result, time),
       attack = this.attackBinding.update(result, time);
     if (this.blocked) {
-      const sample = inspectRightHand(result);
+      const sample = inspectLoopHand(result);
       this.draw(sample, false, release, attack);
       this.indicators(sample, release, attack);
       if (sample.allowed || release.rawAllowed || attack.rawAllowed) {
@@ -238,20 +233,20 @@ export class HandController {
         return;
       }
       this.blocked = false;
-      this.binding.reset(this.getPitch());
+      this.binding.reset();
       this.releaseBinding.reset(this.getRelease());
       this.attackBinding.reset(this.getAttack());
       release = this.releaseBinding.update(result, time);
       attack = this.attackBinding.update(result, time);
     }
-    // Envelope gestures take priority over the right-index pitch binding.
+    // Envelope gestures take priority over the single-index loop gate.
     const sample = this.binding.update(
       release.allowed || release.active || attack.allowed || attack.active
         ? {}
         : result,
       time,
     );
-    const editing = sample.active || release.active || attack.active;
+    const editing = release.active || attack.active;
     const wasEditing = this.editing;
     if (editing !== this.editing) {
       this.editing = editing;
@@ -261,14 +256,10 @@ export class HandController {
     this.indicators(sample, release, attack);
     if (sample.active !== this.gate) {
       this.gate = sample.active;
-      this.onGate(this.gate);
+      this.onLoop(this.gate);
     }
-    if (sample.pitch !== null && sample.allowed) {
-      if (Math.abs(sample.pitch - (this.sentPitch ?? 0)) > 0.1) {
-        this.sentPitch = sample.pitch;
-        this.onPitch(sample.pitch);
-      }
-      this.setStatus(`Pitch active · ${Math.round(sample.pitch)} Hz`, "active");
+    if (sample.active) {
+      this.setStatus("Loop on · lower right index to stop repeats", "active");
     } else if (release.release !== null && release.allowed) {
       this.onRelease(release.release);
       this.setStatus(
@@ -293,8 +284,8 @@ export class HandController {
                   : !sample.hasRight
                     ? "Show your right hand"
                     : !sample.indexExtended
-                      ? "Straighten your right index finger"
-                      : "Press right middle, ring + pinky tips into palm",
+                      ? "Raise your right index finger for Loop"
+                      : "Raise only the right index finger for Loop",
         "ready",
       );
     }
@@ -303,13 +294,13 @@ export class HandController {
   indicators(sample, release = {}, attack = {}) {
     document.querySelectorAll("[data-finger]").forEach((node) => {
       const index = ["middle", "ring", "pinky"].indexOf(node.dataset.finger);
-      const valid = index < 0 ? sample.indexExtended : sample.curled[index];
+      const valid = index < 0 ? sample.indexRaised : sample.curled[index];
       node.dataset.curled = valid ? "true" : "false";
       node.setAttribute(
         "aria-label",
         index < 0
-          ? `Index ${valid ? "extended" : "bent"}`
-          : `${["Middle", "Ring", "Pinky"][index]} fingertip ${valid ? "at palm" : "away from palm"}`,
+          ? `Right index ${valid ? "raised" : "lowered"}`
+          : `${["Middle", "Ring", "Pinky"][index]} finger ${valid ? "bent" : "extended"}`,
       );
     });
     for (const [id, valid] of [
@@ -373,19 +364,10 @@ export class HandController {
       c.stroke();
       c.setLineDash([]);
     }
-    c.setLineDash([3, 5]);
-    c.strokeStyle = "#ffffff35";
-    for (const y of [PITCH_BINDING.top, PITCH_BINDING.bottom]) {
-      c.beginPath();
-      c.moveTo(w - 25, y * h);
-      c.lineTo(w - 6, y * h);
-      c.stroke();
-    }
-    c.setLineDash([]);
   }
   disarm() {
     this.blocked = true;
-    this.binding.reset(this.getPitch());
+    this.binding.reset();
     this.releaseBinding.reset(this.getRelease());
     this.attackBinding.reset(this.getAttack());
     if (this.editing) {
@@ -394,7 +376,7 @@ export class HandController {
     }
     if (this.gate) {
       this.gate = false;
-      this.onGate(false);
+      this.onLoop(false);
     }
     if (this.active) this.setStatus("Relax both hands to resume", "ready");
   }
@@ -406,7 +388,7 @@ export class HandController {
     clearInterval(this.watchdog);
     if (this.gate) {
       this.gate = false;
-      this.onGate(false);
+      this.onLoop(false);
     }
     if (this.editing) {
       this.editing = false;
@@ -426,7 +408,7 @@ export class HandController {
       .getContext("2d")
       .clearRect(0, 0, this.overlay.width, this.overlay.height);
     this.indicators({ curled: [false, false, false] });
-    this.binding.reset(this.getPitch());
+    this.binding.reset();
     this.releaseBinding.reset(this.getRelease());
     this.attackBinding.reset(this.getAttack());
     this.button.textContent = "Enable";
