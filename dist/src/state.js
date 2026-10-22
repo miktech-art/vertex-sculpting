@@ -1,6 +1,6 @@
 import { makeDocument, validateDocument } from "./model.js";
 const KEY = "sound-form:session:v1";
-const REVISION = 3;
+const REVISION = 4;
 export class Store {
   constructor() {
     this.listeners = new Set();
@@ -10,11 +10,14 @@ export class Store {
     try {
       const data = JSON.parse(localStorage.getItem(KEY));
       // Apply the requested sound/library/connection reset once, then persist new edits normally.
-      if ([2, REVISION].includes(data?.revision) && data?.document)
+      if ([2, 3, REVISION].includes(data?.revision) && data?.document)
         this.document = validateDocument(data.document);
-      if ([2, REVISION].includes(data?.revision) && data?.initial)
+      if ([2, 3, REVISION].includes(data?.revision) && data?.initial)
         initial = validateDocument(data.initial);
-      if ([2, REVISION].includes(data?.revision) && Array.isArray(data?.saved))
+      if (
+        [2, 3, REVISION].includes(data?.revision) &&
+        Array.isArray(data?.saved)
+      )
         this.saved = data.saved.slice(0, 40).map(validateDocument);
       if (data?.revision === 2) {
         this.document = { ...makeDocument(), routes: this.document.routes };

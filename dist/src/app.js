@@ -12,17 +12,16 @@ import {
   formatValue,
   duration,
   noteName,
+  tailDuration,
 } from "./model.js";
 import { Store } from "./state.js";
-import { NativeAudioEngine, encodeWav } from "./audio/engine.js";
+import { NoteInput, PIANO_NOTES, installNoteKeyboard } from "./notes.js";
 import { SculptureRenderer } from "./visual/sculpture.js";
 import { MappingEditor } from "./ui/mapping.js";
 import { ContourView } from "./ui/contour.js";
-import { HandController } from "./tracking/controller.js";
 
 const $ = (selector) => document.querySelector(selector);
 const store = new Store(),
-  audio = new NativeAudioEngine(),
   renderer = new SculptureRenderer($("#sculpture")),
   miniRenderer = new SculptureRenderer($("#mini-sculpture")),
   contour = new ContourView($("#envelope-canvas"), {
@@ -43,11 +42,16 @@ let mode = "sculpt",
   loopTimer = null,
   compare = false,
   compareWasPlaying = false,
-  playingPromise = false,
-  playbackTicket = 0,
   toastTimer = null,
-  frameTime = 0,
-  hands = null;
+  frameTime = 0;
+const clock = () => performance.now() / 1000;
+const notes = new NoteInput({
+  onChange: updateNote,
+  onTrigger: () => {
+    setLoop(false);
+    play();
+  },
+});
 const inputs = new Map();
 let filterRange = null;
 function toast(message) {
@@ -192,15 +196,12 @@ function renderHeader() {
   $("#redo-button").disabled = !store.redoStack.length;
 }
 function renderReadouts(p) {
-  $("#note-label").textContent = noteName(p.pitch);
-  $("#pitch-label").textContent = formatValue("pitch", p.pitch);
+  $("#note-label").textContent = noteName(notes.frequency);
+  $("#pitch-label").textContent = `${Math.round(notes.frequency)} Hz`;
   const d = duration(p);
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
 }
 function sync(doc, kind) {
-  if (!compare) audio.update(doc.params);
-  renderer.setSampleRate(audio.context?.sampleRate ?? 48000);
-  miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
@@ -208,6 +209,11 @@ function sync(doc, kind) {
   contour.setParams(compare ? store.initial.params : doc.params);
   mapping.update();
   if (kind === "load" || kind === "routes") mapping.renderDetails();
+  if (activeEvent) {
+    activeEvent.params = { ...(compare ? store.initial.params : doc.params) };
+    activeEvent.duration = duration(activeEvent.params);
+    activeEvent.total = tailDuration(activeEvent.params);
+  }
   if (looping && activeEvent) scheduleNext();
 }
 store.subscribe(sync);
@@ -215,53 +221,42 @@ makeControls();
 renderPresets();
 sync(store.document, "load");
 
-async function play({ fromGesture = false } = {}) {
-  if (playingPromise) return;
-  if (!fromGesture) hands?.disarm();
-  playingPromise = true;
-  const ticket = playbackTicket;
-  try {
-    if (!looping) audio.stop();
-    const params = compare ? store.initial.params : store.document.params;
-    const event = await audio.trigger(params);
-    renderer.setSampleRate(audio.context.sampleRate);
-    miniRenderer.setSampleRate(audio.context.sampleRate);
-    if (document.hidden || ticket !== playbackTicket) {
-      audio.disposeVoice(event);
-      return;
-    }
-    activeEvent = event;
-    renderer.trigger(event);
-    miniRenderer.trigger(event);
-    $("#audio-status").textContent = "AUDIO RUNNING";
-    if (looping) scheduleNext();
-  } catch (e) {
-    toast(e.message || "Audio could not start. Try pressing Play again.");
-    $("#audio-status").textContent = "AUDIO UNAVAILABLE";
-  } finally {
-    playingPromise = false;
+function play() {
+  if (document.hidden) return;
+  const params = {
+    ...(compare ? store.initial.params : store.document.params),
+  };
+  activeEvent = {
+    start: clock(),
+    duration: duration(params),
+    total: tailDuration(params),
+    params,
+  };
+  if (!looping) {
+    renderer.stop();
+    miniRenderer.stop();
   }
+  renderer.trigger(activeEvent);
+  miniRenderer.trigger(activeEvent);
+  if (looping) scheduleNext();
 }
 function scheduleNext() {
   clearTimeout(loopTimer);
   if (!looping || !activeEvent || activeEvent.held) return;
   const deadline = activeEvent.start + duration(activeEvent.params) + 0.18;
   loopTimer = setTimeout(
-    () => play({ fromGesture: true }),
-    Math.max(30, (deadline - audio.now()) * 1000),
+    () => play(),
+    Math.max(30, (deadline - clock()) * 1000),
   );
 }
 function stop() {
-  hands?.disarm();
-  playbackTicket++;
+  notes.clear();
   clearTimeout(loopTimer);
   loopTimer = null;
-  audio.stop();
   activeEvent = null;
   renderer.stop();
   miniRenderer.stop();
   setLoop(false);
-  $("#audio-status").textContent = "READY";
 }
 function setLoop(value) {
   looping = value;
@@ -278,14 +273,6 @@ $("#loop-button").addEventListener("click", () => {
   setLoop(!looping);
   if (looping) play();
 });
-$("#mute-button").addEventListener("click", () => {
-  audio.setMuted(!audio.muted);
-  $("#mute-button").setAttribute("aria-pressed", audio.muted);
-  $("#mute-button").setAttribute(
-    "aria-label",
-    audio.muted ? "Unmute audio" : "Mute audio",
-  );
-});
 document.querySelectorAll("[data-group]").forEach((button) =>
   button.addEventListener("click", () => {
     group = button.dataset.group;
@@ -296,7 +283,7 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     makeControls();
     syncControls();
     $("#parameter-note").textContent = {
-      source: "Parameters update the playing sound live.",
+      source: "Parameters update the sculpture preview.",
       contour: "Drag the ADSR handles to change the envelope.",
       space: "Delay and reverb settings.",
     }[group];
@@ -356,13 +343,10 @@ $("#reset-mappings").addEventListener("click", () => {
 });
 function beginCompare() {
   if (compare) return;
-  hands?.disarm();
   compareWasPlaying =
-    !!activeEvent && audio.now() - activeEvent.start < activeEvent.total;
+    !!activeEvent && clock() - activeEvent.start < activeEvent.total;
   compare = true;
   clearTimeout(loopTimer);
-  playbackTicket++;
-  audio.stop();
   renderer.stop();
   miniRenderer.stop();
   $("#compare-button").classList.add("comparing");
@@ -376,8 +360,6 @@ function beginCompare() {
 function endCompare() {
   if (!compare) return;
   compare = false;
-  playbackTicket++;
-  audio.stop();
   activeEvent = null;
   renderer.stop();
   miniRenderer.stop();
@@ -456,7 +438,7 @@ function renderLibrary() {
     const load = document.createElement("button");
     load.textContent = doc.name;
     const meta = document.createElement("small");
-    meta.textContent = `${formatValue("pitch", doc.params.pitch)} · ${duration(doc.params).toFixed(2)} s · ${doc.routes.length} connections`;
+    meta.textContent = `${duration(doc.params).toFixed(2)} s · ${doc.routes.length} connections`;
     load.append(meta);
     load.addEventListener("click", () => {
       stop();
@@ -520,27 +502,14 @@ $("#import-file").addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
-$("#wav-button").addEventListener("click", async () => {
-  const button = $("#wav-button");
-  button.disabled = true;
-  button.textContent = "Rendering…";
-  const doc = structuredClone(store.document);
-  try {
-    const buffer = await audio.render(doc.params);
-    download(encodeWav(buffer), `${filename(doc.name)}.wav`);
-    toast("Stereo WAV rendered with effects");
-  } catch (e) {
-    toast(`Could not render audio: ${e.message}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = "WAV ↓";
-  }
-});
-
-installPlayOnceShortcut(document, () => {
-  setLoop(false);
-  play();
-}, () => !!document.querySelector("dialog[open]"));
+installPlayOnceShortcut(
+  document,
+  () => {
+    setLoop(false);
+    play();
+  },
+  () => !!document.querySelector("dialog[open]"),
+);
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(
@@ -568,30 +537,69 @@ document.addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stop();
+  if (document.hidden) {
+    notes.clear();
+    stop();
+  }
 });
 
-hands = new HandController({
-  onEnable: () => audio.init(),
-  getRelease: () => store.document.params.release,
-  getAttack: () => store.document.params.attack,
-  onAttack: (attack) => {
-    store.document.params.attack = attack;
-    store.emit("gesture");
-  },
-  onEditing: (active) => (active ? store.begin() : store.commit()),
-  onRelease: (release) => {
-    store.document.params.release = release;
-    store.emit("gesture");
-  },
-  onLoop: (active) => {
-    setLoop(active);
-    if (active) play({ fromGesture: true });
-  },
+function updateNote() {
+  renderer.setNoteFrequency(notes.frequency);
+  miniRenderer.setNoteFrequency(notes.frequency);
+  renderReadouts(compare ? store.initial.params : store.document.params);
+  for (const button of document.querySelectorAll("[data-note]"))
+    button.setAttribute(
+      "aria-pressed",
+      notes.active.has(Number(button.dataset.note)),
+    );
+}
+for (const { key, midi } of PIANO_NOTES) {
+  const button = document.createElement("button");
+  button.className = "note-key";
+  button.dataset.note = midi;
+  button.setAttribute("aria-pressed", "false");
+  button.setAttribute(
+    "aria-label",
+    `Preview ${noteName(440 * 2 ** ((midi - 69) / 12))} (${key.toUpperCase()})`,
+  );
+  const label = document.createElement("span");
+  label.textContent = noteName(440 * 2 ** ((midi - 69) / 12));
+  button.append(key.toUpperCase(), label);
+  button.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    button.setPointerCapture(e.pointerId);
+    notes.noteOn(midi, `pointer-${e.pointerId}`);
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+    button.addEventListener(type, (e) =>
+      notes.noteOff(midi, `pointer-${e.pointerId}`),
+    );
+  button.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.repeat) {
+      e.preventDefault();
+      notes.noteOn(midi, "button");
+    }
+  });
+  button.addEventListener("keyup", (e) => {
+    if (e.key === "Enter") notes.noteOff(midi, "button");
+  });
+  button.addEventListener("blur", () => notes.noteOff(midi, "button"));
+  $("#note-keys").append(button);
+}
+installNoteKeyboard(
+  document,
+  notes,
+  () => !!document.querySelector("dialog[open]"),
+);
+window.addEventListener("blur", () => {
+  notes.clear();
+  stop();
 });
+updateNote();
 
 function animate(ms) {
-  const now = audio.context ? audio.now() : ms / 1000;
+  const now = ms / 1000;
   const playing =
     activeEvent &&
     now >= activeEvent.start &&
@@ -604,9 +612,7 @@ function animate(ms) {
     $("#play-button").classList.toggle("playing", !!playing);
     $(".state-dot").classList.toggle("playing", !!playing);
     $("#stage-state").textContent = playing
-      ? activeEvent.held
-        ? "GESTURE"
-        : "PLAYING"
+      ? "PREVIEW"
       : compare
         ? "ORIGINAL FORM"
         : "PAUSED";
@@ -625,8 +631,6 @@ function animate(ms) {
     } else {
       $("#transport-time").textContent = "00:00.00";
       contour.draw();
-      if (!looping)
-        $("#audio-status").textContent = audio.muted ? "AUDIO MUTED" : "READY";
     }
   }
   requestAnimationFrame(animate);

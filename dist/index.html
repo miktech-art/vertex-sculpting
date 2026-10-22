@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#080909" />
     <meta
       name="description"
-      content="Native sound synthesis and sound-to-visual mapping editor."
+      content="Sound sculpture visualizer and sound-to-visual mapping editor."
     />
     <title>Sound/Sculpt</title>
     <link
@@ -19,8 +19,7 @@
     <div class="app-shell">
       <header class="app-header">
         <a class="wordmark" href="./" aria-label="Sound/Sculpt home"
-          >SOUND
-          <span class="wordmark-slash">/</span> SCULPT
+          >SOUND <span class="wordmark-slash">/</span> SCULPT
         </a>
         <nav class="mode-switch" aria-label="Workspace">
           <button class="active" data-mode="sculpt" aria-pressed="true">
@@ -30,7 +29,7 @@
           </button>
         </nav>
         <div class="header-actions">
-          <span class="native-status"><i></i> NATIVE ENGINE</span
+          <span class="visualizer-status"><i></i> VISUALIZER</span
           ><button
             id="help-button"
             class="icon-button"
@@ -53,7 +52,7 @@
             <button
               id="compare-button"
               class="text-button"
-              title="Hold to see and hear the loaded preset"
+              title="Hold to see the loaded preset"
             >
               Hold to compare <span>↔</span>
             </button>
@@ -144,79 +143,9 @@
           </div>
         </main>
         <aside class="inspector" aria-label="Sound controls">
-          <section
-            id="camera-panel"
-            class="camera-panel"
-            aria-label="Webcam and hand tracking"
-            data-state="off"
-            data-model="unloaded"
-          >
-            <div class="camera-heading">
-              <span class="eyebrow">CAMERA</span
-              ><button id="camera-button" class="text-button">Enable</button>
-            </div>
-            <div class="camera-frame">
-              <video
-                id="camera-video"
-                autoplay
-                playsinline
-                muted
-                hidden
-                aria-label="Mirrored webcam video"
-              ></video>
-              <canvas
-                id="hand-overlay"
-                aria-label="Detected left and right hand landmarks"
-              ></canvas>
-              <div id="camera-placeholder">Camera off</div>
-            </div>
-            <div class="camera-binding">
-              <span>Left index ↑ → Loop</span>
-              <div
-                class="finger-indicators"
-                aria-label="Loop pose requirements"
-              >
-                <span
-                  data-finger="middle"
-                  data-curled="false"
-                  aria-label="Middle finger extended"
-                  >M</span
-                ><span
-                  data-finger="ring"
-                  data-curled="false"
-                  aria-label="Ring finger extended"
-                  >R</span
-                ><span
-                  data-finger="pinky"
-                  data-curled="false"
-                  aria-label="Pinky finger extended"
-                  >P</span
-                ><span
-                  data-finger="index"
-                  data-curled="false"
-                  aria-label="Left index lowered"
-                  >I</span
-                >
-              </div>
-            </div>
-            <div class="camera-binding">
-              <span>Hand distance → Release</span>
-              <div class="release-indicators">
-                <span id="left-open" data-valid="false">L ↑</span
-                ><span id="right-pinch" data-valid="false">R pinch</span>
-              </div>
-            </div>
-            <div class="camera-binding">
-              <span>Hand distance → Attack</span>
-              <div class="release-indicators">
-                <span id="right-open" data-valid="false">R ↑</span
-                ><span id="left-pinch" data-valid="false">L pinch</span>
-              </div>
-            </div>
-          </section>
           <div id="sound-inspector">
             <div class="inspector-heading">
-              <span class="eyebrow">PARAMETERS</span>
+              <span class="eyebrow">PREVIEW PARAMETERS</span>
             </div>
             <div
               class="control-tabs"
@@ -240,7 +169,7 @@
             <div class="inspector-note">
               <span>↳</span>
               <p id="parameter-note">
-                Parameters update the playing sound live.
+                Parameters update the sculpture preview.
               </p>
             </div>
           </div>
@@ -289,13 +218,7 @@
                 Import preset</button
               ><span>/</span
               ><button id="export-button" class="text-button">
-                Export JSON</button
-              ><button
-                id="wav-button"
-                class="text-button"
-                title="Render this sound as stereo WAV"
-              >
-                WAV ↓
+                Export JSON
               </button>
             </div>
             <input
@@ -309,11 +232,19 @@
       </div>
       <footer class="transport">
         <div class="transport-left">
-          <button id="play-button" class="play-button" aria-label="Play sound">
+          <button
+            id="play-button"
+            class="play-button"
+            aria-label="Preview sculpture"
+          >
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="M5 3l8 5-8 5z" />
             </svg></button
-          ><button id="stop-button" class="icon-button" aria-label="Stop sound">
+          ><button
+            id="stop-button"
+            class="icon-button"
+            aria-label="Stop preview"
+          >
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <rect x="4" y="4" width="8" height="8" rx=".5" />
             </svg>
@@ -323,31 +254,16 @@
             id="loop-button"
             class="text-button"
             aria-pressed="false"
-            title="Loop sound (L)"
+            title="Loop visual preview (L)"
           >
             <span class="loop-symbol">↻</span> Loop</button
           ><span class="transport-time" id="transport-time">00:00.00</span>
         </div>
-        <div class="transport-center">
-          <span class="keyboard-key">space</span><span>to play</span>
+        <div class="transport-center" aria-label="Silent note preview">
+          <div id="note-keys" class="note-keys"></div>
         </div>
         <div class="transport-right">
-          <span id="audio-status">READY</span
-          ><button
-            id="mute-button"
-            class="icon-button"
-            aria-label="Mute audio"
-            aria-pressed="false"
-          >
-            <svg viewBox="0 0 18 18" aria-hidden="true">
-              <path
-                d="M3 7h3l4-3v10l-4-3H3zM13 6q4 3 0 6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.2"
-              />
-            </svg>
-          </button>
+          <span id="preview-status">SERUM NOT CONNECTED</span>
         </div>
       </footer>
     </div>
@@ -359,8 +275,8 @@
         <label for="save-name">Sound name</label
         ><input id="save-name" maxlength="60" required autocomplete="off" />
         <p class="dialog-description">
-          Sound settings and connections are saved together in this browser.
-          Export JSON to keep a portable copy.
+          Visual preview settings and connections are saved together in this
+          browser. Export JSON to keep a portable copy.
         </p>
         <div class="dialog-actions">
           <button
@@ -402,26 +318,25 @@
       <p>
         Drag A to change attack time. Drag D to change decay time and sustain
         level. Drag S to change hold time and sustain level. Drag R to change
-        release time. Parameters update the playing sound live.
+        release time. Parameters update the sculpture preview.
       </p>
       <p>
-        Lower pitch maps to greater line thickness by default. Drag the visual
-        to rotate it; scroll to zoom.
+        Played notes set pitch dynamically; lower notes make thicker lines. Drag
+        the visual to rotate it; scroll to zoom.
       </p>
       <p>
         In Connections, connect sound parameters to visual properties. Select a
         line to adjust strength, response curve, inversion, and smoothing.
       </p>
       <div class="shortcut-list">
-        <span>Play once</span><kbd>Space</kbd><span>Stop</span
-        ><kbd>Esc</kbd><span>Loop</span><kbd>L</kbd><span>Undo / redo</span
+        <span>Preview once</span><kbd>Space</kbd><span>Stop</span><kbd>Esc</kbd
+        ><span>Loop</span><kbd>L</kbd><span>Undo / redo</span
         ><kbd>⌘ Z / ⌘ ⇧ Z</kbd><span>Reset view</span><kbd>Double click</kbd>
       </div>
       <p class="dialog-description">
-        A native browser instrument. Import accepts Sound/Sculpt JSON presets.
-        DAW and third-party instrument formats are not supported in this
-        version. Audio and sculpture parameters update while you drag. No
-        microphone or recording uploads.
+        A silent visualizer. Import accepts Sound/Sculpt JSON presets. Serum is
+        not connected yet. Use A–K to preview notes; use Space for a single
+        timeline pass. Parameters update the sculpture while you drag.
       </p>
     </dialog>
     <script type="module" src="./src/app.js"></script>

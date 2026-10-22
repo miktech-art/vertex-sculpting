@@ -1,20 +1,24 @@
 import { delayEchoes } from "./delay.js";
 
-// Sound definitions are independent of UI, renderer, and audio backend.
-export const SCHEMA = "sound-form/preset-v1";
+// Sound definitions are independent of UI and renderer.
+export const SCHEMA = "sound-sculpt/visual-preset-v2";
+const LEGACY_SCHEMA = "sound-form/preset-v1";
+export const DEFAULT_NOTE_FREQUENCY = 220;
+// A performed note is transient input, never an editable or saved sound parameter.
+export const NOTE_INPUT = {
+  id: "notePitch",
+  label: "Note pitch",
+  group: "note",
+  dynamic: true,
+  min: 55,
+  max: 1760,
+  value: DEFAULT_NOTE_FREQUENCY,
+  unit: "Hz",
+  scale: "log",
+  description:
+    "Pitch of the representative played note. Lower notes make thicker lines.",
+};
 export const PARAMETERS = [
-  {
-    id: "pitch",
-    label: "Pitch",
-    group: "source",
-    min: 55,
-    max: 1760,
-    value: 220,
-    unit: "Hz",
-    scale: "log",
-    description:
-      "Fundamental frequency. Lower pitch makes the line thicker by default.",
-  },
   {
     id: "volume",
     label: "Level",
@@ -23,7 +27,7 @@ export const PARAMETERS = [
     max: 0.8,
     value: 0.35,
     unit: "%",
-    description: "Output level before the master limiter.",
+    description: "Level represented by the sculpture luminance.",
   },
   {
     id: "harmonics",
@@ -33,7 +37,7 @@ export const PARAMETERS = [
     max: 1,
     value: 0,
     unit: "%",
-    description: "Adds up to 96 harmonics to the fundamental.",
+    description: "Amount of harmonic structure in the visual preview.",
   },
   {
     id: "detune",
@@ -53,7 +57,7 @@ export const PARAMETERS = [
     max: 1,
     value: 0,
     unit: "%",
-    description: "Blends filtered noise into the tone.",
+    description: "Noise content represented by grain and particles.",
   },
   {
     id: "cutoff",
@@ -96,7 +100,7 @@ export const PARAMETERS = [
     max: 1,
     value: 0,
     unit: "%",
-    description: "Soft saturation before the filter.",
+    description: "Distortion amount represented by ridges.",
   },
   {
     id: "width",
@@ -234,6 +238,13 @@ export const PARAMETERS = [
   },
 ];
 export const PARAM_BY_ID = Object.fromEntries(PARAMETERS.map((p) => [p.id, p]));
+export const SOURCES = [...PARAMETERS, NOTE_INPUT];
+export const SOURCE_BY_ID = Object.fromEntries(SOURCES.map((p) => [p.id, p]));
+export const sourceValue = (
+  params,
+  id,
+  noteFrequency = DEFAULT_NOTE_FREQUENCY,
+) => (id === NOTE_INPUT.id ? noteFrequency : params[id]);
 export const BASE = Object.freeze(
   Object.fromEntries(PARAMETERS.map((p) => [p.id, p.value])),
 );
@@ -357,7 +368,7 @@ export const TARGETS = [
   },
 ];
 const pairs = [
-  ["pitch", "thickness"],
+  ["notePitch", "thickness"],
   ["harmonics", "body"],
   ["noise", "grain"],
   ["detune", "twist"],
@@ -383,7 +394,7 @@ export const DEFAULT_ROUTES = pairs.map(([source, target], i) => ({
   source,
   target,
   amount: 1,
-  invert: source === "pitch" && target === "thickness",
+  invert: source === "notePitch" && target === "thickness",
   curve: 1,
   smoothing: 0.08,
 }));
@@ -407,7 +418,7 @@ DEFAULT_ROUTES.push({
 });
 export const clamp = (n, a = 0, b = 1) => Math.max(a, Math.min(b, n));
 export function normalize(id, value) {
-  const p = PARAM_BY_ID[id];
+  const p = SOURCE_BY_ID[id];
   return clamp(
     p.scale === "log"
       ? Math.log(value / p.min) / Math.log(p.max / p.min)
@@ -415,13 +426,13 @@ export function normalize(id, value) {
   );
 }
 export function denormalize(id, n) {
-  const p = PARAM_BY_ID[id];
+  const p = SOURCE_BY_ID[id];
   return p.scale === "log"
     ? p.min * (p.max / p.min) ** clamp(n)
     : p.min + (p.max - p.min) * clamp(n);
 }
 export function formatValue(id, value) {
-  const p = PARAM_BY_ID[id];
+  const p = SOURCE_BY_ID[id];
   if (id === "rate") return `${value.toFixed(1)} Hz`;
   if (p.unit === "%") return `${Math.round(value * 100)}%`;
   if (p.unit === "s")
@@ -454,10 +465,14 @@ export function noteName(hz) {
   const midi = Math.round(69 + 12 * Math.log2(hz / 440));
   return `${["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"][((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
-export function resolveMappings(params, routes) {
+export function resolveMappings(
+  params,
+  routes,
+  noteFrequency = DEFAULT_NOTE_FREQUENCY,
+) {
   const values = Object.fromEntries(TARGETS.map((t) => [t.id, 0]));
   for (const r of routes) {
-    let n = normalize(r.source, params[r.source]);
+    let n = normalize(r.source, sourceValue(params, r.source, noteFrequency));
     if (r.invert) n = 1 - n;
     values[r.target] += n ** r.curve * r.amount;
   }
@@ -468,8 +483,8 @@ export function resolveMappings(params, routes) {
   return values;
 }
 export function validateDocument(input) {
-  if (!input || input.schema !== SCHEMA)
-    throw new Error("This file is not a Sound/Sculpt v1 preset.");
+  if (!input || ![SCHEMA, LEGACY_SCHEMA].includes(input.schema))
+    throw new Error("This file is not a Sound/Sculpt visual preset.");
   if (
     !input.params ||
     !Array.isArray(input.routes) ||
@@ -486,10 +501,15 @@ export function validateDocument(input) {
   }
   if (params.cutoffLow > params.cutoff)
     throw new Error("Low cutoff must not exceed high cutoff.");
-  const routes = input.routes.map((r, i) => {
+  const routes = input.routes.map((original, i) => {
+    // Preserve old pitch mappings while moving their source out of saved parameters.
+    const r =
+      original?.source === "pitch"
+        ? { ...original, source: NOTE_INPUT.id }
+        : original;
     if (
       !r ||
-      !Object.hasOwn(PARAM_BY_ID, r.source) ||
+      !Object.hasOwn(SOURCE_BY_ID, r.source) ||
       !TARGETS.some((t) => t.id === r.target)
     )
       throw new Error(`Unknown endpoint in connection ${i + 1}.`);
@@ -546,7 +566,6 @@ export const PRESETS = [
     name: "saw",
     params: {
       ...BASE,
-      pitch: 146.83,
       volume: 0.3,
       harmonics: 0.86,
       detune: 9,

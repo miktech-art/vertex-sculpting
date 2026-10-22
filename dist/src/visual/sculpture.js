@@ -9,6 +9,8 @@ import {
   TARGETS,
   BASE,
   normalize,
+  sourceValue,
+  DEFAULT_NOTE_FREQUENCY,
   clamp,
   denormalize,
   envelopeAt,
@@ -24,7 +26,12 @@ const hash = (i, j = 0) => {
 };
 
 // Geometry is deterministic: identical sound + mapping always gives the same object.
-export function buildGeometry(params, m, sampleRate = 48000) {
+export function buildGeometry(
+  params,
+  m,
+  sampleRate = 48000,
+  noteFrequency = DEFAULT_NOTE_FREQUENCY,
+) {
   const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
     highCut = denormalize("cutoff", m.spectralHigh ?? 1);
   const crinkle = (frequency) =>
@@ -72,7 +79,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       e = envelopeAt(contour, Math.min(total - 0.00001, u * total)) * wave;
     return {
       x: (u - 0.5) * length,
-      y: crinkle(params.pitch) * 13 * Math.sin(u * TAU * 22) ** 7 * e ** 0.6,
+      y: crinkle(noteFrequency) * 13 * Math.sin(u * TAU * 22) ** 7 * e ** 0.6,
       z: 0,
       u,
       e,
@@ -83,14 +90,14 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     alpha: 1,
     width: 1,
     kind: "core",
-    frequency: params.pitch,
-    filterGain: response(params.pitch),
+    frequency: noteFrequency,
+    filterGain: response(noteFrequency),
   });
   for (let j = 0; j < bands.length; j++) {
     const band = bands[j],
       position = Math.log(band.center) / Math.log(96),
-      energy = bandAmplitude(band, spectrumParams, response),
-      resonanceShape = crinkle(params.pitch * band.center);
+      energy = bandAmplitude(band, spectrumParams, response, noteFrequency),
+      resonanceShape = crinkle(noteFrequency * band.center);
     for (const sign of [-1, 1]) {
       const line = [];
       for (let i = 0; i < points; i++) {
@@ -126,7 +133,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
         alpha: (0.32 + 0.16 * ((j % 4) / 3)) * energy.source ** 0.28,
         width: 0.5 + 0.35 * (m.edge + resonanceShape),
         kind: "filament",
-        frequency: params.pitch * band.center,
+        frequency: noteFrequency * band.center,
         partials: band.partials,
         filterGain: energy.gain,
       });
@@ -152,7 +159,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
         Math.min(
           2.5,
           response(
-            params.pitch *
+            noteFrequency *
               HARMONIC_BANDS[Math.floor(hash(i, 91) * HARMONIC_BANDS.length)]
                 .center,
           ),
@@ -298,6 +305,16 @@ export class SculptureRenderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (this.autoFit && this.geometry) this.fitTimeline();
   }
+  setNoteFrequency(frequency) {
+    if (
+      Number.isFinite(frequency) &&
+      frequency > 0 &&
+      this.noteFrequency !== frequency
+    ) {
+      this.noteFrequency = frequency;
+      this.needsBuild = true;
+    }
+  }
   setSampleRate(rate) {
     if (this.sampleRate !== rate) {
       this.sampleRate = rate;
@@ -332,7 +349,10 @@ export class SculptureRenderer {
     const valid = new Set();
     for (const r of doc.routes) {
       valid.add(r.id);
-      let n = normalize(r.source, doc.params[r.source]);
+      let n = normalize(
+        r.source,
+        sourceValue(doc.params, r.source, this.noteFrequency),
+      );
       if (r.invert) n = 1 - n;
       const next = n ** r.curve * r.amount,
         prev = this.routeValues.get(r.id) ?? next,
@@ -357,7 +377,12 @@ export class SculptureRenderer {
     );
     if (changed || this.needsBuild) {
       this.targets = vals;
-      this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000);
+      this.geometry = buildGeometry(
+        doc.params,
+        vals,
+        this.sampleRate ?? 48000,
+        this.noteFrequency,
+      );
       this.needsBuild = false;
       if (this.autoFit) this.fitTimeline();
     }

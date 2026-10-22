@@ -22,7 +22,7 @@ test("zero mix stays dry, zero feedback has one repeat, and the loop stays stabl
   assert.deepEqual(delayEchoes(0.4, 0), [{ index: 1, gain: 0.4 }]);
   for (const input of [0, 0.01, 0.3, 0.65, 1]) assert.ok(delayFeedback(input) < 1);
 });
-test("voice and WAV tail length cover the same expanded echo train as the sculpture", () => {
+test("preview tail length covers the expanded echo train", () => {
   for (const feedback of [0, 0.0156, 0.28, 0.5, 0.65]) {
     const p = { ...BASE, delayMix: 0.55, feedback, delayTime: 0.85, reverbMix: 0 };
     const layout = buildEchoLayout(duration(p), 500, { mix: p.delayMix, feedback, delay: p.delayTime });
