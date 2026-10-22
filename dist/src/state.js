@@ -6,6 +6,7 @@ export class Store {
     this.listeners = new Set();
     this.document = makeDocument();
     this.saved = [];
+    this.deleted = [];
     this.activeSavedId = null;
     let initial;
     try {
@@ -20,6 +21,11 @@ export class Store {
           try {
             return [{ ...validateDocument(doc), libraryId: doc.libraryId || crypto.randomUUID() }];
           } catch { return []; }
+        });
+      if ([2, 3, 4, REVISION].includes(data?.revision) && Array.isArray(data?.deleted))
+        this.deleted = data.deleted.flatMap((doc) => {
+          try { return [{ ...validateDocument(doc), libraryId: doc.libraryId || crypto.randomUUID() }]; }
+          catch { return []; }
         });
       this.activeSavedId = this.saved.some((doc) => doc.libraryId === data?.activeSavedId)
         ? data.activeSavedId : null;
@@ -54,6 +60,7 @@ export class Store {
           document: this.document,
           initial: this.initial,
           saved: this.saved,
+          deleted: this.deleted,
           activeSavedId: this.activeSavedId,
         }),
       );
@@ -69,7 +76,8 @@ export class Store {
   restore(snapshot) {
     this.document = snapshot.document;
     this.initial = snapshot.initial;
-    this.activeSavedId = snapshot.activeSavedId ?? null;
+    this.activeSavedId = this.saved.some((doc) => doc.libraryId === snapshot.activeSavedId)
+      ? snapshot.activeSavedId : null;
   }
   commit() {
     if (
@@ -116,6 +124,57 @@ export class Store {
     this.restore(this.redoStack.pop());
     this.checkpoint = null;
     this.emit("load");
+  }
+  updateLibrary(fn) {
+    const previous = this.snapshot(), saved = this.saved, deleted = this.deleted;
+    const result = fn();
+    clearTimeout(this.persistTimer);
+    if (!this.persist()) {
+      this.saved = saved;
+      this.deleted = deleted;
+      this.restore(previous);
+      throw new Error("Could not update sounds in this browser. Free up browser storage and try again.");
+    }
+    this.emit("library");
+    return result;
+  }
+  renameSaved(id, name) {
+    const nextName = name.trim().slice(0, 60);
+    if (!nextName) throw new Error("Enter a sound name.");
+    if (!this.saved.some((doc) => doc.libraryId === id)) throw new Error("This sound is no longer saved.");
+    this.updateLibrary(() => {
+      this.saved = this.saved.map((doc) => doc.libraryId === id ? { ...doc, name: nextName } : doc);
+      if (this.activeSavedId === id) {
+        this.document = { ...this.document, name: nextName };
+        this.initial = { ...this.initial, name: nextName };
+      }
+    });
+    // Parameter undo must not revive an old library name.
+    for (const snapshot of [...this.undoStack, ...this.redoStack, this.checkpoint]) {
+      if (snapshot?.activeSavedId === id) {
+        snapshot.document.name = nextName;
+        snapshot.initial.name = nextName;
+      }
+    }
+  }
+  deleteSaved(id) {
+    const doc = this.saved.find((item) => item.libraryId === id);
+    if (!doc) throw new Error("This sound is no longer saved.");
+    return this.updateLibrary(() => {
+      this.saved = this.saved.filter((item) => item.libraryId !== id);
+      this.deleted = [doc, ...this.deleted];
+      if (this.activeSavedId === id) this.activeSavedId = null;
+      return doc;
+    });
+  }
+  restoreSaved(id) {
+    const doc = this.deleted.find((item) => item.libraryId === id);
+    if (!doc) throw new Error("This sound is no longer in Recently deleted.");
+    return this.updateLibrary(() => {
+      this.deleted = this.deleted.filter((item) => item.libraryId !== id);
+      this.saved = [doc, ...this.saved];
+      return doc;
+    });
   }
   get hasUnsavedChanges() {
     const baseline = this.saved.find((doc) => doc.libraryId === this.activeSavedId) || this.initial;

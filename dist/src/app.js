@@ -51,11 +51,18 @@ let mode = "sculpt",
   hands = null;
 const inputs = new Map();
 let filterRange = null;
-function toast(message) {
+function toast(message, action) {
   $("#toast").textContent = message;
+  if (action) {
+    const button = document.createElement("button");
+    button.textContent = "Undo";
+    button.className = "toast-undo";
+    button.addEventListener("click", action, { once: true });
+    $("#toast").append(button);
+  }
   $("#toast").classList.add("visible");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3600);
+  toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), action ? 9000 : 3600);
 }
 function makeControls() {
   const container = $("#parameter-controls");
@@ -206,7 +213,8 @@ function sync(doc, kind) {
   miniRenderer.setDocument(doc, kind === "load");
   syncControls();
   renderHeader();
-  if (["save", "load"].includes(kind)) renderSavedCards();
+  if (["save", "load", "library"].includes(kind)) renderSavedCards();
+  if (kind === "library" && $("#library-dialog").open) renderLibrary();
   contour.setParams(compare ? store.initial.params : doc.params);
   mapping.update();
   if (kind === "load" || kind === "routes") mapping.renderDetails();
@@ -506,9 +514,59 @@ function renderSavedCards() {
     name.textContent = doc.name;
     button.append(label, name);
     button.addEventListener("click", () => loadSavedSound(doc));
-    cards.append(button);
+    const item = document.createElement("div");
+    item.className = "saved-card-item";
+    const manage = document.createElement("button");
+    manage.className = "sound-menu-button";
+    manage.textContent = "⋯";
+    manage.title = `Rename or delete ${doc.name}`;
+    manage.setAttribute("aria-label", `Manage ${doc.name}`);
+    manage.setAttribute("aria-haspopup", "dialog");
+    manage.addEventListener("click", () => openSoundOptions(doc.libraryId));
+    item.append(button, manage);
+    cards.append(item);
   }
 }
+let managedSoundId = null;
+function openSoundOptions(id) {
+  const doc = store.saved.find((item) => item.libraryId === id);
+  if (!doc) return;
+  stop();
+  managedSoundId = id;
+  $("#sound-options-name").value = doc.name;
+  $("#sound-options-name").setCustomValidity("");
+  $("#sound-options-error").hidden = true;
+  $("#sound-options-dialog").showModal();
+  $("#sound-options-name").select();
+}
+$("#sound-options-name").addEventListener("input", () => $("#sound-options-name").setCustomValidity(""));
+$("#sound-options-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  try {
+    store.renameSaved(managedSoundId, $("#sound-options-name").value);
+    $("#sound-options-dialog").close();
+    toast("Sound renamed");
+  } catch (error) {
+    $("#sound-options-error").textContent = error.message;
+    $("#sound-options-error").hidden = false;
+  }
+});
+function restoreSound(id) {
+  try {
+    const doc = store.restoreSaved(id);
+    toast(`“${doc.name}” restored`);
+  } catch (error) { toast(error.message); }
+}
+function deleteSound(id) {
+  try {
+    const doc = store.deleteSaved(id);
+    toast(`“${doc.name}” moved to Recently deleted`, () => restoreSound(id));
+    return true;
+  } catch (error) { toast(error.message); return false; }
+}
+$("#delete-sound-button").addEventListener("click", () => {
+  if (deleteSound(managedSoundId)) $("#sound-options-dialog").close();
+});
 function renderLibrary() {
   const list = $("#library-list");
   list.replaceChildren();
@@ -517,9 +575,8 @@ function renderLibrary() {
     p.className = "library-empty";
     p.textContent = "No saved sounds. Use Save sound to add one.";
     list.append(p);
-    return;
   }
-  store.saved.forEach((doc, i) => {
+  store.saved.forEach((doc) => {
     const row = document.createElement("div");
     row.className = "saved-row";
     const load = document.createElement("button");
@@ -535,9 +592,41 @@ function renderLibrary() {
     exportButton.textContent = "JSON ↓";
     exportButton.setAttribute("aria-label", `Export ${doc.name}`);
     exportButton.addEventListener("click", () => downloadJSON(doc));
-    row.append(load, exportButton);
+    const rename = document.createElement("button");
+    rename.textContent = "Rename";
+    rename.setAttribute("aria-label", `Rename ${doc.name}`);
+    rename.addEventListener("click", () => openSoundOptions(doc.libraryId));
+    const remove = document.createElement("button");
+    remove.textContent = "Delete";
+    remove.className = "delete-sound";
+    remove.setAttribute("aria-label", `Delete ${doc.name}`);
+    remove.addEventListener("click", () => deleteSound(doc.libraryId));
+    const actions = document.createElement("div");
+    actions.className = "saved-row-actions";
+    actions.append(rename, remove, exportButton);
+    row.append(load, actions);
     list.append(row);
   });
+  if (store.deleted.length) {
+    const details = document.createElement("details");
+    details.className = "deleted-sounds";
+    const summary = document.createElement("summary");
+    summary.textContent = `Recently deleted (${store.deleted.length})`;
+    details.append(summary);
+    for (const doc of store.deleted) {
+      const row = document.createElement("div");
+      row.className = "deleted-row";
+      const name = document.createElement("span");
+      name.textContent = doc.name;
+      const restore = document.createElement("button");
+      restore.textContent = "Restore";
+      restore.setAttribute("aria-label", `Restore ${doc.name}`);
+      restore.addEventListener("click", () => restoreSound(doc.libraryId));
+      row.append(name, restore);
+      details.append(row);
+    }
+    list.append(details);
+  }
 }
 $("#library-button").addEventListener("click", () => {
   renderLibrary();

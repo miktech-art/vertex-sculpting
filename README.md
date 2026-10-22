@@ -4,6 +4,8 @@ Use **Save sound** in the bottom strip to name and save the current sound, inclu
 
 Use **+ New sound** for a clean starting point. If the current sound has changes, choose Save & continue, Discard changes, or Cancel. Saving a selected sound updates it; choose **Save as a new sound** to keep a separate variation.
 
+Use the **⋯** button on a saved card to rename or delete it. **My sounds** also has Rename and Delete controls. Delete moves the saved version to **Recently deleted**, where Restore brings it back even after reload; the Undo link immediately after deletion restores it too. Renaming preserves sound settings and current unsaved edits.
+
 Sounds remain in this browser after reload. Export JSON for a portable backup or WAV for rendered audio where available. Browser storage is local to this site and browser; clearing it removes the library. The library has no fixed 40-sound limit; storage failures are reported without claiming the sound was saved.
 
 Run locally: `python3 -m http.server 5177 --directory dist`, then open http://localhost:5177. No build or dependencies are needed. Run `npm test` for the test suite.

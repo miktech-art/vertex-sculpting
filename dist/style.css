@@ -1907,3 +1907,25 @@ dialog input:not([type]) {
   .sound-bar-actions { flex-direction: row; }
   .preset-strip .library-button { margin-left: auto; min-width: 90px; }
 }
+
+/* Saved sound management stays available to mouse, touch, and keyboard users. */
+.saved-card-item { position: relative; flex: none; }
+.saved-card-item .saved-card { padding-right: 32px; }
+.sound-menu-button { position: absolute; right: 3px; top: 3px; width: 28px; height: 28px; color: var(--muted); font-size: 20px; border-radius: 3px; line-height: 1; }
+.sound-menu-button:hover, .sound-menu-button:focus-visible { color: var(--text); background: #ffffff12; }
+.saved-row > button:first-child { min-width: 0; overflow-wrap: anywhere; }
+.saved-row-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.saved-row-actions button { font-size: 11px; padding: 8px 0; }
+.delete-sound { color: #e5a99d; }
+.sound-options-actions { gap: 18px; flex-wrap: wrap; }
+.sound-options-actions .delete-sound { margin-right: auto; }
+.toast-undo { margin-left: 16px; color: #f0f3e8; text-decoration: underline; font-size: 13px; padding: 5px; pointer-events: auto; }
+.deleted-sounds { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.deleted-sounds summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.deleted-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 0; font-size: 13px; }
+.deleted-row span { overflow-wrap: anywhere; min-width: 0; }
+.deleted-row button { color: var(--accent); padding: 8px; }
+@media (max-width: 480px) {
+  .saved-row { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .saved-row-actions { justify-content: flex-start; }
+}

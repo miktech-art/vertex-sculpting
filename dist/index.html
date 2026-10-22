@@ -385,6 +385,20 @@
         <button id="save-and-continue" class="solid-button">Save &amp; continue</button>
       </div>
     </dialog>
+    <dialog id="sound-options-dialog" aria-labelledby="sound-options-title">
+      <form id="sound-options-form">
+        <h2 id="sound-options-title">Manage sound</h2>
+        <label for="sound-options-name">Sound name</label>
+        <input id="sound-options-name" maxlength="60" required autocomplete="off" />
+        <p id="sound-options-error" class="save-error" role="alert" hidden></p>
+        <p class="dialog-description">Rename changes only the name. Deleted sounds can be restored from My sounds → Recently deleted.</p>
+        <div class="dialog-actions sound-options-actions">
+          <button type="button" id="delete-sound-button" class="text-button delete-sound">Delete sound</button>
+          <button type="button" class="text-button" data-close-dialog="sound-options-dialog">Cancel</button>
+          <button type="submit" class="solid-button">Rename</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="library-dialog">
       <div class="dialog-top">
         <span class="eyebrow">SAVED SOUNDS</span
