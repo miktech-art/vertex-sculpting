@@ -312,24 +312,39 @@ document.querySelectorAll("[data-group]").forEach((button) =>
     }[group];
   }),
 );
+function showWorkspace(nextMode) {
+  mode = nextMode;
+  for (const button of document.querySelectorAll("[data-mode]")) {
+    const active = button.dataset.mode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active);
+  }
+  $("#sculpt-workspace").hidden = mode !== "sculpt";
+  $("#mapping-workspace").hidden = mode !== "mapping";
+  $("#sound-inspector").hidden = mode !== "sculpt";
+  $("#route-inspector").hidden = mode !== "mapping";
+  if (mode === "mapping") {
+    mapping.update();
+    mapping.renderDetails();
+    miniRenderer.resize();
+  } else renderer.resize();
+}
+function workspaceFromHash() {
+  showWorkspace(location.hash === "#connections" ? "mapping" : "sculpt");
+}
 document.querySelectorAll("[data-mode]").forEach((button) =>
   button.addEventListener("click", () => {
-    mode = button.dataset.mode;
-    for (const b of document.querySelectorAll("[data-mode]")) {
-      b.classList.toggle("active", b === button);
-      b.setAttribute("aria-pressed", b === button);
-    }
-    $("#sculpt-workspace").hidden = mode !== "sculpt";
-    $("#mapping-workspace").hidden = mode !== "mapping";
-    $("#sound-inspector").hidden = mode !== "sculpt";
-    $("#route-inspector").hidden = mode !== "mapping";
-    if (mode === "mapping") {
-      mapping.update();
-      mapping.renderDetails();
-      miniRenderer.resize();
-    } else renderer.resize();
+    showWorkspace(button.dataset.mode);
+    history.replaceState(null, "", mode === "mapping" ? "#connections" : "#sculpt");
   }),
 );
+window.addEventListener("hashchange", workspaceFromHash);
+workspaceFromHash();
+// Leaving for the independent Beatbox page must flush any pending session edit.
+window.addEventListener("pagehide", () => {
+  stop();
+  store.persist();
+});
 $("#reset-view").addEventListener("click", () => {
   renderer.resetView();
   $("#view-label").textContent = "FRONT VIEW";

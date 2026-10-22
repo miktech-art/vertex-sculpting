@@ -1,0 +1,2 @@
+# LF everywhere: the debug build matches source text that contains newlines.
+* text=auto eol=lf

@@ -1,0 +1,12 @@
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const result = spawnSync('npm', ['--prefix', 'beatbox-src', 'run', 'build'], { cwd: root, stdio: 'inherit' });
+if (result.status !== 0) process.exit(result.status || 1);
+const output = resolve(root, 'dist/beatbox');
+rmSync(output, { recursive: true, force: true });
+mkdirSync(output, { recursive: true });
+cpSync(resolve(root, 'beatbox-src/dist'), output, { recursive: true });
+console.log('Beatbox built at dist/beatbox/');

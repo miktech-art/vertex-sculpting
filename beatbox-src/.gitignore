@@ -1,0 +1,20 @@
+# stems — samples from someone else's track (HNTR, "Shook Ones Pt. III").
+# Never commit them, even to a private repo. See README → "Stems".
+public/stems/*
+!public/stems/README.txt
+*.wav
+
+# build output — both hold the stems (dist-single/index.html embeds them)
+dist/
+dist-single/
+
+# dependencies
+node_modules/
+
+# misc
+__pycache__/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

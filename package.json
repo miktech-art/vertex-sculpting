@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 5177 --directory dist",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build:beatbox": "node scripts/build-beatbox.mjs",
+    "test:beatbox": "npm --prefix beatbox-src test"
   }
 }

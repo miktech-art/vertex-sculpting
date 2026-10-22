@@ -1,0 +1,25 @@
+{
+  "name": "vertex-sequencer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:debug": "vite build --mode debug",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check:timing": "node scripts/check-timing.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "playwright-core": "^1.64.1",
+    "vite": "^8.3.4"
+  }
+}

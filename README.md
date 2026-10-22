@@ -1,3 +1,13 @@
+## Beatbox page
+
+The header has three selectors: **Sculpt**, **Connections**, and **Beatbox**. Beatbox is the supplied Vertex Sequencer on its own `/beatbox/` page, with its original appearance and instrument code. Its links return to either Sound/Sculpt workspace. Only page navigation is shared; sounds, sequencers, effects, and controls are independent.
+
+The supplied Beatbox archive omits its five audio samples. Drop `kick.wav`, `clap.wav`, `cymbal.wav`, `synth.wav`, and `bass.wav` into `beatbox-src/public/stems/`, then run `npm run build:beatbox` from this project root and redeploy. The files are copied to `dist/beatbox/stems/`. The built page also contains that folder for quick local additions. Until the samples are present, the Beatbox visuals and controls work but its audio is silent.
+
+Beatbox source is in `beatbox-src/`; its own README and documentation remain there. To rebuild, install its locked dependencies once (`npm --prefix beatbox-src ci`), then run `npm run build:beatbox`. The root Sound/Sculpt page still runs without a build. Switching pages follows normal browser navigation; the original Beatbox does not persist edited scenes across reloads.
+
+---
+
 ## Saved-sound bar
 
 Use **Save sound** in the bottom strip to name and save the current sound, including its parameters and visual connections. Saved sounds appear beside the factory sound; click a card to load it.

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vertex Sequencer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#d9d8de; --fg:#1d1a22; --dim:rgba(29,26,34,.5); --faint:rgba(29,26,34,.13); --line:rgba(29,26,34,.28);
+    --accent:#1d1a22; --hi:#6c52b8; --panel:rgba(232,231,236,.86);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;color:var(--fg);
+    font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;-webkit-font-smoothing:antialiased}
+  canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;cursor:default}
+  #hud{position:fixed;inset:0;pointer-events:none;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:400}
+  #hud .pe{pointer-events:auto}
+  button,select,input{font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit}
+  button{background:transparent;border:1px solid var(--faint);padding:6px 10px;cursor:pointer;white-space:nowrap;transition:border-color .15s,background .15s,color .15s}
+  button:hover{border-color:var(--line)}
+  button.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+  button.rec.on{background:#c8473b;border-color:#c8473b;color:#fff}
+  select{background:transparent;border:1px solid var(--faint);padding:5px 6px;outline:none;cursor:pointer}
+  select option{background:#e6e5ea;color:var(--fg)}
+  .dim{color:var(--dim)}
+  .vsep{width:1px;height:34px;background:var(--line)}
+  .hsep{width:28px;height:1px;background:var(--line);margin:14px 0}
+
+  #top{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;padding:22px 28px}
+  .brand{font-size:12px;letter-spacing:.2em}
+  .center{display:flex;gap:8px;align-items:center}
+  .seg{display:flex}
+  .seg button+button{border-left:none}
+  .transport{display:flex;gap:10px;align-items:center}
+  .transport label{display:flex;gap:8px;align-items:center;color:var(--dim)}
+  #recTime{min-width:46px;color:#c8473b}
+  #exports{display:flex;gap:6px}
+
+  #tools{position:absolute;left:28px;top:118px;display:flex;flex-direction:column;gap:6px;width:112px}
+  #tools button{text-align:left}
+  #tools .k{float:right;opacity:.55}
+  #tools .lbl{color:var(--dim);font-size:9px;margin:10px 0 2px}
+
+  #props{position:absolute;right:28px;top:118px;width:262px;max-height:calc(100% - 180px);overflow:auto;padding-left:18px;border-left:1px solid var(--faint)}
+  #props h3{font-weight:400;font-size:12px;letter-spacing:.2em;margin:0 0 4px}
+  #props .sub{color:var(--dim);font-size:9.5px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0}
+  .row > span:first-child{color:var(--dim)}
+  .sec{color:var(--dim);font-size:9px;margin-top:16px}
+  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:16px;margin:0;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line)}
+  input[type=range]::-moz-range-track{height:1px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;background:var(--fg);margin-top:-4px}
+  input[type=range]::-moz-range-thumb{width:9px;height:9px;border:none;border-radius:50%;background:var(--fg)}
+  .fader{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+  .fader .top{display:flex;justify-content:space-between}
+  .fader .top span:first-child{color:var(--dim)}
+  input[type=checkbox]{accent-color:#1d1a22}
+  input.num{width:44px;background:transparent;border:1px solid var(--faint);padding:4px 5px;outline:none;color:var(--fg)}
+  input.num::placeholder{color:var(--dim)}
+  .mini{display:flex;gap:4px}
+  .mini button{padding:3px 7px;font-size:9.5px}
+
+  /* instrument swatches: colour = instrument, glow = its contrast halo */
+  .swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:12px 0;margin:12px 0 6px;justify-items:center}
+  .sw{width:22px;height:22px;border-radius:50%;padding:0;border:none;background:var(--c);cursor:pointer;transition:transform .12s}
+  .sw:hover{transform:scale(1.12);border:none}
+  button.sw.on{outline:1px solid var(--fg);outline-offset:4px;background:var(--c);border:none}
+  #pFam{color:var(--fg)}
+
+  #status{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:20px;padding:18px 28px;color:var(--dim);font-size:9.5px}
+  #status .l{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  #status .l b{font-weight:400;color:var(--fg)}
+  #info{white-space:nowrap;flex-shrink:0}
+  #modalHdr{position:absolute;left:50%;top:84px;transform:translateX(-50%);padding:7px 14px;border:1px solid var(--line);color:var(--fg);background:var(--panel);display:none;white-space:nowrap}
+
+  .menu{position:absolute;min-width:270px;max-height:calc(100% - 40px);overflow:auto;background:rgba(236,235,240,.96);border:1px solid var(--line);padding:6px;display:none;backdrop-filter:blur(6px)}
+  .menu .ttl{color:var(--dim);padding:6px 8px 8px;font-size:9px;border-bottom:1px solid var(--faint);margin-bottom:4px}
+  .menu button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;border:none;text-align:left;padding:7px 8px}
+  .menu button:hover{background:rgba(29,26,34,.07)}
+  .menu button span{color:var(--dim)}
+  .menu i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:-1px}
+  #box{position:absolute;border:1px dashed var(--fg);background:rgba(29,26,34,.04);display:none}
+
+  .overlay{position:absolute;inset:0;background:rgba(217,216,222,.82);display:flex;align-items:center;padding:0 9vw;backdrop-filter:blur(8px)}
+  .overlay .inner{max-width:980px;width:100%}
+  .big{font-size:clamp(22px,2.6vw,34px);letter-spacing:.14em;line-height:1.55;font-weight:300}
+  .para{color:var(--dim);text-transform:none;letter-spacing:.05em;font-size:12px;line-height:1.9;max-width:560px}
+  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 36px;margin:26px 0 30px;font-size:10px}
+  .keys div{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid var(--faint)}
+  .keys div span:last-child{color:var(--dim)}
+  .keys h4{font-weight:400;color:var(--hi);font-size:9.5px;margin:12px 0 4px}
+  #beginBtn{padding:12px 22px;border-color:var(--fg);font-size:11px}
+  #beginBtn:hover{background:var(--fg);color:var(--bg)}
+  #help{display:none}
+  #fx{position:absolute;left:28px;top:96px;width:236px;max-height:calc(100% - 150px);overflow:auto;padding-right:16px;border-right:1px solid var(--faint);display:none}
+  #fx h3{font-weight:400;font-size:12px;letter-spacing:.2em;margin:0 0 4px}
+  #fx .sub{color:#c8473b;font-size:9.5px}
+  #fx .sec{margin-top:18px}
+  #fx .fader{margin:7px 0}
+  #fx .btns{display:flex;gap:6px;margin-top:18px}
+  #fx .btns button{flex:1}
+
+  /* Page navigation only; Vertex keeps its own palette, typography and controls. */
+  #soundsculpt-pages { position:fixed; inset:0 0 auto; height:56px; z-index:100;
+    display:flex; align-items:center; justify-content:center; gap:4px;
+    background:var(--bg); border-bottom:1px solid var(--faint); font-size:11px; letter-spacing:.1em; }
+  #soundsculpt-pages a { color:var(--dim); text-decoration:none; padding:9px 15px; border:1px solid transparent; }
+  #soundsculpt-pages a:hover { border-color:var(--line); color:var(--fg); }
+  #soundsculpt-pages [aria-current="page"] { background:var(--fg); color:var(--bg); }
+  #soundsculpt-pages a:focus-visible { outline:2px solid var(--hi); outline-offset:2px; }
+  #top { top:56px; }
+  #tools, #props { top:174px; }
+  #props { max-height:calc(100% - 236px); }
+  #fx { top:152px; max-height:calc(100% - 206px); }
+  #modalHdr { top:140px; }
+</style>
+</head>
+<body>
+<nav id="soundsculpt-pages" aria-label="Workspace">
+  <a href="../#sculpt">Sculpt</a>
+  <a href="../#connections">Connections</a>
+  <a href="./" aria-current="page">Beatbox</a>
+</nav>
+<canvas id="c" tabindex="0"></canvas>
+
+<div id="hud">
+  <header id="top">
+    <div class="brand pe">VERTEX SEQUENCER</div>
+
+    <div class="center pe">
+      <button id="modeBtn" title="Tab">OBJECT MODE</button>
+      <div class="seg" id="selModes" style="display:none">
+        <button data-sm="p" class="on" title="1">1 · POINTS</button><button data-sm="v" title="2">2 · VERT</button><button data-sm="e" title="3">3 · EDGE</button>
+      </div>
+      <button id="mirrorBtn" class="on" style="display:none" title="Mirror edits across local X">X-MIRROR</button>
+    </div>
+
+    <div class="transport pe">
+      <label>KEY <select id="keySel"></select><select id="modeSel"></select></label>
+      <label>BPM <input id="gBpm" type="range" min="60" max="180" step="1" value="132" style="width:80px"><span id="gBpmV" style="color:var(--fg);min-width:28px">132</span></label>
+      <div class="vsep" style="height:22px"></div>
+      <button id="playBtn" title="Space">■ STOP</button>
+      <button id="recBtn" class="rec">● REC</button><span id="recTime"></span>
+      <div id="exports" style="display:none"><button id="expVid">EXPORT VIDEO</button><button id="expWav">EXPORT WAV</button></div>
+    </div>
+  </header>
+
+  <aside id="tools" class="pe">
+    <div class="lbl">GUMBALL</div>
+    <button data-gum="none">SELECT</button>
+    <button data-gum="translate" class="on">MOVE</button>
+    <button data-gum="rotate">ROTATE</button>
+    <button data-gum="scale">SCALE</button>
+    <div class="lbl">CREATE</div>
+    <button id="addBtn">ADD <span class="k">⇧A</span></button>
+    <button id="polyBtn">POLYGON</button>
+    <button id="delBtn">DELETE <span class="k">X</span></button>
+    <div class="lbl">VIEW</div>
+    <div class="seg"><button data-view="top" style="flex:1" title="Numpad 7">TOP</button><button data-view="3d" style="flex:1" class="on" title="Numpad 5">3D</button></div>
+    <button id="snapBtn" class="on" title="Snap to the 1/16 grid (hold Ctrl to invert)">SNAP 1/16</button>
+    <button id="frameBtn">FRAME <span class="k">.</span></button>
+    <button id="padBtn" title="Trackpad: 2-finger scroll orbits, shift pans, pinch zooms">TRACKPAD</button>
+    <button id="helpBtn">KEYS <span class="k">F1</span></button>
+  </aside>
+
+  <aside id="props" class="pe">
+    <div id="pEmpty"><h3>NO SELECTION</h3><div class="sub" style="margin-top:8px;line-height:1.8">LMB SELECT · ⇧A ADD<br>DOUBLE-CLICK / TAB TO EDIT NOTES<br>CTRL+CLICK LOOPS · CTRL+L LINKS THEM</div></div>
+    <div id="pBody" style="display:none">
+      <h3 id="pName">CUBE</h3>
+      <div class="sub" id="pChar" style="color:var(--hi);margin-top:8px;line-height:1.7"></div>
+      <div class="hsep"></div>
+      <div class="row" style="margin-bottom:0"><span>INSTRUMENT</span><span id="pFam">SYNTH</span></div>
+      <div class="swatches" id="pSw"></div>
+      <div class="row" style="margin-top:12px"><span>MUTE</span><input id="pMute" type="checkbox"></div>
+
+      <div class="sec">— EFFECTS · DOUBLE-CLICK RESETS</div>
+      <div id="pFx"></div>
+
+      <div class="sec">— NOTES · HEIGHT = PITCH</div>
+      <div class="row"><span id="pNotes" style="color:var(--fg);line-height:1.7">—</span></div>
+      <div class="sec">— LOOP · DISTANCE = TIME</div>
+      <div class="row"><span>CORNERS</span><span class="mini" style="display:flex;gap:8px;align-items:center"><button id="pNminus">−</button><span id="pCorners">4</span><button id="pNplus">+</button></span></div>
+      <div class="row"><span>LENGTH</span><span id="pLoop">1 BAR</span></div>
+      <div class="row"><span>LINKED</span><span style="display:flex;gap:8px;align-items:center"><span id="pStack">—</span><button id="pUnstack" class="mini" style="padding:3px 8px;font-size:9.5px" title="Alt+L">UNLINK</button></span></div>
+      <div class="sec">— MOTION LOOPS</div>
+      <div class="row"><span id="pMotion" style="color:var(--fg)">NONE · R WHILE DRAGGING</span><button id="pMotionClear" style="padding:3px 8px;font-size:9.5px">CLEAR</button></div>
+      <button id="pDelete" style="width:100%;margin-top:18px">DELETE SHAPE <span class="dim" style="float:right">X</span></button>
+    </div>
+  </aside>
+
+  <aside id="fx" class="pe">
+    <h3>SHADER</h3><div class="sub">■ PAUSED · N OR ESC TO RESUME</div>
+    <div class="sec">— PREVIEW</div>
+    <div class="seg" style="margin-top:8px"><button data-pv="rest" style="flex:1">REST</button><button data-pv="hit" style="flex:1">HIT</button><button data-pv="pulse" style="flex:1">PULSE</button></div>
+    <div id="fxBody"></div>
+    <div class="btns"><button id="fxReset">RESET</button><button id="fxCopy">COPY</button><button id="fxClose">CLOSE</button></div>
+  </aside>
+
+  <div id="modalHdr"></div>
+
+  <footer id="status">
+    <div class="l" id="hint"></div>
+    <div id="info"></div>
+  </footer>
+
+  <div id="addMenu" class="menu pe">
+    <div class="ttl">ADD · EXACTLY 1 BAR · THEN PLACE ITS NOTES</div>
+    <button data-add="4">SQUARE <span>A BEAT A SIDE</span></button>
+    <button data-add="3">TRIANGLE <span>3 · TRIPLETS</span></button>
+    <button data-add="5">PENTAGON <span>5</span></button>
+    <button data-add="6">HEXAGON <span>6</span></button>
+    <button data-add="8">OCTAGON <span>8 · EIGHTHS</span></button>
+    <button data-add="16">16-GON <span>16 · SIXTEENTHS</span></button>
+    <button data-add="rect">RECTANGLE <span>4 · UNEVEN</span></button>
+    <button data-add="poly">DRAW POLYGON… <span>✎ SNAPS 1/16</span></button>
+    <div class="ttl" style="margin-top:6px">ADD · SOUND SHAPES</div>
+    <div id="presetList"></div>
+  </div>
+  <div id="box"></div>
+
+  <div id="start" class="overlay pe">
+    <div class="inner">
+      <div class="big">EVERY CORNER<br>IS A NOTE.</div>
+      <div class="hsep"></div>
+      <p class="para">A black dot travels the outline of every form. Distance is time: one grid unit is one beat, so a form's perimeter is its loop length, and snapping to the 1/16 grid keeps every corner on the beat. Corners are notes and open faces are rests. Height is pitch: every corner plays the note at the height the dot passes it, with a plane for every octave, so lifting a face changes its notes. Colour is the instrument and brightness the pitch. Drop one form onto another to chain bars into a stack. The top view (numpad 7) shows every form around one centre. The 3D view pulls them apart so you can edit them separately.</p>
+      <div class="keys" id="keysStart"></div>
+      <button id="beginBtn">CLICK TO BEGIN ▸</button>
+    </div>
+  </div>
+  <div id="help" class="overlay pe">
+    <div class="inner">
+      <div class="big" style="font-size:22px">CONTROLS</div>
+      <div class="keys" id="keysHelp"></div>
+      <button id="helpClose">CLOSE · F1</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
