@@ -176,7 +176,7 @@ export const PARAMETERS = [
     label: "Motion rate",
     group: "contour",
     min: 0.2,
-    max: 12,
+    max: 24,
     value: 3,
     unit: "Hz",
     scale: "log",

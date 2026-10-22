@@ -30,7 +30,7 @@ Open http://localhost:5177. Run the automated checks with `npm test` (Node 20+).
 - Drag the A, D, S, and R envelope handles to edit attack, decay/sustain level, hold/sustain level, and release. Arrow keys adjust the focused handle; Shift uses larger increments.
 - Source, Contour and Space expose 22 editable parameters. Controls update the active sound and sculpture continuously at the current playback time.
 - Space / Play triggers the current sound; L toggles looping; Escape stops. Undo / redo uses Command/Ctrl Z and Shift Command/Ctrl Z.
-- Drag to orbit; scroll to zoom; double-click to reset. Front gives an unrotated view.
+- Drag to orbit; scroll to zoom; double-click to reset.
 - The complete sculpture stays visible when paused. Playback highlights the form over time. Delay produces repeated impressions; reverb adds diffuse structure.
 - Connections supports drag or click between endpoints. Select a line to audition its source value and adjust strength, response curve, inversion, smoothing, or disconnection. Negative strengths subtract before the target is clamped.
 - Save sound stores sound parameters and mappings together in this browser. JSON import/export is portable. WAV renders a stereo sound including delay and reverb.
@@ -115,7 +115,7 @@ Echoes translate longitudinally by `repeat index × delay time × units per seco
 
 A shared seconds scale extends through the last visible echo. The narrow present-moment window is one third of its original temporal width, and intersects every copy at its local sound time; it continues across echoes after the source envelope finishes. Held-note previews cycle across the full displayed timeline. The ADSR editor remains the source envelope only.
 
-The whole train fits once on load/reset. Subsequent delay edits retain the viewing scale. Fit time explicitly frames the full train; Shift-drag pans and the wheel zooms. Tick marks below the sculpture show elapsed seconds. Existing custom mappings to echo level, spacing and persistence remain supported. Live delay edits update the existing audio graph.
+The whole train fits once on load/reset. Subsequent delay edits retain the viewing scale. Reset view frames the full train; Shift-drag pans and the wheel zooms. Tick marks below the sculpture show elapsed seconds. Existing custom mappings to echo level, spacing and persistence remain supported. Live delay edits update the existing audio graph.
 
 ## Live editing (v0.7)
 
@@ -125,7 +125,7 @@ All native sliders capture pointer movement and emit input continuously; keyboar
 
 ADSR changes cancel future automation, bridge the current level over 20 ms, and reschedule only the envelope landmarks ahead of the elapsed note time. Sources remain available until voice cleanup so an unfinished envelope can be extended. Finished source envelopes do not restart when editing effect tails, and repeated edits do not indefinitely extend old tail lifetimes. Volume controls both dry sound and tails. Stop fades each voice's complete bus and cleans its nodes and pending tasks.
 
-Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy, rather than the former 4 units. Fit time considers the full transverse stack as well as its longitudinal extent.
+Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy, rather than the former 4 units. The view reset considers the full transverse stack as well as its longitudinal extent.
 
 ## Expanded delay (v0.7.1)
 
