@@ -1712,28 +1712,8 @@ dialog input:not([type]) {
   border-color: #a68c74;
   background: #c4a18114;
 }
-#camera-status {
-  color: #9ba590;
-  font-family: var(--mono);
-  font-size: 9px;
-  line-height: 1.6;
-  min-height: 15px;
-  margin: 9px 0 0;
-}
-.camera-panel[data-state="active"] #camera-status {
-  color: #e6c5a8;
-}
 .camera-panel[data-state="active"] .camera-frame {
   border-color: #aa9177;
-}
-.camera-panel[data-state="error"] #camera-status {
-  color: #e1aa91;
-}
-.camera-instruction {
-  color: #747e6b;
-  font-size: 9px;
-  line-height: 1.6;
-  margin: 4px 0 0;
 }
 @media (max-height: 850px) and (min-width: 761px) {
   .camera-panel {
@@ -1785,13 +1765,6 @@ dialog input:not([type]) {
   }
   .camera-heading {
     margin-bottom: 7px;
-  }
-  .camera-instruction {
-    display: none;
-  }
-  #camera-status {
-    font-size: 8px;
-    margin-top: 6px;
   }
   .finger-indicators span {
     width: 15px;

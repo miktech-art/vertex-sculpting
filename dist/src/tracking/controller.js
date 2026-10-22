@@ -51,7 +51,6 @@ export class HandController {
     this.panel = document.querySelector("#camera-panel");
     this.video = document.querySelector("#camera-video");
     this.overlay = document.querySelector("#hand-overlay");
-    this.status = document.querySelector("#camera-status");
     this.placeholder = document.querySelector("#camera-placeholder");
     this.binding = new LoopBinding();
     this.releaseBinding = new ReleaseBinding();
@@ -71,7 +70,7 @@ export class HandController {
     window.addEventListener("pagehide", () => this.stop());
   }
   setStatus(text, state = "off") {
-    this.status.textContent = text;
+    this.button.title = state === "error" ? text : "";
     this.panel.dataset.state = state;
   }
   loadWorker() {
@@ -180,7 +179,7 @@ export class HandController {
       this.placeholder.hidden = true;
       this.video.hidden = false;
       this.button.textContent = "Disable";
-      this.setStatus("Raise right index for Loop", "ready");
+      this.setStatus("Raise left index for Loop", "ready");
       for (const track of stream.getVideoTracks())
         track.addEventListener("ended", () => this.stop());
       this.watchdog = setInterval(() => {
@@ -259,7 +258,7 @@ export class HandController {
       this.onLoop(this.gate);
     }
     if (sample.active) {
-      this.setStatus("Loop on · lower right index to stop repeats", "active");
+      this.setStatus("Loop on · lower left index to stop repeats", "active");
     } else if (release.release !== null && release.allowed) {
       this.onRelease(release.release);
       this.setStatus(
@@ -281,11 +280,11 @@ export class HandController {
                 ? "Pinch left thumb + index for attack"
                 : attack.pinched
                   ? "Hold right hand upright (±15°)"
-                  : !sample.hasRight
-                    ? "Show your right hand"
+                  : !sample.hasLoopHand
+                    ? "Show your left hand"
                     : !sample.indexExtended
-                      ? "Raise your right index finger for Loop"
-                      : "Raise only the right index finger for Loop",
+                      ? "Raise your left index finger for Loop"
+                      : "Raise only the left index finger for Loop",
         "ready",
       );
     }
@@ -299,7 +298,7 @@ export class HandController {
       node.setAttribute(
         "aria-label",
         index < 0
-          ? `Right index ${valid ? "raised" : "lowered"}`
+          ? `Left index ${valid ? "raised" : "lowered"}`
           : `${["Middle", "Ring", "Pinky"][index]} finger ${valid ? "bent" : "extended"}`,
       );
     });
@@ -348,11 +347,14 @@ export class HandController {
       c.font = "18px monospace";
       c.fillText(label, x(0) + 8, y(0) - 8);
     };
-    drawHand(release.left?.landmarks, "L", release.leftOpen || (attack.active && attack.allowed));
     drawHand(
-      release.right?.landmarks || sample.landmarks,
+      release.left?.landmarks || sample.landmarks, "L",
+      active || release.leftOpen || (attack.active && attack.allowed),
+    );
+    drawHand(
+      release.right?.landmarks,
       "R",
-      active || attack.rightOpen || (release.active && release.allowed),
+      attack.rightOpen || (release.active && release.allowed),
     );
     for (const pose of [release, attack]) {
       if (!pose.allowed || !pose.anchor || !pose.pinch) continue;

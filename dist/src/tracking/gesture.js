@@ -1,6 +1,7 @@
 import { clamp, denormalize } from "../model.js";
 
 export const LOOP_BINDING = Object.freeze({
+  hand: "Left",
   acquireMs: 140,
   releaseMs: 100,
   enterDegrees: 50,
@@ -103,9 +104,9 @@ function raisedIndex(hand, aspect, latched) {
 }
 // A single upward index, with the other long fingers bent. No palm contact test.
 export function inspectLoopHand(result, { latched = false } = {}) {
-  const hand = selectHand(result, "Right");
+  const hand = selectHand(result, LOOP_BINDING.hand);
   if (!hand) return {
-    hasRight: false, allowed: false, curled: [false, false, false],
+    hasLoopHand: false, allowed: false, curled: [false, false, false],
     indexExtended: false, indexRaised: false, landmarks: null,
   };
   const points = hand.shape;
@@ -119,7 +120,7 @@ export function inspectLoopHand(result, { latched = false } = {}) {
   const index = raisedIndex(hand, aspect, latched);
   const indexExtended = index.extended, indexRaised = index.raised;
   return {
-    ...hand, hasRight: true, curled, indexExtended, indexRaised,
+    ...hand, hasLoopHand: true, curled, indexExtended, indexRaised,
     allowed: indexRaised && curled.every(Boolean),
   };
 }

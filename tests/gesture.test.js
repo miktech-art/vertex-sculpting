@@ -9,14 +9,14 @@ import {
   ReleaseBinding,
 } from "../dist/src/tracking/gesture.js";
 
-import { fixture, combine, releaseFixture, attackFixture } from "./hand-fixtures.js";
-test("a single raised anatomical right index gates Loop, without requiring palm contact", () => {
-  assert.equal(inspectLoopHand(fixture()).allowed, true);
-  assert.equal(inspectLoopHand(fixture({hand:"Left"})).allowed, false);
-  assert.equal(inspectLoopHand(fixture({score:0.6})).allowed, false);
-  assert.equal(inspectLoopHand(fixture({closed:false})).allowed, false);
-  assert.equal(inspectLoopHand(fixture({indexStraight:false})).allowed, false);
-  const loose = fixture();
+import { fixture, combine, releaseFixture, attackFixture, loopFixture } from "./hand-fixtures.js";
+test("a single raised anatomical left index gates Loop, without requiring palm contact", () => {
+  assert.equal(inspectLoopHand(loopFixture()).allowed, true);
+  assert.equal(inspectLoopHand(loopFixture({hand:"Right"})).allowed, false);
+  assert.equal(inspectLoopHand(loopFixture({score:0.6})).allowed, false);
+  assert.equal(inspectLoopHand(loopFixture({closed:false})).allowed, false);
+  assert.equal(inspectLoopHand(loopFixture({indexStraight:false})).allowed, false);
+  const loose = loopFixture();
   for (const tip of [12,16,20]) loose.worldLandmarks[0][tip].z = 0.5;
   assert.equal(inspectLoopHand(loose).allowed, true, "loose curls need not touch the palm");
   loose.worldLandmarks[0][4] = {x:0,y:0,z:2};
@@ -24,20 +24,20 @@ test("a single raised anatomical right index gates Loop, without requiring palm 
 });
 test("finger height and hand screen position cannot modify pitch or Loop recognition", () => {
   for (const y of [0,0.2,0.5,0.8,1]) {
-    const sample = inspectLoopHand(fixture({y}));
+    const sample = inspectLoopHand(loopFixture({y}));
     assert.equal(sample.allowed, true);
     assert.equal("pitch" in sample, false);
     assert.equal("normalized" in sample, false);
   }
   for (const order of [false,true]) {
-    const result = combine(fixture({hand:"Left",x:0.8}),fixture({x:0.2}));
+    const result = combine(loopFixture({hand:"Left",x:0.8}),loopFixture({x:0.2}));
     if (order) for (const key of ["landmarks","worldLandmarks","handedness"]) result[key].reverse();
     assert.equal(inspectLoopHand(result).allowed,true);
   }
 });
 test("loop index points upward independent of palm facing, and dropping it turns the gate off", () => {
   for (const yaw of [0,90,180,270]) {
-    const result = fixture();
+    const result = loopFixture();
     result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{yaw});
     assert.equal(inspectLoopHand(result).allowed,true);
     result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{tilt:90});
@@ -47,15 +47,15 @@ test("loop index points upward independent of palm facing, and dropping it turns
 });
 test("Loop acquires once, tolerates brief jitter, and turns off after lowered or missing index", () => {
   const binding = new LoopBinding();
-  assert.equal(binding.update(fixture(),0).active,false);
-  assert.equal(binding.update(fixture(),80).active,false);
-  assert.equal(binding.update(fixture(),160).active,true);
+  assert.equal(binding.update(loopFixture(),0).active,false);
+  assert.equal(binding.update(loopFixture(),80).active,false);
+  assert.equal(binding.update(loopFixture(),160).active,true);
   assert.equal(binding.update({},200).active,true);
-  assert.equal(binding.update(fixture(),240).active,true);
-  assert.equal(binding.update(fixture({indexStraight:false}),280).active,true);
-  assert.equal(binding.update(fixture({indexStraight:false}),400).active,false);
-  assert.equal(binding.update(fixture(),440).active,false);
-  assert.equal(binding.update(fixture(),600).active,true);
+  assert.equal(binding.update(loopFixture(),240).active,true);
+  assert.equal(binding.update(loopFixture({indexStraight:false}),280).active,true);
+  assert.equal(binding.update(loopFixture({indexStraight:false}),400).active,false);
+  assert.equal(binding.update(loopFixture(),440).active,false);
+  assert.equal(binding.update(loopFixture(),600).active,true);
   assert.equal(binding.update({},640).active,true);
   assert.equal(binding.update({},760).active,false);
 });
@@ -114,9 +114,9 @@ test("release freezes immediately if pinch or left pose breaks, without jumping 
   assert.equal(binding.update(releaseFixture(), 440).release, null);
 });
 test("missing, malformed or degenerate landmarks cannot activate either binding", () => {
-  const malformed = fixture();
+  const malformed = loopFixture();
   malformed.worldLandmarks[0][12].z = NaN;
-  const degenerate = fixture();
+  const degenerate = loopFixture();
   degenerate.worldLandmarks[0] = Array.from({ length: 21 }, () => ({
     x: 0,
     y: 0,
@@ -285,7 +285,7 @@ test("attack uses the same acquisition, hysteresis, smoothing and immediate inva
 });
 
 test("a visibly raised index survives incorrect world depth and naturally bent joints", () => {
-  const result = fixture();
+  const result = loopFixture();
   result.worldLandmarks[0][6].z = 0.5;
   result.worldLandmarks[0][7].z = -0.3;
   result.worldLandmarks[0][8].z = 0.9;
@@ -296,17 +296,17 @@ test("a visibly raised index survives incorrect world depth and naturally bent j
   assert.equal(inspectLoopHand(result).allowed, true);
 });
 test("a straight world index cannot rescue a visibly dropped or hooked finger", () => {
-  const result = fixture();
+  const result = loopFixture();
   const image = result.landmarks[0];
   image[8].y = image[5].y + 0.03;
   assert.equal(inspectLoopHand(result).indexRaised, false);
-  const hooked = fixture();
+  const hooked = loopFixture();
   hooked.landmarks[0][8].y = hooked.landmarks[0][6].y + 0.015;
   assert.equal(inspectLoopHand(hooked).indexRaised, false);
 });
 test("visible-index detection handles aspect ratio, scale, screen position and edge-on hands", () => {
   for (const yaw of [0, 90, 180, 270]) {
-    const result = fixture();
+    const result = loopFixture();
     const rotated = rotate(result.worldLandmarks[0], { yaw });
     result.landmarks[0] = rotated.map(p => ({ x:0.5+p.x*0.08, y:0.7+p.y*0.12, z:0 }));
     result.frameAspectRatio = 4/3;
@@ -317,7 +317,7 @@ test("visible-index detection handles aspect ratio, scale, screen position and e
     }
     assert.equal(inspectLoopHand(result).allowed, true);
   }
-  const result = fixture();
+  const result = loopFixture();
   result.frameAspectRatio = 16/9;
   assert.equal(inspectLoopHand(result).allowed, true);
 });

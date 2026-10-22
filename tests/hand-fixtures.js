@@ -65,3 +65,5 @@ export function attackFixture({ leftX = 0.2, rightX = 0.65 } = {}) {
     fixture({ hand: "Right", closed: false, x: rightX }),
   );
 }
+
+export const loopFixture = (options = {}) => fixture({ hand: "Left", ...options });

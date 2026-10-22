@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HandController } from "../dist/src/tracking/controller.js";
-import { fixture, releaseFixture, attackFixture } from "./hand-fixtures.js";
+import { fixture, releaseFixture, attackFixture, loopFixture } from "./hand-fixtures.js";
 
 function controller() {
   globalThis.document = {
@@ -22,17 +22,17 @@ function controller() {
   hand.setStatus = () => {};
   return { hand, events };
 }
-test("right index emits one loop-on edge and one loop-off edge, without editing the preset", () => {
+test("left index emits one loop-on edge and one loop-off edge, without editing the preset", () => {
   const {hand,events} = controller();
-  for (const t of [0,80,160,240,320,400]) hand.consume(fixture(),t);
+  for (const t of [0,80,160,240,320,400]) hand.consume(loopFixture(),t);
   assert.deepEqual(events,[["loop",true]]);
-  for (const t of [440,560,640]) hand.consume(fixture({indexStraight:false}),t);
+  for (const t of [440,560,640]) hand.consume(loopFixture({indexStraight:false}),t);
   assert.deepEqual(events,[["loop",true],["loop",false]]);
 });
 test("release takes priority over Loop and never turns Loop on", () => {
   const {hand,events} = controller();
-  hand.consume(fixture(),0);
-  hand.consume(fixture(),160);
+  hand.consume(loopFixture(),0);
+  hand.consume(loopFixture(),160);
   events.length = 0;
   for (const t of [200,280,360,440]) hand.consume(releaseFixture(),t);
   assert.ok(events.some(([k,v]) => k === "loop" && v === false));
@@ -41,13 +41,13 @@ test("release takes priority over Loop and never turns Loop on", () => {
 });
 test("manual disarm stops a raised-index loop and blocks it until lowered and raised again", () => {
   const {hand,events} = controller();
-  hand.consume(fixture(),0);
-  hand.consume(fixture(),160);
+  hand.consume(loopFixture(),0);
+  hand.consume(loopFixture(),160);
   hand.disarm();
-  for (const t of [200,400,600]) hand.consume(fixture(),t);
+  for (const t of [200,400,600]) hand.consume(loopFixture(),t);
   assert.deepEqual(events,[["loop",true],["loop",false]]);
   hand.consume({},640);
-  for (const t of [680,760,840]) hand.consume(fixture(),t);
+  for (const t of [680,760,840]) hand.consume(loopFixture(),t);
   assert.deepEqual(events,[["loop",true],["loop",false],["loop",true]]);
 });
 test("one undo transaction covers a gesture and commits on loss or manual stop", () => {
@@ -121,7 +121,7 @@ test("manual stop blocks the attack pose until both hands relax", () => {
 
 test("visible raised-index depth errors still turn Loop on; visibly dropping it turns Loop off", () => {
   const { hand, events } = controller();
-  const raised = fixture();
+  const raised = loopFixture();
   raised.worldLandmarks[0][6].z = 0.5;
   raised.worldLandmarks[0][8].z = 1;
   for (const t of [0, 80, 160, 240]) hand.consume(raised, t);
@@ -131,4 +131,12 @@ test("visible raised-index depth errors still turn Loop on; visibly dropping it 
   hand.consume(lowered, 280);
   hand.consume(lowered, 400);
   assert.deepEqual(events, [["loop", true], ["loop", false]]);
+});
+
+test("only the left index controls Loop; a raised right index is ignored", () => {
+  const { hand, events } = controller();
+  for (const t of [0,80,160,240]) hand.consume(fixture(), t);
+  assert.deepEqual(events, []);
+  for (const t of [280,360,440,520]) hand.consume(loopFixture(), t);
+  assert.deepEqual(events, [["loop", true]]);
 });
