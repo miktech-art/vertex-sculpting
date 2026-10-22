@@ -8,34 +8,35 @@ export class Store {
     this.saved = [];
     this.deleted = [];
     this.activeSavedId = null;
-    let initial;
+    let initial, data, raw;
+    let unreadable = false;
     try {
-      const data = JSON.parse(localStorage.getItem(KEY));
-      // Apply the requested sound/library/connection reset once, then persist new edits normally.
-      if ([2, 3, 4, REVISION].includes(data?.revision) && data?.document)
-        this.document = validateDocument(data.document);
-      if ([2, 3, 4, REVISION].includes(data?.revision) && data?.initial)
-        initial = validateDocument(data.initial);
-      if ([2, 3, 4, REVISION].includes(data?.revision) && Array.isArray(data?.saved))
-        this.saved = data.saved.flatMap((doc) => {
-          try {
-            return [{ ...validateDocument(doc), libraryId: doc.libraryId || crypto.randomUUID() }];
-          } catch { return []; }
+      raw = localStorage.getItem(KEY);
+      data = JSON.parse(raw);
+    } catch { unreadable = !!raw; }
+    const decode = (doc) => {
+      try { return validateDocument(doc); }
+      catch { unreadable = true; return null; }
+    };
+    if ([2, 3, 4, REVISION].includes(data?.revision)) {
+      if (data.document) this.document = decode(data.document) || this.document;
+      if (data.initial) initial = decode(data.initial);
+      for (const collection of ["saved", "deleted"]) {
+        if (!Array.isArray(data[collection])) continue;
+        this[collection] = data[collection].flatMap((doc) => {
+          const valid = decode(doc);
+          return valid ? [{ ...valid, libraryId: doc.libraryId || crypto.randomUUID() }] : [];
         });
-      if ([2, 3, 4, REVISION].includes(data?.revision) && Array.isArray(data?.deleted))
-        this.deleted = data.deleted.flatMap((doc) => {
-          try { return [{ ...validateDocument(doc), libraryId: doc.libraryId || crypto.randomUUID() }]; }
-          catch { return []; }
-        });
-      this.activeSavedId = this.saved.some((doc) => doc.libraryId === data?.activeSavedId)
+      }
+      this.activeSavedId = this.saved.some((doc) => doc.libraryId === data.activeSavedId)
         ? data.activeSavedId : null;
-      if (data?.revision === 2) {
+      if (data.revision === 2) {
         this.document = { ...makeDocument(), routes: this.document.routes };
         initial = structuredClone(this.document);
       }
-    } catch {
-      /* Invalid or unavailable storage starts clean. */
-    }
+    } else if (raw) unreadable = true;
+    // Preserve unreadable input before replacing it with a usable session.
+    this.recoveryRaw = unreadable ? raw : null;
     this.initial = initial || structuredClone(this.document);
     this.undoStack = [];
     this.redoStack = [];
@@ -53,6 +54,10 @@ export class Store {
   }
   persist() {
     try {
+      if (this.recoveryRaw) {
+        localStorage.setItem(`${KEY}:recovery`, this.recoveryRaw);
+        this.recoveryRaw = null;
+      }
       localStorage.setItem(
         KEY,
         JSON.stringify({

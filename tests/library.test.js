@@ -169,3 +169,26 @@ test('undo after deleting the active sound cannot target a deleted library entry
   assert.equal(store.deleted[0].libraryId, saved.libraryId);
   assert.notEqual(store.saved[0].libraryId, saved.libraryId);
 });
+
+test('an invalid working session cannot erase valid saved or deleted sounds', () => {
+  const good = { ...makeDocument(), libraryId: 'kept', name: 'Keep me' };
+  const invalid = makeDocument(); invalid.params.rate = 101;
+  const raw = JSON.stringify({revision: 5, document: invalid, initial: invalid, saved: [invalid, good], deleted: [{...good, libraryId: 'trash'}]});
+  data.set('sound-form:session:v1', raw);
+  const store = fresh();
+  assert.equal(store.saved.length, 1);
+  assert.equal(store.saved[0].name, 'Keep me');
+  assert.equal(store.deleted.length, 1);
+  assert.equal(data.get('sound-form:session:v1:recovery'), raw);
+  assert.equal(fresh().saved[0].name, 'Keep me');
+});
+test('unreadable data is not overwritten when its recovery backup cannot be stored', () => {
+  const raw = '{invalid JSON';
+  data.set('sound-form:session:v1', raw);
+  blocked = true;
+  const store = fresh();
+  assert.equal(data.get('sound-form:session:v1'), raw);
+  blocked = false;
+  assert.equal(store.persist(), true);
+  assert.equal(data.get('sound-form:session:v1:recovery'), raw);
+});
