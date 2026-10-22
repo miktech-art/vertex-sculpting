@@ -71,6 +71,7 @@ export function octaveSel(dir) {
   pushUndo(); refreshPanel();
   flashMsg(`${list.length > 1 ? list.length + ' FORMS' : lead.name} · AN OCTAVE ${dir > 0 ? 'UP' : 'DOWN'} · PLANE ${work.plane > 0 ? '+' : ''}${work.plane}`, 1100);
 }
+const Z_PX = 20;                                     // notes: mouse travel per scale step with Z
 export function flashMsg(t, ms = 1600) {
   const h = $('modalHdr'); h.textContent = t; h.style.display = 'block';
   clearTimeout(flashMsg.tm); flashMsg.tm = setTimeout(() => { if (!modal && !mrec) h.style.display = 'none'; }, ms);
@@ -563,15 +564,13 @@ export function updateModal() {
   const camDir = camera.getWorldDirection(V3());
   if (xf && xf.kind === 'notes') {
     const s = xf.s;
-    if (modal.axis === 'z') {                         // up / down: the note (pitch), by scale steps
-      const nrm = V3().crossVectors(V3(0, 1, 0), V3().crossVectors(camDir, V3(0, 1, 0))); if (nrm.lengthSq() < 1e-8) nrm.copy(camDir);
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(nrm.normalize(), p);
-      raycaster.setFromCamera(ndc(m0.x, m0.y), camera); const a = raycaster.ray.intersectPlane(plane, V3());
-      raycaster.setFromCamera(ndc(mouse.x, mouse.y), camera); const b = raycaster.ray.intersectPlane(plane, V3());
-      let dy = (a && b ? b.y - a.y : 0) / Math.max(1e-6, Math.abs(s.group.scale.y));
+    if (modal.axis === 'z') {                         // up / down: the note (pitch), like a knob: Z_PX of mouse travel per scale
+      modal.zy ??= mouse.y;                           // step, counted from where Z was pressed, the same at any zoom
+      let dy = (modal.zy - mouse.y) / Z_PX * PITCH.step / Math.max(1e-6, Math.abs(s.group.scale.y));
       if (snapOn()) dy = Math.round(dy / PITCH.step) * PITCH.step;
       applyNotes(0, dy); modal.val = { dy };
     } else {                                          // slide along the path, by 1/16
+      modal.zy = null;
       modal.f0 ??= outlineHit(s, m0.x, m0.y, 1e9)?.f ?? 0;
       const h = outlineHit(s, mouse.x, mouse.y, 1e9);
       let df = h ? h.f - modal.f0 : 0; if (s.closed) df -= Math.round(df);
