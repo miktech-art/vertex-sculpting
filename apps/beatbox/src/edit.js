@@ -179,8 +179,8 @@ let pivotStartInv = new THREE.Matrix4(), pivotY0 = 0;
 tc.addEventListener('mouseDown', () => { beginXform(); pivot.updateMatrixWorld(true); pivotStartInv.copy(pivot.matrixWorld).invert(); pivotY0 = pivot.position.y; });
 tc.addEventListener('objectChange', () => {
   if (!xf) return;
-  // whole forms move up and down by octaves (plane to plane); corners snap to scale steps
-  if (tc.mode === 'translate' && snapOn()) { const sy = xf.kind === 'object' ? octaveH() : PITCH.step; pivot.position.y = pivotY0 + Math.round((pivot.position.y - pivotY0) / sy) * sy; }
+  // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
+  if (tc.mode === 'translate' && snapOn()) pivot.position.y = pivotY0 + Math.round((pivot.position.y - pivotY0) / PITCH.step) * PITCH.step;
   pivot.updateMatrixWorld(true);
   applyDelta(new THREE.Matrix4().multiplyMatrices(pivot.matrixWorld, pivotStartInv));
 });
@@ -590,8 +590,8 @@ export function updateModal() {
     const d = (a && b) ? b.sub(a) : V3();
     if (axis && !modal.exclude) { const k = d.dot(axis); d.copy(axis).multiplyScalar(k); }
     if (axis && modal.exclude) d.addScaledVector(axis, -d.dot(axis));
-    // up and down: whole forms jump plane to plane (octaves), corners and faces by scale steps
-    if (snapOn()) { const sy = xf.kind === 'object' ? octaveH() : PITCH.step; d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / sy) * sy; }
+    // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
+    if (snapOn()) { d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / PITCH.step) * PITCH.step; }
     M.makeTranslation(d.x, d.y, d.z); modal.val = d;
   } else if (modal.type === 'R') {
     let ang = Math.atan2(mouse.y - ps.y, mouse.x - ps.x) - Math.atan2(m0.y - ps.y, m0.x - ps.x);

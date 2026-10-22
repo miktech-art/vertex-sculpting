@@ -60,7 +60,8 @@ missing in old data → one on every corner that used to play), `open[]` (old re
 the floor, step = 0.5 (twice the 1/16 snap, so the planes sit well apart), 7 steps = one octave = 3.5 units, a plane every octave.
 A form resting on a plane plays that octave's root. Each instrument keeps its register (`SOUNDS[].oct`); all five stems are
 repitched tape-style (`playbackRate` = note / `sampleRoot`): on the floor the drums play their original sound, the bass B♭1.
-Moving a whole form snaps by octaves, a note (edit mode, Z) by steps; a corner moves as a whole column (`fitThickness`).
+Moving a whole form up or down (gumball, G) snaps by scale steps, ↑ / ↓ by octaves; a note (edit mode, Z) moves one step per
+20 px of mouse travel (`Z_PX`, like a knob, at any zoom); a corner moves as a whole column (`fitThickness`).
 The path runs through the notes at their heights (`heightAt`: corners take the slope between neighbouring notes), so the melody
 shows as height while time stays in plan. Brightness shows pitch (`pitchColor`: ±`PITCH.light` per octave).
 In 3D a chain sits in a row along +x in playing order (`layout`, 0.5 apart), each loop at its own height; the top view keeps every
