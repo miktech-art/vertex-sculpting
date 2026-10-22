@@ -120,3 +120,9 @@ Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy,
 The shared `src/delay.js` response stretches repeat decay by three times: actual audio feedback is the cube root of the stored Feedback control value. The first repeat level and delay interval stay unchanged. This produces roughly 2–3 times as many audible/visible repeats at nonzero feedback, up to 30. Zero feedback still produces one repeat. Live audio, offline WAV tail length, and sculpture copies use the same decay and threshold; saved parameter values and mappings are preserved.
 
 The app is named Sound/Sculpt. The original preset schema and browser storage key remain compatible with earlier Sound / Form versions.
+
+## Mirrored envelope gestures and transport (v0.8)
+
+The seconds axis is always visible, including at zero delay. Sculpture navigation instructions are removed from the stage; the interactions remain available. Space plays one finite note and disables Loop, including when a button, ADSR handle or parameter slider has focus. Holding Space does not retrigger. Text fields, dialogs and modified shortcuts keep their normal behavior; L remains the explicit Loop shortcut.
+
+Attack mirrors release: right hand upright within ±15° in any facing, left thumb/index pinch, lateral distance → attack (5 ms–1.6 s). Spreading farther apart lengthens attack. Both envelope bindings share geometry, stable pose latches, dropout tolerance and logarithmic smoothing. Neither envelope gesture triggers a note or moves pitch; both update the current sound and sculpture through the live parameter path. Pose indicators are separate. A continuous transition between attack and release remains a single undo transaction; Stop disarms all bindings until hands relax.

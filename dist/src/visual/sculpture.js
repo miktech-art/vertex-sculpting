@@ -401,7 +401,6 @@ export class SculptureRenderer {
     this.drawTimeAxis(g);
   }
   drawTimeAxis(g) {
-    if (g.echoLayout.copies.length === 1) return;
     const c = this.ctx,
       { width: w, height: h } = this.size,
       y = h - 72;

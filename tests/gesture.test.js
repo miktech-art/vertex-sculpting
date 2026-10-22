@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import {
   inspectRightHand,
   inspectReleaseHands,
+  inspectAttackHands,
+  AttackBinding,
   GestureBinding,
   ReleaseBinding,
 } from "../dist/src/tracking/gesture.js";
 
-import { fixture, combine, releaseFixture } from "./hand-fixtures.js";
+import { fixture, combine, releaseFixture, attackFixture } from "./hand-fixtures.js";
 test("pitch selects only anatomical right hand with all three fingertips at palm and straight index", () => {
   assert.equal(inspectRightHand(fixture()).allowed, true);
   assert.equal(inspectRightHand(fixture({ hand: "Left" })).allowed, false);
@@ -265,4 +267,40 @@ test("both poses stay acquired through boundary jitter and brief tracking loss",
   assert.equal(ended.leftOpen, false);
   assert.equal(ended.pinched, false);
   assert.equal(ended.active, false);
+});
+
+test("attack mirrors release across anatomical hands, preserves orientation tolerance and rejects the reverse pose", () => {
+  assert.equal(inspectAttackHands(releaseFixture()).allowed, false);
+  assert.equal(inspectReleaseHands(attackFixture()).allowed, false);
+  for (const yaw of [0, 90, 180, 270]) {
+    for (const tilt of [-14, 0, 14, 25]) {
+      const result = attackFixture();
+      result.worldLandmarks[1] = rotate(result.worldLandmarks[1], { yaw, tilt });
+      assert.equal(inspectAttackHands(result).allowed, tilt !== 25);
+    }
+  }
+  const reordered = attackFixture();
+  for (const key of ["landmarks", "worldLandmarks", "handedness"]) reordered[key].reverse();
+  assert.equal(inspectAttackHands(reordered).allowed, true);
+  assert.equal(inspectAttackHands({}).allowed, false);
+});
+test("attack distance is lateral, bounded to its own parameter range, and longer when spread apart", () => {
+  assert.equal(inspectAttackHands(attackFixture({ leftX: 0.3, rightX: 0.3 })).attack, 0.005);
+  assert.equal(inspectAttackHands(attackFixture({ leftX: 0.05, rightX: 0.95 })).attack, 1.6);
+  const regular = attackFixture(), before = inspectAttackHands(regular).attack;
+  regular.landmarks[0] = regular.landmarks[0].map(p => ({ ...p, y: p.y + 0.25 }));
+  assert.equal(inspectAttackHands(regular).attack, before);
+  assert.ok(inspectAttackHands(attackFixture({leftX:0.1,rightX:0.8})).attack > before);
+});
+test("attack uses the same acquisition, hysteresis, smoothing and immediate invalid-pose freeze as release", () => {
+  const binding = new AttackBinding();
+  binding.reset(0.08);
+  for (const t of [0, 40, 80, 120]) assert.equal(binding.update(attackFixture(), t).attack, null);
+  const active = binding.update(attackFixture(), 160);
+  assert.ok(active.attack > 0.08 && active.attack < inspectAttackHands(attackFixture()).attack);
+  const relaxed = attackFixture();
+  relaxed.worldLandmarks[1] = rotate(relaxed.worldLandmarks[1], { yaw:90, tilt:18 });
+  assert.ok(binding.update(relaxed, 200).attack !== null);
+  assert.equal(binding.update({}, 240).attack, null);
+  assert.equal(binding.update({}, 440).active, false);
 });

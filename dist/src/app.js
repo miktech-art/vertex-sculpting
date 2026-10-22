@@ -1,3 +1,4 @@
+import { installPlayOnceShortcut } from "./ui/play-once.js";
 import { installLiveRange } from "./ui/live-range.js";
 import { FilterRange, constrainCutoff } from "./ui/filter-range.js";
 import {
@@ -540,6 +541,11 @@ $("#wav-button").addEventListener("click", async () => {
   }
 });
 
+installPlayOnceShortcut(document, () => {
+  setLoop(false);
+  play();
+}, () => !!document.querySelector("dialog[open]"));
+
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(
       "input,textarea,select,[contenteditable=true]",
@@ -558,14 +564,6 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     e.shiftKey ? store.redo() : store.undo();
     return;
-  }
-  if (
-    e.code === "Space" &&
-    e.target.tagName !== "BUTTON" &&
-    e.target.getAttribute("role") !== "button"
-  ) {
-    e.preventDefault();
-    if (!e.repeat) play();
   }
   if (e.key.toLowerCase() === "l" && !mod) {
     e.preventDefault();
@@ -608,6 +606,11 @@ hands = new HandController({
   onEnable: () => audio.init(),
   getPitch: () => store.document.params.pitch,
   getRelease: () => store.document.params.release,
+  getAttack: () => store.document.params.attack,
+  onAttack: (attack) => {
+    store.document.params.attack = attack;
+    store.emit("gesture");
+  },
   onEditing: (active) => (active ? store.begin() : store.commit()),
   onRelease: (release) => {
     store.document.params.release = release;

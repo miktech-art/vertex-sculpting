@@ -55,3 +55,10 @@ export function releaseFixture({ leftX = 0.2, rightX = 0.65 } = {}) {
     fixture({ pinch: true, indexStraight: false, x: rightX }),
   );
 }
+
+export function attackFixture({ leftX = 0.2, rightX = 0.65 } = {}) {
+  return combine(
+    fixture({ hand: "Left", pinch: true, indexStraight: false, x: leftX }),
+    fixture({ hand: "Right", closed: false, x: rightX }),
+  );
+}

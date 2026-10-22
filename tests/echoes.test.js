@@ -171,3 +171,17 @@ test("transverse spacing grows with the sound body and Fit time frames the full 
   assert.ok(high.y - low.y <= 700 * 0.72 + 0.01);
   assert.ok(low.y > 30 && high.y < 670);
 });
+
+test("the seconds axis is drawn even when delay is zero", () => {
+  const params = { ...PRESETS[0].params, delayMix: 0 };
+  const geometry = buildGeometry(params, resolveMappings(params, DEFAULT_ROUTES));
+  const labels = [];
+  const renderer = Object.assign(Object.create(SculptureRenderer.prototype), {
+    geometry, size: { width: 1200, height: 700 },
+    ctx: { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText(text) { labels.push(text); } },
+  });
+  renderer.fitTimeline();
+  renderer.drawTimeAxis(geometry);
+  assert.ok(labels.includes("0 s"));
+  assert.ok(labels.length > 1);
+});

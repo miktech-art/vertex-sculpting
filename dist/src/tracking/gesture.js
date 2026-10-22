@@ -203,24 +203,28 @@ function pinchMetrics(hand, aspect) {
       imageScale > 1e-6 ? pixels(image[4], image[8]) / imageScale : Infinity,
   };
 }
-export function inspectReleaseHands(
+function inspectEnvelopeHands(
   result,
-  { leftLatched = false, pinchLatched = false } = {},
+  { uprightLatched = false, pinchLatched = false },
+  uprightSide,
+  parameter,
 ) {
-  // Release does not require a well-conditioned palm plane (an edge-on hand can
+  // Envelope gestures do not require a well-conditioned palm plane (an edge-on hand can
   // collapse its projected width). Pitch retains its stricter palm-contact checks.
   const selection = { minConfidence: 0.55, requirePalm: false };
   const left = selectHand(result, "Left", selection),
     right = selectHand(result, "Right", selection);
-  const { tilt, extended } = uprightMetrics(left);
+  const upright = uprightSide === "Left" ? left : right,
+    pinching = uprightSide === "Left" ? right : left;
+  const { tilt, extended } = uprightMetrics(upright);
   const aspect = Number.isFinite(result?.frameAspectRatio)
     ? result.frameAspectRatio
     : 4 / 3;
-  const { ratio, imageRatio } = pinchMetrics(right, aspect);
-  const leftOpen =
+  const { ratio, imageRatio } = pinchMetrics(pinching, aspect);
+  const uprightOpen =
     extended >= 3 &&
     tilt <=
-      (leftLatched
+      (uprightLatched
         ? RELEASE_BINDING.uprightExitDegrees
         : RELEASE_BINDING.uprightEnterDegrees);
   // Use 2D proximity to tolerate uncertain depth when touching fingertips occlude
@@ -234,15 +238,15 @@ export function inspectReleaseHands(
   let pinch = null,
     anchor = null,
     normalized = 0;
-  if (right)
+  if (pinching)
     pinch = {
-      x: (right.landmarks[4].x + right.landmarks[8].x) / 2,
-      y: (right.landmarks[4].y + right.landmarks[8].y) / 2,
+      x: (pinching.landmarks[4].x + pinching.landmarks[8].x) / 2,
+      y: (pinching.landmarks[4].y + pinching.landmarks[8].y) / 2,
     };
-  if (left)
+  if (upright)
     anchor = {
-      x: [0, 5, 9, 13, 17].reduce((s, i) => s + left.landmarks[i].x, 0) / 5,
-      y: [0, 5, 9, 13, 17].reduce((s, i) => s + left.landmarks[i].y, 0) / 5,
+      x: [0, 5, 9, 13, 17].reduce((s, i) => s + upright.landmarks[i].x, 0) / 5,
+      y: [0, 5, 9, 13, 17].reduce((s, i) => s + upright.landmarks[i].y, 0) / 5,
     };
   if (pinch && anchor)
     normalized = clamp(
@@ -250,20 +254,37 @@ export function inspectReleaseHands(
         (RELEASE_BINDING.far - RELEASE_BINDING.near),
     );
   return {
-    allowed: leftOpen && pinched,
-    leftTilt: tilt,
-    leftExtended: extended,
+    allowed: uprightOpen && pinched,
+    [`${uprightSide.toLowerCase()}Tilt`]: tilt,
+    [`${uprightSide.toLowerCase()}Extended`]: extended,
     pinchRatio: ratio,
     pinchImageRatio: imageRatio,
-    leftOpen,
+    [`${uprightSide.toLowerCase()}Open`]: uprightOpen,
     pinched,
     left,
     right,
     pinch,
     anchor,
     normalized,
-    release: denormalize("release", normalized),
+    [parameter]: denormalize(parameter, normalized),
   };
+}
+
+export function inspectReleaseHands(
+  result,
+  { leftLatched = false, pinchLatched = false } = {},
+) {
+  return inspectEnvelopeHands(
+    result, { uprightLatched: leftLatched, pinchLatched }, "Left", "release",
+  );
+}
+export function inspectAttackHands(
+  result,
+  { rightLatched = false, pinchLatched = false } = {},
+) {
+  return inspectEnvelopeHands(
+    result, { uprightLatched: rightLatched, pinchLatched }, "Right", "attack",
+  );
 }
 
 class SmoothedBinding {
@@ -344,20 +365,21 @@ class PoseLatch {
     return this.active;
   }
 }
-export class ReleaseBinding extends SmoothedBinding {
-  constructor() {
-    super(inspectReleaseHands, "release", RELEASE_BINDING, 1);
-    this.leftLatch = new PoseLatch();
+class EnvelopeDistanceBinding extends SmoothedBinding {
+  constructor(inspect, key, side, initial) {
+    super(inspect, key, RELEASE_BINDING, initial);
+    const openKey = `${side}Open`;
+    this.uprightLatch = new PoseLatch();
     this.pinchLatch = new PoseLatch();
     this.inspect = (result) => {
-      const raw = inspectReleaseHands(result);
-      const relaxed = inspectReleaseHands(result, {
-        leftLatched: true,
+      const raw = inspect(result);
+      const relaxed = inspect(result, {
+        [`${side}Latched`]: true,
         pinchLatched: true,
       });
-      const leftOpen = this.leftLatch.update(
-        raw.leftOpen,
-        relaxed.leftOpen,
+      const uprightOpen = this.uprightLatch.update(
+        raw[openKey],
+        relaxed[openKey],
         this.sampleTime,
       );
       const pinched = this.pinchLatch.update(
@@ -368,21 +390,32 @@ export class ReleaseBinding extends SmoothedBinding {
       return {
         ...relaxed,
         rawAllowed: raw.allowed,
-        leftOpen,
+        [openKey]: uprightOpen,
         pinched,
         // Missing or clearly broken poses freeze edits immediately; the stable
         // indicators and activation survive a brief tracking dropout.
-        allowed: leftOpen && pinched && relaxed.leftOpen && relaxed.pinched,
+        allowed: uprightOpen && pinched && relaxed[openKey] && relaxed.pinched,
       };
     };
   }
   reset(value = 1) {
     super.reset(value);
-    this.leftLatch?.reset();
+    this.uprightLatch?.reset();
     this.pinchLatch?.reset();
   }
   update(result, time) {
     this.sampleTime = time;
     return super.update(result, time);
+  }
+}
+
+export class ReleaseBinding extends EnvelopeDistanceBinding {
+  constructor() {
+    super(inspectReleaseHands, "release", "left", 1);
+  }
+}
+export class AttackBinding extends EnvelopeDistanceBinding {
+  constructor() {
+    super(inspectAttackHands, "attack", "right", 0.08);
   }
 }

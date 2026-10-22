@@ -95,10 +95,6 @@
                 ⌖
               </button>
             </div>
-            <span class="stage-instruction"
-              >DRAG TO ORBIT <span>·</span> SHIFT-DRAG TO PAN
-              <span>·</span> SCROLL TO ZOOM</span
-            >
           </section>
           <section
             class="timeline-section"
@@ -213,6 +209,13 @@
                 ><span id="right-pinch" data-valid="false">R pinch</span>
               </div>
             </div>
+            <div class="camera-binding">
+              <span>Hand distance → Attack</span>
+              <div class="release-indicators">
+                <span id="right-open" data-valid="false">R ↑</span
+                ><span id="left-pinch" data-valid="false">L pinch</span>
+              </div>
+            </div>
             <p id="camera-status" role="status" aria-live="polite">
               Camera off
             </p>
@@ -220,7 +223,9 @@
               Pitch: right M/R/P tips to palm, index straight. Up raises
               pitch.<br />
               Release: left hand open, upright ±15° (any facing) + right pinch.
-              Spread apart for longer release.
+              Spread apart for longer release.<br />
+              Attack: right hand open, upright ±15° (any facing) + left pinch.
+              Spread apart for longer attack.
             </p>
           </section>
           <div id="sound-inspector">
@@ -422,7 +427,7 @@
         line to adjust strength, response curve, inversion, and smoothing.
       </p>
       <div class="shortcut-list">
-        <span>Play / retrigger</span><kbd>Space</kbd><span>Stop</span
+        <span>Play once</span><kbd>Space</kbd><span>Stop</span
         ><kbd>Esc</kbd><span>Loop</span><kbd>L</kbd><span>Undo / redo</span
         ><kbd>⌘ Z / ⌘ ⇧ Z</kbd><span>Reset view</span><kbd>Double click</kbd>
       </div>

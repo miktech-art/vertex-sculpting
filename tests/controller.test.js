@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HandController } from "../dist/src/tracking/controller.js";
-import { fixture, releaseFixture } from "./hand-fixtures.js";
+import { fixture, releaseFixture, attackFixture } from "./hand-fixtures.js";
 
 function controller() {
   globalThis.document = {
@@ -14,6 +14,7 @@ function controller() {
     onGate: (active) => events.push(["note", active]),
     onPitch: (value) => events.push(["pitch", value]),
     onRelease: (value) => events.push(["release", value]),
+    onAttack: (value) => events.push(["attack", value]),
     onEditing: (active) => events.push(["edit", active]),
   });
   hand.active = true;
@@ -84,4 +85,30 @@ test("breaking either release pose freezes edits immediately, including release 
     events.some(([k]) => k === "release" || k === "pitch"),
     false,
   );
+});
+
+test("attack edits only attack and transitions to release within one undo transaction", () => {
+  const { hand, events } = controller();
+  for (const t of [0, 40, 80, 120, 160, 200]) hand.consume(attackFixture(), t);
+  assert.ok(events.some(([k]) => k === "attack"));
+  assert.equal(events.some(([k]) => ["pitch", "release", "note"].includes(k)), false);
+  const attackCount = events.filter(([k]) => k === "attack").length;
+  hand.consume({}, 220);
+  assert.equal(events.filter(([k]) => k === "attack").length, attackCount);
+  for (const t of [240, 280, 320, 360, 400, 440]) hand.consume(releaseFixture(), t);
+  assert.ok(events.some(([k]) => k === "release"));
+  hand.consume({}, 460);
+  hand.consume({}, 700);
+  assert.deepEqual(events.filter(([k]) => k === "edit"), [["edit", true], ["edit", false]]);
+});
+test("manual stop blocks the attack pose until both hands relax", () => {
+  const { hand, events } = controller();
+  for (const t of [0, 40, 80, 120, 160]) hand.consume(attackFixture(), t);
+  hand.disarm();
+  events.length = 0;
+  for (const t of [200, 280, 360, 440]) hand.consume(attackFixture(), t);
+  assert.equal(events.length, 0);
+  hand.consume({}, 500);
+  for (const t of [540, 580, 620, 660, 700, 740]) hand.consume(attackFixture(), t);
+  assert.ok(events.some(([k]) => k === "attack"));
 });
