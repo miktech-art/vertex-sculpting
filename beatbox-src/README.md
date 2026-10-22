@@ -1,3 +1,9 @@
+## Sound/Sculpt integration
+
+The WAV files omitted from the original archive have now been supplied by the user and are included in `public/stems/` for this private Site. The Sound/Sculpt build copies them to `dist/beatbox/stems/`. The original documentation below describes the upstream project.
+
+---
+
 # Vertex Sequencer
 
 A 3D shape sequencer: a dot travels each form's outline and plays the notes placed along it.

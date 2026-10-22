@@ -1,8 +1,4 @@
-# stems — samples from someone else's track (HNTR, "Shook Ones Pt. III").
-# Never commit them, even to a private repo. See README → "Stems".
-public/stems/*
-!public/stems/README.txt
-*.wav
+# The user-supplied audio samples are retained with this integrated Site.
 
 # build output — both hold the stems (dist-single/index.html embeds them)
 dist/
