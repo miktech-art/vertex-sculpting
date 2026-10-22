@@ -56,7 +56,7 @@ Edit source in `apps/`, never generated `dist/`. Beatbox imports the native audi
 
 - Sculpt's bottom bar saves, renames, deletes, and restores sounds. JSON export/import provides portable sound backups.
 - Beatbox restores boxes, notes, effects, instruments, tempo, selection, and view after navigation or reload. Playback returns paused. Its intro appears once per browser; F1 opens help.
-- Save a Sculpt sound, return to Beatbox, select a box, and choose **Instrument → Sculpted sounds**. Assigned definitions are archived in the scene so deleting a library sound does not break existing boxes.
+- Save a Sculpt sound, return to Beatbox, select a box, and choose **Instrument → Sculpted sounds**. The box shows that sound's static 3D sculpture instead of its usual cloud. Choosing a preset instrument restores the cloud. Assigned definitions are archived in the scene so deleting a library sound does not break existing boxes.
 
 These records live in browser localStorage, not in GitHub. Different browsers, ports, and domains have separate storage. Local development does not automatically receive the live site's saved sounds, and collaborators do not automatically share libraries.
 
@@ -68,6 +68,6 @@ MediaPipe's runtime and hand model are retained locally so camera tracking does 
 
 ## Collaboration and publishing
 
-Work in separate branches, open pull requests, and merge passing changes into `main`. GitHub Actions runs the tests and production build on pull requests and pushes to `main`.
+Work in separate branches, open pull requests, and merge passing changes into `main`. Ongoing integration work uses `mikael/integration`. GitHub Actions runs the tests and production build on pull requests and pushes to `main` or `mikael/integration`.
 
 The current hosted app is [Sound/Sculpt](https://sound-form-mikvesch.sandywasp257.chatgpt.site/). This repository retains its `.openai/hosting.json` identity and builds the expected `dist/` directory. GitHub pushes do **not** deploy it automatically. Deploy a tested build from merged `main` through the existing Sites publishing workflow. Bring any hosting-side source changes back into this repository before the next deployment.

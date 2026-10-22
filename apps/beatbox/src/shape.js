@@ -437,6 +437,7 @@ export class Shape {
     fitThickness(this); this.rebuild(); this.buildMotionLines(); this.ringKey = '';
   }
   dispose() {
+    this.sculpture?.dispose();
     scene.remove(this.group); scene.remove(this.floor);
     if (this.mlObj) { scene.remove(this.mlObj); this.mlObj.geometry.dispose(); this.mlObj.material.dispose(); }
     [this.path, this.soft].forEach(l => dropLineMat(l.material));

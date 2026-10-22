@@ -40,7 +40,7 @@ export default [
   { ignores: ['dist/', 'dist-single/', 'node_modules/'] },
   {
     files: ['src/**/*.js'],
-    ignores: ['src/lib/**'],
+    ignores: ['src/lib/**', 'src/visual/**'],
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.browser },
     plugins: { local: { rules: { 'load-order': loadOrder } } },
     rules: { 'no-undef': 'error', 'no-import-assign': 'error', 'local/load-order': 'error' },
@@ -50,6 +50,11 @@ export default [
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: {} },
     plugins: { local: { rules: { pure } } },
     rules: { 'no-undef': 'error', 'local/pure': 'error' },
+  },
+  {
+    files: ['src/visual/**/*.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: {} },
+    rules: { 'no-undef': 'error', 'no-import-assign': 'error' },
   },
   {
     files: ['scripts/**/*.mjs', 'test/**/*.mjs', '*.config.js'],

@@ -11,6 +11,7 @@
 - Navigation: Sculpt and Connections use root hash views; Beatbox is `/beatbox/`.
 - Instrument reading: `apps/sculpt/src/sculpt-instruments.js` reads Sculpt's saved library without writing it.
 - Rendering: Beatbox imports `apps/sculpt/src/audio/engine.js`; Vite bundles this engine and its dependencies into Beatbox. There is no second copy of its source.
+- Box visuals: `apps/beatbox/src/visual/sculpture.js` builds static Three.js line/particle geometry from Sculpt's shared geometry builder and the assigned document's mappings. `cloud.js` switches between this preview and the original cloud per box. Geometry is cached by document, fitted to the box without distortion, and disposed on reassignment or deletion.
 - Persistence: Sculpt uses `sound-form:session:v1`. Beatbox uses `vertex.session.v1` and `vertex.intro.seen.v1`. Assigned Sculpt definitions are archived in the Beatbox scene. Names and stable IDs remain separate.
 - Both pages must share the same scheme, hostname, and port to see the same localStorage. There is no backend or shared account database.
 

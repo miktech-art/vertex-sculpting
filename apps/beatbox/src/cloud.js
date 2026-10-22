@@ -1,8 +1,9 @@
 // load order: this import must stay first — modules run in the chain core → render → … → loop (npm run lint checks it)
 import './shape.js';
 import * as THREE from 'three';
-import { clamp, FX, pitchColor, familyOf, semisOf, boostSat } from './core.js';
-import { L_STAR } from './render.js';
+import { clamp, FX, pitchColor, familyOf, semisOf, boostSat, SOUNDS } from './core.js';
+import { L_STAR, L_SHARP, renderer } from './render.js';
+import { BoxSculpture } from './visual/sculpture.js';
 import { audio } from './audio.js';
 import { cloudT } from './loop.js';
 
@@ -137,6 +138,17 @@ export function starClear(s) { s.star.armFl.fill(0); }
 
 // per frame: what the effects are doing right now, and the star's look
 export function syncStar(s, dt, idle, barsV) {
+  const document = SOUNDS[s.sound]?.sculpt;
+  s.star.group.visible = !document;
+  if (document) {
+    s.sculpture ??= new BoxSculpture(s.group, L_SHARP);
+    s.sculpture.setDocument(document);
+    s.sculpture.fit(s.mesh.geometry.boundingBox, s.group.getWorldScale(new THREE.Vector3()), {
+      idle, focus: s.focus, pixelRatio: renderer.getPixelRatio(),
+    });
+    return;
+  }
+  if (s.sculpture) { s.sculpture.dispose(); s.sculpture = null; }
   buildStar(s);
   const S = s.star, fx = s.fx, rt = s.fxRate;
   if (!S.layers.length) return;

@@ -16,6 +16,8 @@ All five supplied WAVs are included in `public/stems/`. Replace `kick.wav`, `cla
 
 `core.js` reads Sculpt's browser library through `../sculpt/src/sculpt-instruments.js` (relative to this app directory). `audio.js` uses the native Sculpt renderer to cache pitched samples. Definitions assigned to boxes are archived in the scene. Returning from Sculpt refreshes the available library and restores the Beatbox scene paused.
 
+Sculpt assignments replace the usual instrument cloud with a static 3D preview in the box's center. `src/visual/sculpture.js` reuses Sculpt's geometry and saved mappings, including filter response, envelope, particles, and delay echoes. It fits the preview without stretching it and releases GPU resources when changing back to a preset or deleting a box. Beatbox effects and note hits do not animate the sculpture.
+
 ## Additional developer commands
 
 From this directory, `npm test` runs Beatbox's unit tests, `npm run lint` runs its existing ESLint configuration, `npm run build:debug` includes debug hooks, and `npm run build:single` creates an embedded standalone HTML build in `dist-single/`. Standalone builds cannot share storage with the hosted Sculpt page.
