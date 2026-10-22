@@ -3,8 +3,8 @@ import { clamp, denormalize } from "../model.js";
 export const LOOP_BINDING = Object.freeze({
   acquireMs: 140,
   releaseMs: 100,
-  enterDegrees: 40,
-  exitDegrees: 50,
+  enterDegrees: 50,
+  exitDegrees: 60,
 });
 export const RELEASE_BINDING = Object.freeze({
   near: 0.08,
@@ -76,11 +76,30 @@ export function selectHand(
       result.worldLandmarks?.[i]?.length === 21
         ? result.worldLandmarks[i]
         : landmarks;
-    if (!shape.every(finite)) continue;
+    if (!shape.every(finite) ||
+      Math.max(distance(shape[0], shape[9]), distance(shape[5], shape[17])) < 1e-6
+    ) continue;
     if (!selected || category.score > selected.confidence)
       selected = { landmarks, shape, confidence: category.score };
   }
   return selected;
+}
+// Use the visible finger silhouette for Loop. World-landmark depth and joint
+// angles are too unstable to require a rigidly straight 3D index here.
+function raisedIndex(hand, aspect, latched) {
+  const image = hand.landmarks.map(p => ({ x: p.x * aspect, y: p.y, z: 0 }));
+  const [mcp, pip, dip, tip] = [5, 6, 7, 8].map(i => image[i]);
+  const chain = distance(mcp, pip) + distance(pip, dip) + distance(dip, tip);
+  const palmScale = Math.max(distance(image[0], image[9]), distance(image[5], image[17]));
+  const reach = distance(mcp, tip);
+  const extended = palmScale > 1e-6 && chain >= palmScale * 0.35 &&
+    reach >= chain * (latched ? 0.75 : 0.82);
+  const tilt = Math.atan2(Math.abs(tip.x - mcp.x), mcp.y - tip.y) * 180 / Math.PI;
+  return {
+    extended,
+    raised: extended && tip.y < pip.y - chain * 0.12 &&
+      tilt <= (latched ? LOOP_BINDING.exitDegrees : LOOP_BINDING.enterDegrees),
+  };
 }
 // A single upward index, with the other long fingers bent. No palm contact test.
 export function inspectLoopHand(result, { latched = false } = {}) {
@@ -95,11 +114,10 @@ export function inspectLoopHand(result, { latched = false } = {}) {
     (angle(points[m], points[p], points[d]) < 145 ||
       angle(points[p], points[d], points[t]) < 145),
   );
-  const indexExtended = fingerExtended(points, ...FINGERS[0]);
-  const direction = sub(points[8], points[5]);
-  const tilt = Math.atan2(Math.hypot(direction[0], direction[2]), -direction[1]) * 180 / Math.PI;
-  const indexRaised = indexExtended && tilt <=
-    (latched ? LOOP_BINDING.exitDegrees : LOOP_BINDING.enterDegrees);
+  const aspect = Number.isFinite(result?.frameAspectRatio) && result.frameAspectRatio > 0
+    ? result.frameAspectRatio : 4 / 3;
+  const index = raisedIndex(hand, aspect, latched);
+  const indexExtended = index.extended, indexRaised = index.raised;
   return {
     ...hand, hasRight: true, curled, indexExtended, indexRaised,
     allowed: indexRaised && curled.every(Boolean),

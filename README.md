@@ -67,7 +67,7 @@ Version 0.2 resets prior browser sounds and custom connections once, keeps only 
 
 Enable Camera in the upper right. The browser must allow camera access. Video and both labeled hand overlays are visible in the panel. Camera frames stay in the browser; MediaPipe assets are served from the app's origin.
 
-Loop: raise a single anatomical right index finger upward, with middle/ring/pinky bent; thumb is unrestricted and palm contact is not required. Hold to enable the existing finite-note Loop transport, lower it to disable further repeats. The current note and its tails finish normally. Gesture motion does not change pitch. A 140 ms acquisition and 100 ms dropout grace prevent flicker. Index direction enters within 40° of vertical and stays acquired within 50°, independent of palm facing. Stop or manual Play/Space disarms the gesture until relaxed; camera loss, disabling Camera, and page hiding turn a gesture-owned loop off.
+Loop: raise a single anatomical right index finger upward, with middle/ring/pinky bent; thumb is unrestricted and palm contact is not required. Hold to enable the existing finite-note Loop transport, lower it to disable further repeats. The current note and its tails finish normally. Gesture motion does not change pitch. A 140 ms acquisition and 100 ms dropout grace prevent flicker. The visible index enters within 50° of vertical and stays acquired within 60°, independent of palm facing; it may curve naturally. Extension uses the camera-image silhouette and tip position above the middle knuckle, rather than strict 3D joint angles or depth. Stop or manual Play/Space disarms the gesture until relaxed; camera loss, disabling Camera, and page hiding turn a gesture-owned loop off.
 
 Inference now receives the original, unmirrored camera frames, correcting the observed reversed hand assignment. Only the preview and overlay are mirrored. Hand selection uses model handedness with at least 70% confidence, never left/right screen position. Overlay labels L and R identify the selected anatomical hands.
 
@@ -130,3 +130,7 @@ Attack mirrors release: right hand upright within ±15° in any facing, left thu
 ## Right-index Loop gate (v0.8.1)
 
 Replaces the former right-index-height → pitch mapping and sustained gesture note. The single raised right index is now a held Loop gate. Height is ignored; the sound keeps its selected pitch. Envelope gestures retain priority. Loop pose changes do not create preset undo entries. Automatic loop retriggers do not disarm tracking; manual transport actions do. Space still plays one note and turns Loop off. Attack and release bindings are unchanged.
+
+## Visible raised index (v0.8.2)
+
+Loop index detection uses aspect-corrected 2D landmarks: finger reach relative to its chain length, upward tip direction, and a tip clearly above the first joint. This tolerates natural bends and incorrect MediaPipe world-depth estimates while rejecting a hooked, folded, sideways or lowered index. The working M/R/P checks, anatomical handedness, and Loop acquisition/dropout timing are unchanged. Tests include depth corruption, natural curvature, image/world disagreement, edge-on hands and tracking loss.

@@ -34,7 +34,10 @@ export function fixture({
     y: 0.75 + v.y * 0.12,
     z: v.z * 0.08,
   }));
-  if (closed && !pinch) image[8].y = y;
+  if (closed && !pinch) {
+    const shift = y - image[8].y;
+    for (const point of image) point.y += shift;
+  }
   return {
     handedness: [[{ categoryName: hand, score }]],
     worldLandmarks: [p],

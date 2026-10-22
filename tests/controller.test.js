@@ -118,3 +118,17 @@ test("manual stop blocks the attack pose until both hands relax", () => {
   for (const t of [540, 580, 620, 660, 700, 740]) hand.consume(attackFixture(), t);
   assert.ok(events.some(([k]) => k === "attack"));
 });
+
+test("visible raised-index depth errors still turn Loop on; visibly dropping it turns Loop off", () => {
+  const { hand, events } = controller();
+  const raised = fixture();
+  raised.worldLandmarks[0][6].z = 0.5;
+  raised.worldLandmarks[0][8].z = 1;
+  for (const t of [0, 80, 160, 240]) hand.consume(raised, t);
+  assert.deepEqual(events, [["loop", true]]);
+  const lowered = structuredClone(raised);
+  lowered.landmarks[0][8].y = lowered.landmarks[0][5].y + 0.04;
+  hand.consume(lowered, 280);
+  hand.consume(lowered, 400);
+  assert.deepEqual(events, [["loop", true], ["loop", false]]);
+});

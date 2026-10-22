@@ -41,6 +41,7 @@ test("loop index points upward independent of palm facing, and dropping it turns
     result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{yaw});
     assert.equal(inspectLoopHand(result).allowed,true);
     result.worldLandmarks[0] = rotate(result.worldLandmarks[0],{tilt:90});
+    result.landmarks[0] = rotate(result.landmarks[0],{tilt:90});
     assert.equal(inspectLoopHand(result).allowed,false);
   }
 });
@@ -281,4 +282,42 @@ test("attack uses the same acquisition, hysteresis, smoothing and immediate inva
   assert.ok(binding.update(relaxed, 200).attack !== null);
   assert.equal(binding.update({}, 240).attack, null);
   assert.equal(binding.update({}, 440).active, false);
+});
+
+test("a visibly raised index survives incorrect world depth and naturally bent joints", () => {
+  const result = fixture();
+  result.worldLandmarks[0][6].z = 0.5;
+  result.worldLandmarks[0][7].z = -0.3;
+  result.worldLandmarks[0][8].z = 0.9;
+  assert.equal(inspectLoopHand(result).indexRaised, true);
+  // A natural curve in the visible finger also remains raised.
+  result.landmarks[0][7].x += 0.025;
+  result.landmarks[0][8].x += 0.04;
+  assert.equal(inspectLoopHand(result).allowed, true);
+});
+test("a straight world index cannot rescue a visibly dropped or hooked finger", () => {
+  const result = fixture();
+  const image = result.landmarks[0];
+  image[8].y = image[5].y + 0.03;
+  assert.equal(inspectLoopHand(result).indexRaised, false);
+  const hooked = fixture();
+  hooked.landmarks[0][8].y = hooked.landmarks[0][6].y + 0.015;
+  assert.equal(inspectLoopHand(hooked).indexRaised, false);
+});
+test("visible-index detection handles aspect ratio, scale, screen position and edge-on hands", () => {
+  for (const yaw of [0, 90, 180, 270]) {
+    const result = fixture();
+    const rotated = rotate(result.worldLandmarks[0], { yaw });
+    result.landmarks[0] = rotated.map(p => ({ x:0.5+p.x*0.08, y:0.7+p.y*0.12, z:0 }));
+    result.frameAspectRatio = 4/3;
+    assert.equal(inspectLoopHand(result).allowed, true, `yaw ${yaw}`);
+    for (const point of result.landmarks[0]) {
+      point.x = 0.2 + point.x*0.4;
+      point.y = 0.3 + point.y*0.4;
+    }
+    assert.equal(inspectLoopHand(result).allowed, true);
+  }
+  const result = fixture();
+  result.frameAspectRatio = 16/9;
+  assert.equal(inspectLoopHand(result).allowed, true);
 });
