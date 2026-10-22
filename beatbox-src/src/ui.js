@@ -1,7 +1,7 @@
 // load order: this import must stay first — modules run in the chain core → render → … → loop (npm run lint checks it)
 import './edit.js';
 import { $, PALETTE, SOUNDS, NOTE_NAMES, MODES, familyOf, settings, noteName, noteFor, semisOf, UNITS_PER_BAR, V3,
-  barLen, clamp, FX, saveFx, FX_DEFAULT, work } from './core.js';
+  barLen, clamp, FX, saveFx, FX_DEFAULT, work, sculptInstruments, savedSculptures } from './core.js';
 import { scene, canvas } from './render.js';
 import { setCorners, shapes } from './shape.js';
 import { EFFECTS, FX_RATES } from './cloud.js';
@@ -32,6 +32,30 @@ import { fxPulseT, setFxPulseT } from './loop.js';
   }).join('');
 })();
 const targets = () => (selected.size ? [...selected] : (active ? [active] : []));
+const sculptureSelect = $('pSculptSound');
+for (const doc of sculptInstruments) {
+  const option = document.createElement('option');
+  option.value = `sculpt:${doc.libraryId}`;
+  option.textContent = doc.name + (savedSculptures.some(s => s.libraryId === doc.libraryId) ? '' : ' (in this Beatbox)');
+  sculptureSelect.append(option);
+}
+if (!sculptInstruments.length) $('pSculptStatus').textContent = 'Save a sound on the Sculpt page to use it here.';
+sculptureSelect.addEventListener('change', async () => {
+  const type = sculptureSelect.value;
+  if (!SOUNDS[type]?.sculpt) return;
+  const assigned = targets();
+  if (!assigned.length) return;
+  audio.ensure();
+  assigned.forEach(s => { s.sound = type; });
+  setLastSound(type); pushUndo(); refreshPanel();
+  $('pSculptStatus').textContent = 'Preparing sound…';
+  try {
+    await audio.prepareSculpt(type);
+    $('pSculptStatus').textContent = 'Ready';
+    if (active && active.sound === type) audio.preview(active);
+  } catch (error) { $('pSculptStatus').textContent = `Could not prepare sound: ${error.message}`; }
+});
+
 $('pFx').innerHTML = EFFECTS.map(([k, l, m]) => `<div class="fader"><div class="top"><span>${l}</span><span style="display:flex;gap:8px;align-items:center"><span id="pfxv_${k}">0%</span>${m ? `<select id="pfxr_${k}" style="padding:1px 3px;font-size:9px">${FX_RATES.map(r => `<option value="${r}">${r < 1 ? '1/' + (1 / r) : r} BAR</option>`).join('')}</select>` : ''}</span></div><input type="range" id="pfx_${k}" min="0" max="1" step="0.01"></div>`).join('');
 EFFECTS.forEach(([k, , m]) => {
   const el = $('pfx_' + k);
@@ -60,7 +84,8 @@ export function refreshPanel() {
   $('pName').textContent = s.name + (multi ? `  +${selected.size - 1}` : '');
   const fam = familyOf(s.sound);
   document.querySelectorAll('#pSw .sw').forEach(b => b.classList.toggle('on', b.dataset.fam === fam.key));
-  $('pFam').textContent = fam.label;
+  $('pFam').textContent = fam.label; $('pFam').title = fam.label;
+  $('pSculptSound').value = SOUNDS[s.sound]?.sculpt ? s.sound : '';
   $('pMute').checked = s.mute;
   $('pNotes').textContent = notesText(s);
   const tk = Object.entries(s.tracks).map(([k, t]) => `${{ obj: 'OBJECT', verts: 'VERTS', notes: 'NOTES' }[k]} ${t.len < 1 ? t.len * 4 + ' BEAT' : t.len + ' BAR'}`);

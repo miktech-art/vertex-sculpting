@@ -1,10 +1,14 @@
 ## Beatbox page
 
-The header has three selectors: **Sculpt**, **Connections**, and **Beatbox**. Beatbox is the supplied Vertex Sequencer on its own `/beatbox/` page, with its original appearance and instrument code. Its links return to either Sound/Sculpt workspace. Only page navigation is shared; sounds, sequencers, effects, and controls are independent.
+The header has three selectors: **Sculpt**, **Connections**, and **Beatbox**. Beatbox keeps Vertex Sequencer's light appearance and original editing and sequencing controls on its own `/beatbox/` page.
 
-The five user-supplied audio samples are included in `beatbox-src/public/stems/` and published at `dist/beatbox/stems/`. To replace them, use the exact filenames `kick.wav`, `clap.wav`, `cymbal.wav`, `synth.wav`, and `bass.wav`, then run `npm run build:beatbox` from this project root and redeploy. The original Beatbox audio engine loads these files without any connection to Sound/Sculpt's audio engine.
+Beatbox automatically saves its boxes, geometry, notes, effects, assigned instruments, key, tempo, selection, playhead, and camera view in this browser. Switching pages or reloading restores that scene. Playback returns paused; press Play or Space to resume. The intro is shown only on the first visit in this browser, while KEYS / F1 still opens the controls sheet.
 
-Beatbox source is in `beatbox-src/`; its own README and documentation remain there. To rebuild, install its locked dependencies once (`npm --prefix beatbox-src ci`), then run `npm run build:beatbox`. The root Sound/Sculpt page still runs without a build. Switching pages follows normal browser navigation; the original Beatbox does not persist edited scenes across reloads.
+Save sounds on the Sculpt page, then select a box in Beatbox and choose a sound under **Instrument → Sculpted sounds**. Selecting several boxes applies the instrument to all of them. Sculpt sounds use the same native renderer as Sculpt's WAV export, including their envelope and effects; Beatbox treats the result as a pitched sample whose notes follow the box and current scale. New or updated saved sounds appear when returning to Beatbox. Assigned sound definitions are retained with the scene, so deleting a sound from the Sculpt library does not break existing boxes. Both libraries stay local to the same browser/site.
+
+The five user-supplied audio samples are included in `beatbox-src/public/stems/` and published at `dist/beatbox/stems/`. To replace them, use the exact filenames `kick.wav`, `clap.wav`, `cymbal.wav`, `synth.wav`, and `bass.wav`, then run `npm run build:beatbox` from this project root and redeploy.
+
+Beatbox source is in `beatbox-src/`. Install its locked dependencies once (`npm --prefix beatbox-src ci`), then run `npm run build:beatbox`. The root Sound/Sculpt page still runs without a build.
 
 ---
 

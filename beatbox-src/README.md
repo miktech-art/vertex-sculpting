@@ -1,6 +1,10 @@
 ## Sound/Sculpt integration
 
-The WAV files omitted from the original archive have now been supplied by the user and are included in `public/stems/` for this private Site. The Sound/Sculpt build copies them to `dist/beatbox/stems/`. The original documentation below describes the upstream project.
+This private Site includes the user-supplied WAVs in `public/stems/`. The root build copies the standalone Beatbox to `dist/beatbox/`.
+
+The integrated version persists the scene in `vertex.session.v1`, shows its intro once per browser (`vertex.intro.seen.v1`), and reads the Sculpt library without modifying it. The Instruments panel can assign saved Sculpt sounds to boxes. Their samples are rendered by the shared native Sculpt audio engine, and definitions used in the scene are archived with it. Returning to the page restores the scene paused, ready for Play.
+
+The original upstream documentation follows.
 
 ---
 

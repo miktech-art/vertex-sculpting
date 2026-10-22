@@ -1,5 +1,6 @@
 // load order: this import must stay first — modules run in the chain core → render → … → loop (npm run lint checks it)
 import './cloud.js';
+import { NativeAudioEngine } from '../../dist/src/audio/engine.js';
 import { settings, STEM_BYTES, LA, noteFor, clamp, V3, SOUNDS, sampleRoot, $ } from './core.js';
 import { canvas } from './render.js';
 import { chainLevels } from './shape.js';
@@ -14,7 +15,26 @@ const LISTENER = { pos: V3(0, 4.78, 9.98), up: V3(0, 1, 0) };
 LISTENER.fwd = V3(0, 0.5, 0.3).sub(LISTENER.pos).normalize();
 export const audio = {
   ctx: null,
+  sculptBuffers: new Map(),
+  sculptJobs: new Map(),
+  ensure() {
+    if (!this.ctx) this.init();
+    this.ctx.resume().catch(e => console.warn('audio resume failed', e));
+  },
+  prepareSculpt(type) {
+    if (!SOUNDS[type]?.sculpt) return Promise.resolve(null);
+    if (this.sculptBuffers.has(type)) return Promise.resolve(this.sculptBuffers.get(type));
+    if (!this.sculptJobs.has(type)) {
+      const job = new NativeAudioEngine().render(SOUNDS[type].sculpt.params).then(buffer => {
+        this.sculptBuffers.set(type, buffer);
+        return buffer;
+      }).catch(error => { this.sculptJobs.delete(type); throw error; });
+      this.sculptJobs.set(type, job);
+    }
+    return this.sculptJobs.get(type);
+  },
   init() {
+    if (this.ctx) return;
     const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     this.out = ctx.createGain(); this.out.gain.value = 0.9;
     const comp = ctx.createDynamicsCompressor();
@@ -142,14 +162,20 @@ export const audio = {
   preview(s) { if (!this.ctx) return; const midi = noteFor(s, 0), vel = 0.6; this.play(s.sound, 440 * Math.pow(2, (midi - 69) / 12), vel, this.ctx.currentTime + 0.01, this.dry); },
   play(type, f, vel, t, out) {
     if (import.meta.env.DEV || import.meta.env.MODE === 'debug') (window._ev ||= []).push([type, t, f, vel, this.ctx.currentTime]);   // test hook
-    const SD = SOUNDS[type], buf = this.stems?.[SD.stem]; if (!buf) return 0;
+    const SD = SOUNDS[type];
+    if (!SD) return 0;
+    const buf = SD.sculpt ? this.sculptBuffers.get(type) : this.stems?.[SD.stem];
+    if (!buf) {
+      if (SD.sculpt) this.prepareSculpt(type).catch(e => console.warn('sculpt sound render failed', e));
+      return 0;
+    }
     const c = this.ctx, src = c.createBufferSource(), sg_ = c.createGain();
     src.buffer = buf;
     src.playbackRate.value = f / (440 * Math.pow(2, (sampleRoot(type) - 69) / 12));   // tape-style: every stem follows height
     sg_.gain.value = Math.pow(10, SD.db / 20) * vel / 0.6;
     src.connect(sg_); sg_.connect(out); src.start(t);
     src.onended = () => { try { sg_.disconnect(); } catch (e) { } };
-    return this.stemLen[SD.stem] / src.playbackRate.value;
+    return (SD.sculpt ? buf.duration : this.stemLen[SD.stem]) / src.playbackRate.value;
   },
 };
 // time until the stem falls below -40 dB of its peak for good

@@ -1,5 +1,6 @@
 // load order: this import must stay first — modules run in the chain core → render → … → loop (npm run lint checks it)
 import './view.js';
+import { audio } from './audio.js';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { settings, SNAP, V3, $, UNITS_PER_BAR, clamp, barLen, PITCH, octaveH, noteFor, noteName, work, PLANES, planeOf } from './core.js';
@@ -275,7 +276,7 @@ export let lastState = null;
 export function setLastState(v) { lastState = v; }
 export const snapshot = () => shapes.map(s => s.serialize());
 export function pushUndo() { if (lastState) undoStack.push(lastState); if (undoStack.length > 120) undoStack.shift(); lastState = snapshot(); redoStack.length = 0; }
-function restore(state) {
+export function restore(state) {
   const byId = new Map(shapes.map(s => [s.id, s]));
   const keep = new Set();
   state.forEach(d => { const s = byId.get(d.id); if (s && s.n === d.bottom.length) { s.applyData(d); keep.add(s); } else { if (s) { const i = shapes.indexOf(s); shapes.splice(i, 1); s.dispose(); } const ns = new Shape(d); shapes.push(ns); keep.add(ns); } });
@@ -854,7 +855,7 @@ export const unstack = s => unlinkSel([s]);
 export function togglePlay(force) {
   playing = force ?? !playing;
   $('playBtn').textContent = playing ? '■ STOP' : '▶ PLAY'; $('playBtn').classList.toggle('on', playing);
-  if (playing) setSimTime(null);
+  if (playing) { audio.ensure(); setSimTime(null); }
 }
 export function toggleEdit() { if (mode === 'edit') setMode('object'); else if (active) setMode('edit'); }
 export function selectAll() {

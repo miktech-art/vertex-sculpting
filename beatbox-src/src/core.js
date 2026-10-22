@@ -6,6 +6,8 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import INLINE_STEMS from 'virtual:stems';
+import { readSculptures, mergeSculptures, sculptSoundId, sculptureSound, nearestTonic } from '../../dist/src/sculpt-instruments.js';
+import { readSession } from './lib/session.js';
 import { degreeAt as stepsAbove, noteOfDegree } from './lib/pitch.js';
 
 // work directly in display (sRGB) values: hex in = pixels out, which keeps the palette exact
@@ -54,7 +56,13 @@ export const PALETTE = [
 ];
 const FAMILY = {};
 PALETTE.forEach(f => f.sounds.forEach(s => FAMILY[s] = f));
-export const familyOf = snd => FAMILY[snd] ?? PALETTE[3];
+export const familyOf = snd => SOUNDS[snd]?.sculpt
+  ? { key: 'sculpt', hex: '#7355bc', label: SOUNDS[snd].label, sounds: [snd] }
+  : FAMILY[snd] ?? PALETTE[3];
+export const restoredSession = readSession(localStorage);
+export const savedSculptures = readSculptures(localStorage);
+export const sculptInstruments = mergeSculptures(restoredSession?.instruments, savedSculptures);
+for (const doc of sculptInstruments) SOUNDS[sculptSoundId(doc.libraryId)] = sculptureSound(doc);
 
 // stems from "HNTR - Shook Ones Pt. III (colors)" — 16-bit WAV, trimmed: public/stems/*.wav, fetched while the page loads so
 // they are ready by the first click. build:single inlines them as base64 instead (virtual:stems, see vite.config.js).
@@ -100,7 +108,7 @@ export const planeOf = y => Math.floor(y / octaveH() + 1e-4);    // the plane a 
 export const degreeAt = y => stepsAbove(y, PITCH.step, PITCH.thick);
 // the instrument's own pitch: the synth and bass stems have one; the drums play their original sound on the floor
 export const sampleRoot = snd => SOUNDS[snd].root ?? 48 + settings.key + SOUNDS[snd].oct;
-const floorNote = snd => 48 + settings.key + SOUNDS[snd].oct;
+const floorNote = snd => SOUNDS[snd].sculpt ? nearestTonic(SOUNDS[snd].root, settings.key) : 48 + settings.key + SOUNDS[snd].oct;
 
 // note k of a form: its height above the floor in scale steps (without notes: the ring's height)
 export function noteFor(shape, k = 0) {
