@@ -138,3 +138,7 @@ Loop index detection uses aspect-corrected 2D landmarks: finger reach relative t
 ## Left-hand Loop and compact camera panel (v0.8.3)
 
 Loop now uses the anatomical left hand, including M/R/P indicators and the highlighted L overlay. The right index no longer controls Loop. The recently corrected raised-index recognition and timing are unchanged. Attack and release hand assignments are unchanged. Removed the camera status row and instruction paragraph beneath the bindings; camera errors remain available in the Enable button tooltip.
+
+## Visual examples (v0.9)
+
+Connections labels are Sounds and Visuals. Each of the 23 visual properties has a small SVG comparison on its right, showing lower → higher values. These procedural examples explain the property independently of current route values and do not affect sound or sculpture geometry. Filter fade diagrams attenuate the relevant bands; cutoff resonance crinkles only nearby bands. Connection gestures and route settings are unchanged. Removed visible connection helper instructions and the leading slash symbol beside the Sound/Sculpt wordmark.

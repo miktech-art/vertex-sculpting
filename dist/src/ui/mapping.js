@@ -1,3 +1,4 @@
+import { createVisualExample } from "./visual-examples.js";
 import {
   PARAMETERS,
   TARGETS,
@@ -19,14 +20,13 @@ export class MappingEditor {
     this.sources = document.querySelector("#sound-nodes");
     this.targets = document.querySelector("#visual-nodes");
     this.details = document.querySelector("#connection-details");
-    this.hint = document.querySelector("#mapping-hint");
     let lastGroup = "";
     for (const p of PARAMETERS) {
       const button = document.createElement("button");
       button.className = `node${lastGroup !== p.group ? " node-group-start" : ""}`;
       lastGroup = p.group;
       button.dataset.source = p.id;
-      button.title = `${p.description} Drag or select to connect.`;
+      button.title = p.description;
       button.setAttribute(
         "aria-label",
         `${p.label}: connect to a visual property`,
@@ -43,7 +43,6 @@ export class MappingEditor {
       button.addEventListener("pointerdown", (e) => this.startDrag(e, p.id));
       button.addEventListener("click", () => {
         this.pending = p.id;
-        this.hint.textContent = `${p.label} selected — choose a visual property.`;
         this.draw();
       });
     }
@@ -52,17 +51,16 @@ export class MappingEditor {
       button.className = "node";
       button.dataset.target = t.id;
       button.title = t.description;
-      button.setAttribute("aria-label", `${t.label}: visual input`);
+      button.setAttribute("aria-label", `${t.label}: visual`);
       const label = document.createElement("span");
       label.textContent = t.label;
       const dot = document.createElement("span");
       dot.className = "node-dot";
-      button.append(label, dot);
+      label.className = "target-label";
+      button.append(label, dot, createVisualExample(t));
       this.targets.append(button);
       button.addEventListener("click", () => {
         if (this.pending) this.connect(this.pending, t.id);
-        else
-          this.hint.textContent = "Select a sound parameter on the left first.";
       });
     }
     document.addEventListener("pointermove", (e) => this.moveDrag(e));
@@ -114,8 +112,6 @@ export class MappingEditor {
     this.dragStart = null;
     this.dragging = false;
     this.pointer = null;
-    this.hint.textContent =
-      "Drag between nodes, or select a sound then a visual.";
     this.draw();
   }
   connect(source, target) {
@@ -138,7 +134,6 @@ export class MappingEditor {
       this.selected = route.id;
     }
     this.pending = null;
-    this.hint.textContent = "Connected. Select the line to edit its settings.";
     this.renderDetails();
     this.draw();
     this.onChange();
@@ -257,7 +252,7 @@ export class MappingEditor {
     );
     if (!route) {
       this.details.innerHTML =
-        '<div class="empty-connection"><h2 class="connection-title">Connection settings</h2><p class="connection-description">Select a line to edit strength, curve, inversion, and smoothing.</p></div>';
+        '<div class="empty-connection"><h2 class="connection-title">Connection settings</h2></div>';
       return;
     }
     const source = PARAMETERS.find((p) => p.id === route.source),

@@ -95,13 +95,6 @@ a {
   gap: 10px;
   white-space: nowrap;
 }
-.brand-symbol {
-  font-size: 34px;
-  font-weight: 200;
-  line-height: 1;
-  margin-right: 8px;
-  color: #c4c5bf;
-}
 .wordmark-slash {
   color: var(--quiet);
   font-weight: 300;
@@ -1357,10 +1350,6 @@ dialog input:not([type]) {
     letter-spacing: 1.2px;
     gap: 6px;
   }
-  .brand-symbol {
-    font-size: 27px;
-    margin-right: 3px;
-  }
   .mode-switch {
     gap: 2px;
     padding: 3px;
@@ -1845,4 +1834,39 @@ dialog input:not([type]) {
 }
 .filter-control .control-label output {
   font-size: 10px;
+}
+
+/* A compact, noninteractive lower → higher illustration beside each visual. */
+.mapping-workspace { --example-space: 100px; }
+.mapping-board { padding-right: var(--example-space); }
+.mapping-legend { padding-right: var(--example-space); }
+.target-column .node { overflow: visible; }
+.target-label { min-width: 0; line-height: 1.15; }
+.visual-example {
+  position: absolute;
+  right: calc(-1 * var(--example-space));
+  top: 50%;
+  transform: translateY(-50%);
+  width: 90px;
+  height: 28px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: #c4cabd;
+  pointer-events: none;
+}
+.mapping-footer { justify-content: flex-end; }
+@media (max-width: 1100px) {
+  .mapping-workspace { --example-space: 84px; }
+  .visual-example { width: 76px; }
+  .mapping-board { gap: 36px; }
+  .node-column { width: 42%; }
+}
+@media (max-width: 480px) {
+  .mapping-workspace { --example-space: 64px; }
+  .visual-example { width: 58px; }
+  .mapping-board { gap: 20px; }
+  .target-column .node { min-height: 38px; }
 }
