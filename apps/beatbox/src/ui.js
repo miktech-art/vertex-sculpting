@@ -15,7 +15,7 @@ import { PRESETS, selected, active, pushUndo, mode, setMode, updateGumball, clea
   finishMotionRec, redo, undo, copySel, pasteClip, invertSel, selectNone, selectAll, startModal, duplicateSel,
   clickNotes, startNoteDrag, muteNotes, deleteNotes, pickNote,
   place, placeClick, finishPlace, cancelPlace, undoPlace, updatePlacePreview,
-  resetPhases, setActive, setLastPick, setPlane, octaveSel } from './edit.js';
+  resetPhases, setActive, setLastPick, setPlane, raiseSel, pad, take, toggleTake, finishTake } from './edit.js';
 import { begin } from './scene.js';
 import { fxPulseT, setFxPulseT } from './loop.js';
 
@@ -266,8 +266,8 @@ export function setHint() {
   if (fxOpen) h = [K('N / ESC', 'CLOSE & RESUME'), K('REST · HIT · PULSE', 'PREVIEW'), K('MMB / WHEEL', 'LOOK AROUND'), K('RESET · COPY', 'DEFAULTS · SHARE VALUES')];
   else if (place) h = [K('LMB ON THE OUTLINE', 'PLACE A NOTE · SNAPS 1/16'), K('LMB ON A NOTE', 'TAKE IT AWAY'), K('ENTER / RMB', 'DONE'), K('⌫', 'UNDO NOTE'), K('CTRL', settings.snap ? 'FREE' : 'SNAP'), K('ESC', 'DROP THE FORM')];
   else if (poly) h = [K('LMB', 'PLACE POINT · PLAYS AS YOU DRAW'), K('CLICK 1ST POINT', 'CLOSE = LOOP'), K('ENTER / RMB', 'DONE · OPEN = THERE AND BACK'), K('⌫', 'UNDO POINT'), K('CTRL', settings.snap ? 'FREE' : 'SNAP'), K('ESC', 'CANCEL')];
-  else if (mode === 'edit' && selMode === 'p') h = [K('1/2/3', 'POINTS/VERTS/EDGES'), K('LMB ON THE PATH', 'ADD A NOTE'), K('LMB ON A NOTE', 'SELECT · ⇧ ADD'), K('DRAG / G', 'SLIDE · SNAPS 1/16'), K('Z', 'NOTE UP / DOWN'), K('M', 'MUTE'), K('X', 'DELETE'), K('R WHILE DRAGGING', 'LOOP MOTION'), K('TAB', 'OBJECT MODE')];
-  else if (mode === 'edit') h = [K('1/2/3', 'POINTS/VERTS/EDGES'), K('LMB', 'SELECT'), K('A', 'ALL'), K('G/R/S', 'GRAB/ROT/SCALE · RESHAPE'), K('R WHILE DRAGGING', 'LOOP MOTION'), K('TAB', 'OBJECT MODE')];
+  else if (mode === 'edit' && selMode === 'p') h = [K('Q/W/E', 'POINTS/VERTS/EDGES'), K('LMB ON THE PATH', 'ADD A NOTE'), K('LMB ON A NOTE', 'SELECT · ⇧ ADD'), K('DRAG / G', 'SLIDE · SNAPS 1/16'), K('Z · ⇧↑↓', 'NOTE UP / DOWN'), K('M', 'MUTE'), K('X', 'DELETE'), K('R WHILE DRAGGING', 'LOOP MOTION'), K('TAB', 'OBJECT MODE')];
+  else if (mode === 'edit') h = [K('Q/W/E', 'POINTS/VERTS/EDGES'), K('LMB', 'SELECT'), K('A', 'ALL'), K('G/S', 'GRAB/SCALE · RESHAPE'), K('R WHILE DRAGGING', 'LOOP MOTION'), K('TAB', 'OBJECT MODE')];
   else if (viewMode === 'top') h = [K('LMB', 'SELECT · CLICK AGAIN TO CYCLE'), K('⇧A', 'ADD'), K('POLYGON', 'DRAW ON THE GRID'), K('S', 'SCALE · SNAPS TO 1/16'), K('TAB', 'EDIT'), K('MMB / WHEEL', 'PAN / ZOOM'), K('NUM 5', '3D'), K('SPACE', 'PLAY')];
   else h = [K('LMB', 'SELECT'), K('⇧A', 'ADD'), K('G', 'MOVE'), K('CTRL LMB · CTRL L', 'LINK IN CLICK ORDER'), K('TAB', 'EDIT'),
     settings.trackpad ? K('2-FINGER', 'ORBIT · ⇧ PAN · PINCH ZOOM') : K('MMB', 'ORBIT · ⇧ PAN'), K('ALT WHEEL', 'PLANE'), K('NUM 7', 'TOP'), K('SPACE', 'PLAY')];
@@ -275,8 +275,8 @@ export function setHint() {
 }
 const KEYS = [
   ['NAVIGATE', [['NUMPAD 7 · 5', 'TOP · 3D'], ['MMB DRAG', 'ORBIT (3D) · PAN (TOP)'], ['⇧ + MMB', 'PAN'], ['WHEEL', 'ZOOM'], ['ALT + WHEEL', 'WORK PLANE · OCTAVE UP / DOWN'], ['ALT + LMB', 'ORBIT (NO MMB)'], ['NUMPAD . / HOME', 'FRAME SEL / ALL']]],
-  ['FORMS & STACKS', [['LMB / ⇧ OR CTRL LMB', 'SELECT / ADD (IN ORDER)'], ['⇧ A', 'ADD (1 BAR) · THEN PLACE NOTES · ENTER'], ['G · R · S', 'MOVE · ROTATE · SCALE'], ['→ X / Y / Z', 'LOCK AXIS (⇧ = PLANE)'], ['CTRL L', 'LINK LOOPS · PLAY IN CLICK ORDER'], ['ALT L · UNSTACK', 'TAKE A LOOP OUT'], ['HEIGHT', 'PITCH · A PLANE PER OCTAVE'], ['↑ · ↓', 'FORM AN OCTAVE UP · DOWN (THE PLANE FOLLOWS)'], ['G UP / DOWN', 'WHOLE FORM: OCTAVE · EDIT: SCALE STEP'], ['⇧ D · CTRL C/V', 'DUPLICATE · COPY/PASTE'], ['X / DEL · CTRL Z', 'DELETE · UNDO']]],
-  ['EDIT & SOUND', [['TAB / DBL-CLICK', 'EDIT MODE'], ['1 · 2 · 3', 'POINTS · VERTS · EDGES'], ['A · ALT A · CTRL I', 'ALL · NONE · INVERT'], ['LMB ON THE PATH (1)', 'ADD A NOTE · LMB NOTE SELECT'], ['DRAG / G · THEN Z', 'SLIDE · NOTE UP / DOWN'], ['CTRL WHILE MOVING', 'INVERT SNAP'], ['M · X (POINTS)', 'MUTE · DELETE NOTES'], ['R WHILE DRAGGING', 'RECORD MOTION LOOP'], ['ALT R', 'CLEAR MOTION'], ['SPACE · ⇧ ←', 'PLAY · RESTART'], ...(LOOK_MENU ? [['N', 'SHADER MENU · PAUSES']] : []), ['⇧ N · T · F1', 'PANELS · THIS SHEET']]],
+  ['FORMS & STACKS', [['LMB / ⇧ OR CTRL LMB', 'SELECT / ADD (IN ORDER)'], ['⇧ A', 'ADD (1 BAR) · THEN PLACE NOTES · ENTER'], ['G · S', 'MOVE · SCALE'], ['→ X / Y / Z', 'LOCK AXIS AS IN RHINO · Z = UP (⇧ = PLANE)'], ['CTRL L', 'LINK LOOPS · PLAY IN CLICK ORDER'], ['ALT L · UNSTACK', 'TAKE A LOOP OUT'], ['HEIGHT', 'PITCH · A PLANE PER OCTAVE'], ['G → Z · BLUE ARROW', 'UP / DOWN BY SCALE STEP'], ['⇧↑ · ⇧↓ · ↑ · ↓', 'A STEP · AN OCTAVE (THE PLANE FOLLOWS)'], ['⇧ D · CTRL C/V', 'DUPLICATE · COPY/PASTE'], ['X / DEL · CTRL Z', 'DELETE · UNDO']]],
+  ['EDIT & SOUND', [['TAB / DBL-CLICK', 'EDIT MODE'], ['Q · W · E', 'POINTS · VERTS · EDGES'], ['A · ALT A · CTRL I', 'ALL · NONE · INVERT'], ['LMB ON THE PATH (1)', 'ADD A NOTE · LMB NOTE SELECT'], ['DRAG / G · THEN Z', 'SLIDE · NOTE UP / DOWN (20 PX A STEP)'], ['⇧↑ · ⇧↓ · ↑ · ↓', 'NOTES A STEP · AN OCTAVE'], ['CTRL WHILE MOVING', 'INVERT SNAP'], ['M · X (POINTS)', 'MUTE · DELETE NOTES'], ['R WHILE DRAGGING', 'RECORD MOTION LOOP'], ['ALT R', 'CLEAR MOTION'], ['1 · 2 · 3 · 4 · 5', 'KICK · CLAP · CYMBAL · SYNTH · BASS'], ['R · THEN 1–5 · R', 'RECORD A RHYTHM → A LOOP PER INSTRUMENT'], ['SPACE · ⇧ ←', 'PLAY · RESTART'], ...(LOOK_MENU ? [['N', 'SHADER MENU · PAUSES']] : []), ['⇧ N · T · F1', 'PANELS · THIS SHEET']]],
 ];
 const keysHTML = KEYS.map(([t, rows]) => `<div style="display:block;border:none;padding:0"><h4>${t}</h4>${rows.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('')}</div>`).join('');
 $('keysStart').innerHTML = keysHTML; $('keysHelp').innerHTML = keysHTML;
@@ -410,7 +410,8 @@ addEventListener('keyup', e => { mouseCtrl = e.ctrlKey || e.metaKey; });
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
   if (!started) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); begin(); } return; }
-  const k = e.code, ctrl = e.ctrlKey || e.metaKey; mouseCtrl = ctrl;
+  // letter keys by the letter printed on them, so a German (QWERTZ) Z is Z; everything else by position
+  const k = /^[a-z]$/i.test(e.key) ? 'Key' + e.key.toUpperCase() : e.code, ctrl = e.ctrlKey || e.metaKey; mouseCtrl = ctrl;
   if (k === 'F1') { e.preventDefault(); toggleHelp(); return; }
   if ($('help').style.display === 'flex' && k === 'Escape') { toggleHelp(false); return; }
   if (fxOpen) { if ((k === 'KeyN' && !e.shiftKey) || k === 'Escape') toggleFx(false); e.preventDefault(); return; }
@@ -452,7 +453,7 @@ addEventListener('keydown', e => {
     case 'Tab': e.preventDefault(); toggleEdit(); break;
     case 'KeyA': e.preventDefault(); if (e.shiftKey) { setAddAt(mouse.x, mouse.y); openAddMenu(mouse.x, mouse.y); } else if (e.altKey) selectNone(); else selectAll(); break;
     case 'KeyG': startModal('G'); break;
-    case 'KeyR': if (e.altKey) { e.preventDefault(); clearMotion(); } else startModal('R'); break;
+    case 'KeyR': if (e.altKey) { e.preventDefault(); clearMotion(); } else if (!e.repeat) toggleTake(); break;
     case 'KeyS': startModal('S'); break;
     case 'KeyD': if (e.shiftKey) duplicateSel(); break;
     case 'KeyL': if (e.altKey) { e.preventDefault(); unlinkSel(); } break;
@@ -460,9 +461,10 @@ addEventListener('keydown', e => {
     case 'KeyM': if (mode === 'edit' && selMode === 'p') muteNotes(); break;
     case 'KeyN': if (e.shiftKey) $('props').style.display = $('props').style.display === 'none' ? '' : 'none'; else toggleFx(); break;
     case 'KeyT': $('tools').style.display = $('tools').style.display === 'none' ? '' : 'none'; break;
-    case 'Digit1': if (mode === 'edit') setSelMode('p'); break;
-    case 'Digit2': if (mode === 'edit') setSelMode('v'); break;
-    case 'Digit3': if (mode === 'edit') setSelMode('e'); break;
+    case 'KeyQ': if (mode === 'edit') setSelMode('p'); break;
+    case 'KeyW': if (mode === 'edit') setSelMode('v'); break;
+    case 'KeyE': if (mode === 'edit') setSelMode('e'); break;
+    case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': if (!e.repeat) pad(+k[5] - 1); break;
     case 'Numpad7': setViewMode(viewMode === 'top' ? '3d' : 'top'); break;
     case 'Numpad5': case 'Numpad1': case 'Numpad3': setViewMode('3d'); break;
     case 'Numpad4': if (viewMode === '3d') animateView({ theta: view.theta - Math.PI / 12 }); break;
@@ -474,7 +476,7 @@ addEventListener('keydown', e => {
     case 'NumpadDecimal': case 'Period': mode === 'edit' ? frameVerts() : frameObjects(selected.size ? [...selected] : shapes); break;
     case 'Home': frameObjects(shapes); break;
     case 'ArrowLeft': if (e.shiftKey) resetPhases(); break;
-    case 'ArrowUp': case 'ArrowDown': e.preventDefault(); octaveSel(k === 'ArrowUp' ? 1 : -1); break;
-    case 'Escape': closeAddMenu(); break;
+    case 'ArrowUp': case 'ArrowDown': e.preventDefault(); raiseSel((k === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 1 : 7)); break;   // ⇧ = one step, else an octave
+    case 'Escape': if (take) finishTake(false); closeAddMenu(); break;
   }
 });

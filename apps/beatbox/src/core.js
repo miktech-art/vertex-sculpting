@@ -109,6 +109,8 @@ export const degreeAt = y => stepsAbove(y, PITCH.step, PITCH.thick);
 // the instrument's own pitch: the synth and bass stems have one; the drums play their original sound on the floor
 export const sampleRoot = snd => SOUNDS[snd].root ?? 48 + settings.key + SOUNDS[snd].oct;
 const floorNote = snd => SOUNDS[snd].sculpt ? nearestTonic(SOUNDS[snd].root, settings.key) : 48 + settings.key + SOUNDS[snd].oct;
+// what a pad (1…5) plays: the note a fresh form on the work plane plays (its dot through the middle of the form)
+export const padNote = snd => noteOfDegree(degreeAt(work.plane * octaveH() + PITCH.thick / 2), floorNote(snd), MODES[settings.mode][2]);
 
 // note k of a form: its height above the floor in scale steps (without notes: the ring's height)
 export function noteFor(shape, k = 0) {

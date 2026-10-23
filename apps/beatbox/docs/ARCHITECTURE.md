@@ -60,7 +60,11 @@ missing in old data → one on every corner that used to play), `open[]` (old re
 the floor, step = 0.5 (twice the 1/16 snap, so the planes sit well apart), 7 steps = one octave = 3.5 units, a plane every octave.
 A form resting on a plane plays that octave's root. Each instrument keeps its register (`SOUNDS[].oct`); all five stems are
 repitched tape-style (`playbackRate` = note / `sampleRoot`): on the floor the drums play their original sound, the bass B♭1.
-Moving a whole form snaps by octaves, a note (edit mode, Z) by steps; a corner moves as a whole column (`fitThickness`).
+Axes follow Rhino (`AX` in edit.js): X right, Y into the scene (north in the top view, three.js −z), Z up (three.js y); G/R/S
+headers show Rhino x y z, the gumball's up arrow is blue and its Y arrow green. Up and down always goes by scale steps: G → Z
+(forms, corners, notes) like a knob, one step per 20 px of mouse travel (`Z_PX`, at any zoom); the gumball's blue arrow by steps;
+⇧↑ / ⇧↓ one step and ↑ / ↓ an octave (`raiseSel`: the selected forms, or the selected notes in edit mode). A corner moves as a
+whole column (`fitThickness`). R → Z turns a form around its vertical axis (= start offset).
 The path runs through the notes at their heights (`heightAt`: corners take the slope between neighbouring notes), so the melody
 shows as height while time stays in plan. Brightness shows pitch (`pitchColor`: ±`PITCH.light` per octave).
 In 3D a chain sits in a row along +x in playing order (`layout`, 0.5 apart), each loop at its own height; the top view keeps every
@@ -117,7 +121,7 @@ Effect sweeps are scheduled from `bars` each frame, the same phase the star shad
    form is grey meanwhile (`Shape.focus`).
 8. object mode, something selected: every selected form's pick mesh (also open curves) drawn flat on `L_SEL` → `rtSel`
    (r = selected, g = active); `outlineMat` draws an orange line just outside each silhouette (`SEL` in render.js: #e8641c,
-   the active form #ffa64d, 1.6 px), then the overlay.
+   the active form #ffa64d, 1.1 px), then the overlay.
 - The solid prism mesh is never drawn: it stays for picking, edit-mode faces and framing; the milk mesh shares its geometry.
 - The star: one inflated star per closed form (a unit sphere whose footprint follows an arm toward each note that plays,
   each arm leaning to its note's height), `FX.layers` nested shells; each shell's colour gathers at its silhouette so the

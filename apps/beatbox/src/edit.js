@@ -3,13 +3,15 @@ import './view.js';
 import { audio } from './audio.js';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { settings, SNAP, V3, $, UNITS_PER_BAR, clamp, barLen, PITCH, octaveH, noteFor, noteName, work, PLANES, planeOf } from './core.js';
+import { settings, SNAP, V3, $, UNITS_PER_BAR, clamp, barLen, PITCH, octaveH, noteFor, noteName, work, PLANES, planeOf, PALETTE, SOUNDS,
+  padNote, LA } from './core.js';
 import { scene, camera, canvas, overlay } from './render.js';
 import { stacks, aboveMap, rootOf, rebuildStacks, shapes, Shape, addShape, nextName, removeShape, barPrism, rectPrism,
   prismName, freeSpot, clearRow, standsAt, fitThickness, replaceShape, notesAt } from './shape.js';
 import { viewMode, trans, ex, view } from './view.js';
 import { mouseCtrl, fxOpen, fmtBars, refreshPanel, setHint } from './ui.js';
 import { snapFrac } from './lib/pitch.js';
+import { takeBars, tapNotes } from './lib/rhythm.js';
 import { simTime, bars, setSimTime, setBars } from './loop.js';
 
 /* =========================================================
@@ -19,7 +21,7 @@ export const selected = new Set();
 export let active = null;
 export let mode = 'object';        // 'object' | 'edit'
 export let selMode = 'p';          // 'p' points (notes) | 'v' vertices | 'e' edges
-let gumMode = 'translate';  // 'translate' | 'rotate' | 'scale' | null
+let gumMode = 'translate';  // 'translate' | 'scale' | null
 export let playing = true;
 export let started = false;
 // setters for the modules that write these (an imported binding is read-only)
@@ -30,6 +32,9 @@ export const pivot = new THREE.Object3D(); scene.add(pivot);
 export const tc = new TransformControls(camera, canvas);
 tc.setSpace('world'); tc.setSize(0.85);
 overlay.add(tc.getHelper());
+// Rhino's colours: the arrow that points up is Z, so blue; the one pointing into the scene is Y, so green (three.js has them swapped)
+{ const done = new Set(); tc.getHelper().traverse(o => { const m = o.material; if (!m || !m.color || done.has(m)) return; done.add(m);
+  const h = m.color.getHex(); if (h === 0x00ff00) m.color.setHex(0x0000ff); else if (h === 0x0000ff) m.color.setHex(0x00ff00); }); }
 const snapOn = () => settings.snap !== mouseCtrl;     // Ctrl inverts the snap
 export const snapv = v => Math.round(v / SNAP) * SNAP;
 
@@ -50,7 +55,6 @@ export function updateGumball() {
   if (tc.object !== pivot) tc.attach(pivot);
   tc.setMode(gumMode);
   tc.setTranslationSnap(settings.snap ? SNAP : null);
-  tc.setRotationSnap(settings.snap ? Math.PI / 12 : null);
   tc.showY = !(viewMode === 'top' && gumMode === 'translate');
 }
 // Alt+wheel: the octave you work on (the camera rides along, forms on other planes go grey)
@@ -60,17 +64,28 @@ export function setPlane(k) {
   const a = Math.abs(k);
   flashMsg(k ? `PLANE ${k > 0 ? '+' : '−'}${a} · ${a} OCTAVE${a > 1 ? 'S' : ''} ${k > 0 ? 'UP' : 'DOWN'}` : 'PLANE 0 · THE FLOOR', 900);
 }
-// ↑ / ↓: the selected forms an octave up or down (plane to plane); the work plane goes with them, so you keep working on them
-export function octaveSel(dir) {
-  if (mode !== 'object' || !selected.size || xf || modal) return;
-  const oh = octaveH(), list = [...selected];
-  if (list.some(s => { const p = planeOf(s.dy + dir * oh); return p < PLANES.lo || p > PLANES.hi; })) { flashMsg(dir > 0 ? 'THE HIGHEST PLANE' : 'THE LOWEST PLANE', 900); return; }
-  list.forEach(s => { s.dy = cleanDy(s.dy + dir * oh); s.group.position.y += dir * oh; s.group.updateMatrixWorld(true); });   // moved now, so the panel reads the new notes
+// ↑ / ↓ = an octave, ⇧↑ / ⇧↓ = one scale step: the selected forms (object mode; when one crosses into another octave the work
+// plane goes with it, so you keep working on it) or the selected notes (edit mode, points)
+export function raiseSel(steps) {
+  if (xf || modal) return;
+  const dy = steps * PITCH.step, by = Math.abs(steps) === 7 ? `AN OCTAVE ${steps > 0 ? 'UP' : 'DOWN'}` : `A STEP ${steps > 0 ? 'UP' : 'DOWN'}`;
+  if (mode === 'edit' && selMode === 'p' && active && active.noteSel.size) {
+    const s = active, ks = [...s.noteSel].filter(k => s.notes[k]);
+    ks.forEach(k => { s.notes[k].y += dy / Math.max(1e-6, Math.abs(s.group.scale.y)); });
+    s.ringKey = ''; s.star.key = ''; s.updateLines(); pushUndo(); refreshPanel();
+    flashMsg(`${ks.length > 1 ? ks.length + ' NOTES' : 'NOTE ' + noteName(noteFor(s, ks[0]))} · ${by}`, 1100);
+    return;
+  }
+  if (mode !== 'object' || !selected.size) return;
+  const list = [...selected];
+  if (list.some(s => { const p = planeOf(s.dy + dy); return p < PLANES.lo || p > PLANES.hi; })) { flashMsg(dy > 0 ? 'THE HIGHEST PLANE' : 'THE LOWEST PLANE', 900); return; }
+  list.forEach(s => { s.dy = cleanDy(s.dy + dy); s.group.position.y += dy; s.group.updateMatrixWorld(true); });   // moved now, so the panel reads the new notes
   const lead = active && selected.has(active) ? active : list[0];
   setPlane(planeOf(lead.dy));
   pushUndo(); refreshPanel();
-  flashMsg(`${list.length > 1 ? list.length + ' FORMS' : lead.name} · AN OCTAVE ${dir > 0 ? 'UP' : 'DOWN'} · PLANE ${work.plane > 0 ? '+' : ''}${work.plane}`, 1100);
+  flashMsg(`${list.length > 1 ? list.length + ' FORMS' : lead.name} · ${by} · PLANE ${work.plane > 0 ? '+' : ''}${work.plane}`, 1100);
 }
+const Z_PX = 20;                                     // up / down with Z (notes, forms, corners): mouse travel per scale step
 export function flashMsg(t, ms = 1600) {
   const h = $('modalHdr'); h.textContent = t; h.style.display = 'block';
   clearTimeout(flashMsg.tm); flashMsg.tm = setTimeout(() => { if (!modal && !mrec) h.style.display = 'none'; }, ms);
@@ -178,8 +193,8 @@ let pivotStartInv = new THREE.Matrix4(), pivotY0 = 0;
 tc.addEventListener('mouseDown', () => { beginXform(); pivot.updateMatrixWorld(true); pivotStartInv.copy(pivot.matrixWorld).invert(); pivotY0 = pivot.position.y; });
 tc.addEventListener('objectChange', () => {
   if (!xf) return;
-  // whole forms move up and down by octaves (plane to plane); corners snap to scale steps
-  if (tc.mode === 'translate' && snapOn()) { const sy = xf.kind === 'object' ? octaveH() : PITCH.step; pivot.position.y = pivotY0 + Math.round((pivot.position.y - pivotY0) / sy) * sy; }
+  // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
+  if (tc.mode === 'translate' && snapOn()) pivot.position.y = pivotY0 + Math.round((pivot.position.y - pivotY0) / PITCH.step) * PITCH.step;
   pivot.updateMatrixWorld(true);
   applyDelta(new THREE.Matrix4().multiplyMatrices(pivot.matrixWorld, pivotStartInv));
 });
@@ -556,22 +571,23 @@ export function startModal(type) {
   modal = { type, axis: null, exclude: false, p, ps, m0: { x: mouse.x, y: mouse.y } };
   tc.detach(); updateModal(); showModalHdr();
 }
-const AX = { x: V3(1, 0, 0), y: V3(0, 1, 0), z: V3(0, 0, 1) };
+// the axis keys follow Rhino: X right, Y into the scene (north in the top view), Z up
+const AX = { x: V3(1, 0, 0), y: V3(0, 0, -1), z: V3(0, 1, 0) };
+const COMP = { x: 'x', y: 'z', z: 'y' };            // Rhino axis -> three.js component
+const rhino = v => `${v.x.toFixed(2)} ${(v === modal.val && modal.type === 'G' ? -v.z : v.z).toFixed(2)} ${v.y.toFixed(2)}`;   // x y z as Rhino shows them
 export function updateModal() {
   if (!modal) return;
   const { p, ps, m0 } = modal, M = new THREE.Matrix4();
   const camDir = camera.getWorldDirection(V3());
   if (xf && xf.kind === 'notes') {
     const s = xf.s;
-    if (modal.axis === 'z') {                         // up / down: the note (pitch), by scale steps
-      const nrm = V3().crossVectors(V3(0, 1, 0), V3().crossVectors(camDir, V3(0, 1, 0))); if (nrm.lengthSq() < 1e-8) nrm.copy(camDir);
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(nrm.normalize(), p);
-      raycaster.setFromCamera(ndc(m0.x, m0.y), camera); const a = raycaster.ray.intersectPlane(plane, V3());
-      raycaster.setFromCamera(ndc(mouse.x, mouse.y), camera); const b = raycaster.ray.intersectPlane(plane, V3());
-      let dy = (a && b ? b.y - a.y : 0) / Math.max(1e-6, Math.abs(s.group.scale.y));
+    if (modal.axis === 'z') {                         // up / down: the note (pitch), like a knob: Z_PX of mouse travel per scale
+      modal.zy ??= mouse.y;                           // step, counted from where Z was pressed, the same at any zoom
+      let dy = (modal.zy - mouse.y) / Z_PX * PITCH.step / Math.max(1e-6, Math.abs(s.group.scale.y));
       if (snapOn()) dy = Math.round(dy / PITCH.step) * PITCH.step;
       applyNotes(0, dy); modal.val = { dy };
     } else {                                          // slide along the path, by 1/16
+      modal.zy = null;
       modal.f0 ??= outlineHit(s, m0.x, m0.y, 1e9)?.f ?? 0;
       const h = outlineHit(s, mouse.x, mouse.y, 1e9);
       let df = h ? h.f - modal.f0 : 0; if (s.closed) df -= Math.round(df);
@@ -591,28 +607,21 @@ export function updateModal() {
     const d = (a && b) ? b.sub(a) : V3();
     if (axis && !modal.exclude) { const k = d.dot(axis); d.copy(axis).multiplyScalar(k); }
     if (axis && modal.exclude) d.addScaledVector(axis, -d.dot(axis));
-    // up and down: whole forms jump plane to plane (octaves), corners and faces by scale steps
-    if (snapOn()) { const sy = xf.kind === 'object' ? octaveH() : PITCH.step; d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / sy) * sy; }
+    if (modal.axis === 'z' && !modal.exclude) {      // up / down like a knob: Z_PX of mouse travel per scale step, at any zoom
+      modal.zy ??= mouse.y; const st = (modal.zy - mouse.y) / Z_PX; d.set(0, st * PITCH.step, 0);
+    } else modal.zy = null;
+    // up and down by scale steps, whole forms and corners alike (↑ / ↓ move a form a full octave)
+    if (snapOn()) { d.x = snapv(d.x); d.z = snapv(d.z); d.y = Math.round(d.y / PITCH.step) * PITCH.step; }
     M.makeTranslation(d.x, d.y, d.z); modal.val = d;
-  } else if (modal.type === 'R') {
-    let ang = Math.atan2(mouse.y - ps.y, mouse.x - ps.x) - Math.atan2(m0.y - ps.y, m0.x - ps.x);
-    let ax = camDir.clone();
-    if (axis) { ax = axis.clone(); if (axis.dot(camDir) < 0) ang = -ang; }
-    // turning a form around its vertical axis moves its start (rotation = start offset): snap to the 1/16 grid of its cycle
-    const turn = mode === 'object' && active && ((modal.axis === 'y' && !modal.exclude) || (!axis && viewMode === 'top'));
-    const st = turn ? 2 * Math.PI / Math.max(1, Math.round(active.loopBars() * 16)) : Math.PI / 12;
-    if (snapOn()) ang = Math.round(ang / st) * st;
-    M.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(ax.normalize(), ang)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
-    modal.val = ang;
   } else {
     const d0 = Math.max(4, Math.hypot(m0.x - ps.x, m0.y - ps.y));
     let f = Math.hypot(mouse.x - ps.x, mouse.y - ps.y) / d0;
     // uniform (or XZ) scaling snaps so the loop lands on a whole number of sixteenths
-    const ringScales = !axis || (modal.axis === 'y' && modal.exclude);
+    const ringScales = !axis || (modal.axis === 'z' && modal.exclude);
     if (snapOn() && ringScales && xf.per0 > 1e-4) { const tgt = Math.max(SNAP, Math.round(xf.per0 * f / SNAP) * SNAP); f = tgt / xf.per0; }
     else if (snapOn()) f = Math.round(f * 10) / 10;
     const sv = V3(f, f, f);
-    if (axis) { const k = modal.axis; if (modal.exclude) sv[k] = 1; else { sv.set(1, 1, 1); sv[k] = f; } }
+    if (axis) { const k = COMP[modal.axis]; if (modal.exclude) sv[k] = 1; else { sv.set(1, 1, 1); sv[k] = f; } }
     M.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeScale(Math.max(sv.x, 0.01), Math.max(sv.y, 0.01), Math.max(sv.z, 0.01))).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
     modal.val = sv;
   }
@@ -633,12 +642,11 @@ function showModalHdr() {
       : `SLIDE · ${fmtBars(s.notes[k].f * s.perim / UNITS_PER_BAR)} INTO THE LOOP  ·  Z = NOTE UP / DOWN · CTRL ${settings.snap ? 'FREE' : 'SNAP'} · LMB / RELEASE CONFIRM · RMB / ESC CANCEL`;
     return;
   }
-  const nm = { G: 'MOVE', R: 'ROTATE', S: 'SCALE' }[modal.type];
+  const nm = { G: 'MOVE', S: 'SCALE' }[modal.type];
   const ax = modal.axis ? ` · ${modal.exclude ? 'PLANE ⊥' : 'AXIS'} ${modal.axis.toUpperCase()}` : '';
   let v = '';
-  if (modal.type === 'G' && modal.val) v = `${modal.val.x.toFixed(2)} ${modal.val.y.toFixed(2)} ${modal.val.z.toFixed(2)}`;
-  if (modal.type === 'R' && modal.val !== undefined) v = `${THREE.MathUtils.radToDeg(modal.val).toFixed(1)}°`;
-  if (modal.type === 'S' && modal.val) v = `${modal.val.x.toFixed(2)} ${modal.val.y.toFixed(2)} ${modal.val.z.toFixed(2)}`;
+  if (modal.type === 'G' && modal.val) v = rhino(modal.val);
+  if (modal.type === 'S' && modal.val) v = rhino(modal.val);
   const len = active ? ` · ${fmtBars(active.loopBars())}` : '';
   h.textContent = `${nm} ${v}${ax}${len}  ·  X/Y/Z AXIS · ⇧+AXIS PLANE · CTRL ${settings.snap ? 'FREE' : 'SNAP'} · LMB CONFIRM · RMB/ESC CANCEL`;
 }
@@ -784,6 +792,51 @@ export function addPrism(kind) {
 export function addPreset(key) {
   const s = addFromData(PRESETS[key].make()); pushUndo();
   if (viewMode === 'top') flashMsg(`${s.name} · ${fmtBars(s.loopBars())} · ADDED TO THE COMMON CENTRE`);
+}
+/* =========================================================
+   PADS + TAKES — 1…5 play the five stems (in colour order); R records a take from the next bar line, R again ends it
+   (rounded to whole bars). Every instrument tapped becomes one square loop as long as the take, a note on each tap (1/16).
+   ========================================================= */
+export const PADS = PALETTE.map(p => p.sounds[0]);
+export let take = null;                              // { start: bar, taps: { sound: [bar positions as heard] } }
+// the transport position you hear right now: `bars` belongs to simTime (LA ahead of the audio clock), and the speakers lag
+// the audio clock by the output latency
+const heardBar = () => bars - ((simTime ?? 0) - (audio.ctx?.currentTime ?? 0) + (audio.ctx?.outputLatency || audio.ctx?.baseLatency || 0)) / barLen();
+export function pad(i) {
+  const snd = PADS[i]; if (!snd || !audio.ctx) return;
+  audio.play(snd, 440 * Math.pow(2, (padNote(snd) - 69) / 12), 0.6, audio.ctx.currentTime, audio.dry);
+  if (take) (take.taps[snd] ??= []).push(heardBar());
+}
+export function toggleTake() {
+  if (take) { finishTake(true); return; }
+  if (!playing) togglePlay(true);
+  take = { start: Math.ceil(heardBar() - 1 / 32), taps: {} };   // just after a bar line still starts on it
+  showTakeBadge();
+}
+export function finishTake(commit) {
+  const T = take; take = null; hideRecBadge();
+  if (!T || !commit) return;
+  const now = heardBar(); if (now <= T.start) return;   // stopped during the count-in
+  const len = takeBars(T.start, now), at = viewMode === '3d' ? groundHit(mouse.x, mouse.y) : null, made = [];
+  if (mode === 'edit') setMode('object');
+  selected.clear();
+  PADS.forEach(snd => {
+    const fs = tapNotes(T.taps[snd] ?? [], T.start, len); if (!fs.length) return;
+    const L = SOUNDS[snd].label, s = addShape({ name: nextName(L[0] + L.slice(1).toLowerCase()), ...barPrism(4, len, PITCH.thick),
+      sound: snd, notes: notesAt(fs), anchor: [0, 0], dy: work.plane * octaveH() });
+    landFree(s, at); selected.add(s); active = s; made.push(s);
+  });
+  if (!made.length) { flashMsg('NOTHING RECORDED · TAP 1–5 WHILE RECORDING'); return; }
+  pushUndo(); refreshPanel(); updateGumball();
+  flashMsg(`${made.map(s => s.name.toUpperCase()).join(' · ')} · ${fmtBars(len)}`, 2400);
+}
+export function showTakeBadge() {
+  if (!take || mrec) return;
+  const b = heardBar() - take.start;
+  if (b >= 16) { finishTake(true); return; }
+  const h = $('modalHdr'); h.style.display = 'block'; h.style.borderColor = '#c8473b'; h.style.color = '#c8473b';
+  const got = PADS.filter(s => take.taps[s]?.length).map(s => `${SOUNDS[s].label} ${take.taps[s].length}`).join(' · ');
+  h.textContent = (b < 0 ? `● REC IN ${Math.ceil(-b * 4)}` : `● REC BAR ${Math.floor(b) + 1}`) + `  ·  ${got || '1 KICK · 2 CLAP · 3 CYMBAL · 4 SYNTH · 5 BASS'}  ·  R STOP · ESC CANCEL`;
 }
 export function duplicateSel(thenGrab = true) {
   if (mode !== 'object' || !selected.size) return;
