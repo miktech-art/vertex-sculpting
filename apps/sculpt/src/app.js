@@ -521,13 +521,11 @@ function renderSavedCards() {
     button.className = "preset-card saved-card";
     button.classList.toggle("active", store.activeSavedId === doc.libraryId);
     button.setAttribute("aria-pressed", store.activeSavedId === doc.libraryId);
-    button.setAttribute("aria-label", `Load saved sound ${doc.name}`);
+    button.setAttribute("aria-label", `Load ${doc.name}`);
     button.title = `Load ${doc.name}`;
-    const label = document.createElement("small");
-    label.textContent = "SAVED SOUND";
     const name = document.createElement("span");
     name.textContent = doc.name;
-    button.append(label, name);
+    button.append(name);
     button.addEventListener("click", () => loadSavedSound(doc));
     const item = document.createElement("div");
     item.className = "saved-card-item";
@@ -679,10 +677,16 @@ $("#import-file").addEventListener("change", async (e) => {
       throw new Error("Preset files must be smaller than 500 KB.");
     const doc = validateDocument(JSON.parse(await file.text()));
     switchSound(() => {
-      stop();
-      mapping.selected = null;
-      store.load(doc);
-      toast(`${doc.name} imported`);
+      try {
+        store.importSaved(doc);
+        stop();
+        mapping.selected = null;
+        renderer.resetView();
+        miniRenderer.resetView();
+        toast(`${doc.name} imported and saved`);
+      } catch (error) {
+        toast(error.message);
+      }
     });
   } catch (error) {
     toast(

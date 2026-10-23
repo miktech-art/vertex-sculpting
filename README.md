@@ -55,6 +55,7 @@ Edit source in `apps/`, never generated `dist/`. Beatbox imports the native audi
 ## Saved sounds and scenes
 
 - Sculpt's bottom bar saves, renames, deletes, and restores sounds. JSON export/import provides portable sound backups.
+- **Import preset**, below My sounds, adds each valid preset as a separate saved sound and selects its card. Importing never replaces an existing library entry. The factory saw starts with harmonics and a simple ADSR envelope; detune, noise, drive, tremolo, delay, and reverb are off. Existing saved sounds and resumed working edits retain their settings.
 - Beatbox restores boxes, notes, effects, instruments, tempo, selection, and view after navigation or reload. Playback returns paused. Its intro appears once per browser; F1 opens help.
 - Save a Sculpt sound, return to Beatbox, select a box, and choose **Instrument → Sculpted sounds**. The box shows that sound's static 3D sculpture instead of its usual cloud. Choosing a preset instrument restores the cloud. Assigned definitions are archived in the scene so deleting a library sound does not break existing boxes.
 

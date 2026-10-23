@@ -7,6 +7,7 @@ import { BoxSculpture, sculpturePreview } from '../src/visual/sculpture.js';
 
 test('box previews retain the saved sculpture geometry, custom mappings, and echo train', () => {
   const doc = makeDocument();
+  Object.assign(doc.params, { delayMix: 0.14, delayTime: 0.32, feedback: 0.28, detune: 9 });
   const mapped = resolveMappings(doc.params, doc.routes);
   const source = buildGeometry(doc.params, mapped);
   const preview = sculpturePreview(doc);

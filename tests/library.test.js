@@ -192,3 +192,35 @@ test('unreadable data is not overwritten when its recovery backup cannot be stor
   assert.equal(store.persist(), true);
   assert.equal(data.get('sound-form:session:v1:recovery'), raw);
 });
+
+test('import creates a separate saved sound, persists it, and never replaces an existing selection', () => {
+  const store = fresh(), first = store.save('Existing');
+  const incoming = makeDocument(); incoming.name = 'Imported'; incoming.params.noise = 0.42;
+  incoming.libraryId = first.libraryId;
+  const imported = store.importSaved(incoming);
+  assert.notEqual(imported.libraryId, first.libraryId);
+  assert.equal(store.saved.length, 2);
+  assert.deepEqual(store.saved[1], first);
+  assert.equal(store.activeSavedId, imported.libraryId);
+  assert.equal(store.hasUnsavedChanges, false);
+  assert.equal(fresh().saved[0].params.noise, 0.42);
+  store.undo();
+  assert.equal(store.activeSavedId, first.libraryId);
+  assert.equal(store.saved.length, 2);
+  const duplicate = store.importSaved(incoming);
+  assert.notEqual(duplicate.libraryId, imported.libraryId);
+});
+test('failed or malformed imports leave the current sound, library and undo history intact', () => {
+  const store = fresh(); store.save('Existing');
+  store.edit(doc => { doc.params.noise = 0.17; }); store.commit();
+  const snapshot = store.snapshot(), saved = structuredClone(store.saved), undo = structuredClone(store.undoStack);
+  blocked = true;
+  assert.throws(() => store.importSaved(makeDocument()), /Could not update/);
+  assert.deepEqual(store.snapshot(), snapshot);
+  assert.deepEqual(store.saved, saved);
+  assert.deepEqual(store.undoStack, undo);
+  blocked = false;
+  assert.throws(() => store.importSaved({ schema: 'bad' }));
+  assert.deepEqual(store.snapshot(), snapshot);
+  assert.deepEqual(store.saved, saved);
+});

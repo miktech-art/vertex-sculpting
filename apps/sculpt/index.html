@@ -117,9 +117,12 @@
               <button id="bar-save-button" class="bar-save-button">Save sound</button>
               <button id="new-sound-button" class="bar-new-button">+ New sound</button>
             </div>
-            <button id="library-button" class="library-button">
-              <span>▤</span> My sounds <span id="saved-count">0</span>
-            </button>
+            <div class="sound-library-actions">
+              <button id="library-button" class="library-button">
+                <span>▤</span> My sounds <span id="saved-count">0</span>
+              </button>
+              <button id="import-button" class="text-button">Import preset</button>
+            </div>
           </section>
         </main>
         <main id="mapping-workspace" class="mapping-workspace" hidden>
@@ -285,10 +288,7 @@
               <span>Save sound</span><span>↗</span>
             </button>
             <div class="file-actions">
-              <button id="import-button" class="text-button">
-                Import preset</button
-              ><span>/</span
-              ><button id="export-button" class="text-button">
+              <button id="export-button" class="text-button">
                 Export JSON</button
               ><button
                 id="wav-button"

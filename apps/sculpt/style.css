@@ -1887,7 +1887,6 @@ dialog input:not([type]) {
 .sound-cards .preset-cards:empty { display: none; }
 .sound-cards .preset-card { width: 126px; flex: none; }
 .saved-card { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-.saved-card small { font: 8px var(--mono); color: var(--quiet); letter-spacing: 1px; }
 .saved-card span { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sound-bar-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .bar-save-button, .bar-new-button { padding: 7px 12px; border-radius: 3px; font-size: 11px; white-space: nowrap; }
@@ -1896,6 +1895,8 @@ dialog input:not([type]) {
 .bar-new-button { border: 1px solid var(--line); color: var(--muted); }
 .preset-strip { gap: 16px; height: 100px; min-height: 100px; }
 .preset-strip .library-button { margin-left: 0; flex: none; }
+.sound-library-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; flex: none; }
+.sound-library-actions #import-button { padding: 4px 0; font-size: 11px; color: var(--muted); }
 .save-copy-option { margin-top: 18px; display: flex; gap: 8px; align-items: center; }
 .save-copy-option input { accent-color: #d5dac9; }
 .save-error { color: #f1ada0; font-size: 12px; }
@@ -1905,7 +1906,7 @@ dialog input:not([type]) {
   .sound-cards { flex-basis: 100%; }
   .sound-cards .preset-card { width: 118px; }
   .sound-bar-actions { flex-direction: row; }
-  .preset-strip .library-button { margin-left: auto; min-width: 90px; }
+  .preset-strip .sound-library-actions { margin-left: auto; min-width: 90px; }
 }
 
 /* Saved sound management stays available to mouse, touch, and keyboard users. */

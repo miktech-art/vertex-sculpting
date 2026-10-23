@@ -162,6 +162,23 @@ export class Store {
       }
     }
   }
+  importSaved(input) {
+    const document = validateDocument(input);
+    const previous = this.snapshot();
+    const saved = { ...structuredClone(document), libraryId: crypto.randomUUID() };
+    this.updateLibrary(() => {
+      this.saved = [saved, ...this.saved];
+      this.document = document;
+      this.initial = structuredClone(document);
+      this.activeSavedId = saved.libraryId;
+    });
+    this.undoStack.push(previous);
+    if (this.undoStack.length > 60) this.undoStack.shift();
+    this.redoStack = [];
+    this.checkpoint = null;
+    this.emit("load");
+    return saved;
+  }
   deleteSaved(id) {
     const doc = this.saved.find((item) => item.libraryId === id);
     if (!doc) throw new Error("This sound is no longer saved.");

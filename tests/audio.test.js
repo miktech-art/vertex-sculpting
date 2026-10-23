@@ -166,20 +166,20 @@ test("effects only create feedback loops when delay is enabled", async () => {
     engine.disposeVoice(event);
   }
 });
-test("the default sound has a broad harmonic spectrum and active modulation/effects", async () => {
+test("the default saw has a broad harmonic spectrum without layered effects", async () => {
   const engine = new NativeAudioEngine(),
     voice = await engine.trigger(PRESETS[0].params);
   const oscillator = voice.pitchedSources[0];
   assert.equal(oscillator.wave.imag.length, 97);
   assert.ok(oscillator.wave.imag[64] > 0);
-  assert.ok(voice.nodes.some((n) => n.type === "convolver"));
-  assert.ok(voice.nodes.some((n) => n.type === "delay"));
-  assert.ok(voice.sources.some((n) => n.type === "bufferSource"));
+  for (const id of ['detune', 'noise', 'drive', 'motion', 'delayMix', 'reverbMix', 'width'])
+    assert.equal(voice.params[id], 0, id);
+  assert.ok(!voice.nodes.some((n) => n.type === "delay"));
   engine.disposeVoice(voice);
 });
 test("live pitch updates pitched voices without changing the tremolo rate", async () => {
   const engine = new NativeAudioEngine(),
-    voice = await engine.trigger(PRESETS[0].params);
+    voice = await engine.trigger({ ...PRESETS[0].params, motion: 0.09 });
   const lfo = voice.sources.find((s) => s.type === "oscillator" && !s.wave);
   engine.setPitch(440);
   assert.ok(
@@ -190,7 +190,7 @@ test("live pitch updates pitched voices without changing the tremolo rate", asyn
 });
 test("gesture voices sustain until released and then have a finite effect tail", async () => {
   const engine = new NativeAudioEngine(),
-    voice = await engine.trigger(PRESETS[0].params, { held: true });
+    voice = await engine.trigger({ ...PRESETS[0].params, reverbMix: 0.2 }, { held: true });
   assert.equal(voice.held, true);
   assert.equal(voice.total, Infinity);
   assert.ok(voice.sources.every((source) => source.stopTime === undefined));
@@ -346,7 +346,7 @@ test("drive edits replace and crossfade shapers instead of reassigning a curve o
 });
 test("reverb decay crossfades impulse banks on the running voice", async () => {
   const engine = new NativeAudioEngine(),
-    voice = await engine.trigger(PRESETS[0].params),
+    voice = await engine.trigger({ ...PRESETS[0].params, reverbMix: 0.2 }),
     old = voice.reverb.active;
   engine.context.currentTime += 0.2;
   engine.update({ ...voice.params, reverbDecay: 3.5 });
