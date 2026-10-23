@@ -1743,3 +1743,30 @@ dialog input:not([type]) {
 .envelope-selectors { max-height: 130px; overflow-y: auto; padding: 3px; }
 .envelope-selector { flex: none; }
 .preset-card, .preset-card:hover, .preset-card.active { background: var(--bg); }
+
+/* Stacked dial captions and a single aligned ADSR row. */
+.knob-control, #connection-details .knob-control {
+  grid-template-columns: minmax(0,1fr); grid-template-rows: 38px auto auto;
+  justify-items: center; align-items: start; gap: 3px; padding: 9px 0;
+}
+.knob-dial { grid-column: 1; grid-row: 1; }
+.knob-label { grid-column: 1; grid-row: 2; align-self: start; text-align: center; white-space: nowrap; }
+.knob-value { grid-column: 1; grid-row: 3; text-align: center; }
+.timeline-section { height: 164px; min-height: 164px; }
+.adsr-layout { grid-template-columns: 20px minmax(100px,1fr) minmax(420px,42%); gap: 12px; align-items: center; }
+#adsr-controls { grid-template-columns: repeat(8,minmax(0,1fr)); gap: 3px; }
+.adsr-controls-block { min-width: 0; }
+.envelope-selectors { max-height: none; overflow: visible; padding: 0; }
+.envelope-selectors .envelope-add { width: 14px; height: 16px; min-width: 0; padding: 0; line-height: 16px; border: none; background: none; }
+.envelope-routing { height: 24px; justify-content: flex-start; }
+.envelope-destination { display: inline-flex; align-items: center; gap: 4px; }
+.envelope-destination::after { content: ''; width: 4px; height: 4px; border-right: 1px solid #888; border-bottom: 1px solid #888; transform: rotate(45deg); margin-top: -3px; pointer-events: none; }
+.envelope-routing select { appearance: none; -webkit-appearance: none; border: none; border-radius: 0; outline: none; padding: 0; margin: 0; max-width: none; background: transparent; font: 10px var(--mono); }
+.inactive-depth { opacity: .3; pointer-events: none; }
+[hidden] { display: none !important; }
+*, *::before, *::after { cursor: default !important; }
+.knob-dragging, .knob-dragging * { cursor: none !important; }
+@media(max-width:1000px) {
+ .adsr-layout { grid-template-columns: 16px minmax(80px,1fr) minmax(360px,50%); gap: 6px; }
+ .knob-label { font-size: 9px; }
+}

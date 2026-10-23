@@ -87,36 +87,43 @@ function renderEnvelopeSelectors(){
   const params=store.document.params,envs=params.envelopes||[];
   if(selectedEnvelope>envs.length)selectedEnvelope=0;
   const container=$('#envelope-selectors');container.replaceChildren();
-  for(let i=0;i<=envs.length;i++){
+  for(const i of [selectedEnvelope,...Array.from({length:envs.length+1},(_,i)=>i).filter(i=>i!==selectedEnvelope)]){
     const b=document.createElement('button');b.className='envelope-selector';
     b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
     b.setAttribute('aria-label',i===0?'Amplitude envelope':`Envelope ${i+1}`);
     b.title=i===0?'Amplitude':`Envelope ${i+1}: ${envs[i-1].target}`;
     b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});container.append(b);
   }
-  const add=document.createElement('button');add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8;
+  const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8;
   add.addEventListener('click',()=>{
     selectedEnvelope=envs.length+1;
     store.edit(doc=>{doc.params.envelopes=[...(doc.params.envelopes||[]),{target:'pitch',amount:12,attack:.01,decay:.2,sustain:0,hold:.3,release:.15}];},'envelopes');
     store.commit();
   });container.append(add);
   const route=$('#envelope-routing');route.replaceChildren();
-  if(!selectedEnvelope){route.textContent='Amplitude';return;}
-  const env=envs[selectedEnvelope-1], select=document.createElement('select');select.setAttribute('aria-label','Envelope destination');
-  for(const [value,label] of [['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff']]){
+  const depthSlot=$('#envelope-depth-slot');depthSlot.replaceChildren();
+  const env=envs[selectedEnvelope-1]||{target:'amplitude',amount:0};
+  const select=document.createElement('select');select.setAttribute('aria-label','Envelope destination');
+  const destinations=selectedEnvelope?[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff']]:[['amplitude','Amplitude']];
+  for(const [value,label] of destinations){
     const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);
   }
-  select.value=env.target;select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
-  const limit={pitch:48,wavePosition:1,cutoff:8}[env.target];
+  select.value=env.target;
+  select.style.width=`${destinations.find(([value])=>value===env.target)[1].length*.62+.15}em`;
+  const wrapper=document.createElement('div');wrapper.className='envelope-destination';wrapper.append(select);route.append(wrapper);
+  select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
+  const limit={pitch:48,wavePosition:1,cutoff:8,amplitude:1}[env.target];
   const depth=new Knob({id:'envelope-depth',label:'Depth',min:-limit,max:limit,value:env.amount,
-    format:v=>env.target==='wavePosition'?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
+    format:v=>env.target==='amplitude'?'—':env.target==='wavePosition'?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
     onInput:value=>editSelectedEnvelope({amount:value}),onCommit:()=>store.commit()});
-  route.append(select,depth.element);
+  if(!selectedEnvelope){depth.element.classList.add('inactive-depth');depth.editor.disabled=true;depth.dial.setAttribute('aria-disabled','true');depth.dial.tabIndex=-1;}
+  depthSlot.append(depth.element);
 }
 function makeEnvelopeControls(){
   for(const p of PARAMETERS.filter(p=>p.group==='contour')){
     const knob=parameterKnob(p);$('#adsr-controls').append(knob.element);envelopeKnobs.set(p.id,knob);
   }
+  const slot=document.createElement('div');slot.id='envelope-depth-slot';$('#adsr-controls').append(slot);
 }
 function updateDirtyCards(){
   for(const card of document.querySelectorAll('[data-sound-key]')){
