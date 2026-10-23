@@ -1,3 +1,5 @@
+import { Knob } from './knob.js';
+import { constrainCutoff } from './filter-range.js';
 import { createVisualExample } from "./visual-examples.js";
 import {
   PARAMETERS,
@@ -148,6 +150,7 @@ export class MappingEditor {
     return `M${a.x},${a.y} C${a.x + d},${a.y} ${b.x - d},${b.y} ${b.x},${b.y}`;
   }
   update() {
+    if (this.sourceKnob) this.sourceKnob.setValue(this.store.document.params[this.sourceKnobId]);
     if (
       this.selected &&
       !this.store.document.routes.some((r) => r.id === this.selected)
@@ -239,6 +242,7 @@ export class MappingEditor {
     }
   }
   renderDetails() {
+    this.sourceKnob = null;
     this.details.replaceChildren();
     const route = this.store.document.routes.find(
       (r) => r.id === this.selected,
@@ -265,51 +269,21 @@ export class MappingEditor {
     description.className = "connection-description";
     description.textContent = target.description;
     this.details.append(eyebrow, title, description);
-    const audition = document.createElement("div");
-    audition.className = "route-control";
-    const auditionLabel = document.createElement("label");
-    auditionLabel.htmlFor = "route-source-value";
-    auditionLabel.textContent = `Source / ${source.label}`;
-    const auditionOutput = document.createElement("output");
-    auditionOutput.htmlFor = "route-source-value";
-    const auditionValue = this.store.document.params[source.id];
-    auditionOutput.textContent = formatValue(source.id, auditionValue);
-    const auditionRow = document.createElement("div");
-    auditionRow.className = "control-label";
-    auditionRow.append(auditionLabel, auditionOutput);
-    const auditionInput = document.createElement("input");
-    auditionInput.type = "range";
-    auditionInput.id = "route-source-value";
-    auditionInput.min = 0;
-    auditionInput.max = 1000;
-    auditionInput.step = 1;
-    auditionInput.value = normalize(source.id, auditionValue) * 1000;
-    auditionInput.style.setProperty(
-      "--fill",
-      `${normalize(source.id, auditionValue) * 100}%`,
-    );
-    auditionInput.setAttribute(
-      "aria-valuetext",
-      formatValue(source.id, auditionValue),
-    );
-    auditionInput.addEventListener("input", () => {
-      const value = denormalize(source.id, Number(auditionInput.value) / 1000);
-      auditionOutput.textContent = formatValue(source.id, value);
-      auditionInput.setAttribute(
-        "aria-valuetext",
-        formatValue(source.id, value),
-      );
-      auditionInput.style.setProperty(
-        "--fill",
-        `${Number(auditionInput.value) / 10}%`,
-      );
-      this.store.edit((doc) => {
-        doc.params[source.id] = value;
-      }, "parameter");
+    this.sourceKnobId = source.id;
+    this.sourceKnob = new Knob({
+      id: "route-source-value", label: `Source / ${source.label}`, min: source.min, max: source.max,
+      value: this.store.document.params[source.id], unit: source.unit,
+      format: value => formatValue(source.id, value), normalize: value => normalize(source.id, value),
+      denormalize: n => denormalize(source.id, n), reset: () => this.store.initial.params[source.id],
+      constrain: value => {
+        value = Math.max(source.min, Math.min(source.max, value));
+        if (source.id === "waveTable") return Math.round(value);
+        return ["cutoff", "cutoffLow"].includes(source.id) ? constrainCutoff(this.store.document.params, source.id, value) : value;
+      },
+      onInput: value => this.store.edit(doc => { doc.params[source.id] = value; }, "parameter"),
+      onCommit: () => this.store.commit(),
     });
-    auditionInput.addEventListener("change", () => this.store.commit());
-    audition.append(auditionRow, auditionInput);
-    this.details.append(audition);
+    this.details.append(this.sourceKnob.element);
     for (const spec of [
       {
         key: "amount",
@@ -336,43 +310,14 @@ export class MappingEditor {
         format: (v) => `${Math.round(v * 1000)} ms`,
       },
     ]) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "route-control";
-      const row = document.createElement("div");
-      row.className = "control-label";
-      const label = document.createElement("label");
-      label.htmlFor = `route-${spec.key}`;
-      label.textContent = spec.label;
-      const output = document.createElement("output");
-      output.htmlFor = `route-${spec.key}`;
-      output.textContent = spec.format(route[spec.key]);
-      const input = document.createElement("input");
-      input.type = "range";
-      input.id = `route-${spec.key}`;
-      input.min = spec.min;
-      input.max = spec.max;
-      input.step = spec.step;
-      input.value = route[spec.key];
-      input.style.setProperty(
-        "--fill",
-        `${((route[spec.key] - spec.min) / (spec.max - spec.min)) * 100}%`,
-      );
-      row.append(label, output);
-      wrapper.append(row, input);
-      this.details.append(wrapper);
-      input.addEventListener("input", () => {
-        const value = Number(input.value);
-        output.textContent = spec.format(value);
-        input.style.setProperty(
-          "--fill",
-          `${((value - spec.min) / (spec.max - spec.min)) * 100}%`,
-        );
-        this.store.edit((doc) => {
-          const r = doc.routes.find((r) => r.id === this.selected);
-          if (r) r[spec.key] = value;
-        }, "route-adjust");
+      const knob = new Knob({ id: `route-${spec.key}`, label: spec.label, min: spec.min, max: spec.max,
+        value: route[spec.key], format: spec.format, unit: spec.key === "smoothing" ? "s" : "",
+        reset: () => ({ amount: 1, curve: 1, smoothing: 0.08 })[spec.key],
+        onInput: value => this.store.edit(doc => {
+          const current = doc.routes.find(r => r.id === this.selected); if (current) current[spec.key] = value;
+        }, "route-adjust"), onCommit: () => this.store.commit(),
       });
-      input.addEventListener("change", () => this.store.commit());
+      this.details.append(knob.element);
     }
     const invert = document.createElement("div");
     invert.className = "route-invert";

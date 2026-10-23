@@ -1,3 +1,5 @@
+import { wavetablePartial } from '../oscillator/wavetable.js';
+export { harmonicAmplitude } from '../oscillator/wavetable.js';
 // Shared audio/visual transfer model. Resonance uses Web Audio low/high-pass Q
 // in dB: https://www.w3.org/TR/webaudio-1.0/#filters-characteristics
 export const FILTER_MIN = 20;
@@ -52,8 +54,6 @@ export function createFilterResponse(params, sampleRate = 48000) {
     responseMagnitude(low, frequency, sampleRate) *
     responseMagnitude(high, frequency, sampleRate);
 }
-export const harmonicAmplitude = (h, amount) =>
-  h === 1 ? 1 : amount / h ** (1.1 + (1 - amount) * 1.5);
 
 // Individual low partials and grouped higher partials keep the form readable.
 // Every synthesized harmonic belongs to exactly one fixed frequency band.
@@ -75,7 +75,7 @@ export function bandAmplitude(band, params, response) {
   let before = 0,
     after = 0;
   for (const h of band.partials) {
-    const amplitude = harmonicAmplitude(h, params.harmonics);
+    const amplitude = wavetablePartial(h, params);
     before += amplitude * amplitude;
     after += (amplitude * response(params.pitch * h)) ** 2;
   }

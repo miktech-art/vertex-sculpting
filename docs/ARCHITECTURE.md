@@ -4,9 +4,10 @@
 
 - `model.js`: parameter ranges, physical units, factory preset, validation, and visual mappings.
 - `state.js`: current document, saved and deleted sounds, persistence, and undo/redo.
-- `audio/`: native Web Audio synthesis, effects, live envelope editing, and offline WAV rendering.
+- `audio/`: native Web Audio synthesis, effects, live envelope editing, and offline WAV rendering. Active wavetable edits update PeriodicWave coefficients without restarting voices.
+- `oscillator/wavetable.js`: shared Fourier-frame interpolation for the audio oscillator, waveform display, and sculpture spectrum. Native PeriodicWave playback handles frequency band limiting. Optional waveTable and wavePosition fields default to the legacy spectrum during preset validation.
 - `visual/`: deterministic geometry generated from the sound and its mappings; canvas rendering and temporal echoes.
-- `ui/`: envelope, filter-band, slider, and connection controls.
+- `ui/`: a shared accessible knob control, envelope and connection editors, and the wavetable display. Knobs commit one undo step per drag and preserve live parameter updates.
 
 Both views share one document. Sculpt's localStorage key remains `sound-form:session:v1`; preset schema and library IDs remain compatible. No accounts or backend library are required. Files can be exported and imported as JSON; rendering to WAV runs in the browser.
 

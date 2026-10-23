@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { installPlayOnceShortcut } from "../apps/sculpt/src/ui/play-once.js";
 
-test("Space plays once from buttons and sliders, suppresses native activation and ignores key repeat", () => {
+test("Space plays once from buttons and knobs, suppresses native activation and ignores key repeat", () => {
   let listener, calls = 0;
   installPlayOnceShortcut({ addEventListener(type, fn, capture) { assert.equal(type, "keydown"); assert.equal(capture, true); listener = fn; } }, () => calls++, () => false);
-  for (const kind of ["button", "range"]) {
+  for (const kind of ["button", "knob"]) {
     let prevented = 0, stopped = 0;
     const event = { code: "Space", target: { matches: () => false }, preventDefault() { prevented++; }, stopPropagation() { stopped++; } };
     listener(event);

@@ -1,5 +1,6 @@
+import { wavetableCoefficients } from '../oscillator/wavetable.js';
 import { delayFeedback } from "../delay.js";
-import { filterSettings, harmonicAmplitude } from "../spectral/filter.js";
+import { filterSettings } from "../spectral/filter.js";
 import { duration, tailDuration, clamp } from "../model.js";
 import { voiceEnvelopeAt, futureEnvelope } from "./live-envelope.js";
 
@@ -71,13 +72,10 @@ export class NativeAudioEngine {
       this.impulses.delete(this.impulses.keys().next().value);
     return buffer;
   }
-  wave(amount) {
-    const key = amount.toFixed(3);
+  wave(amount, position = 0, table = 0) {
+    const key = `${amount.toFixed(3)}:${position.toFixed(3)}:${table}`;
     if (this.waves.has(key)) return this.waves.get(key);
-    const real = new Float32Array(97),
-      imag = new Float32Array(97);
-    imag[1] = 1;
-    for (let h = 2; h < 97; h++) imag[h] = harmonicAmplitude(h, amount);
+    const { real, imag } = wavetableCoefficients({ harmonics: amount, wavePosition: position, waveTable: table });
     const wave = this.context.createPeriodicWave(real, imag);
     this.waves.set(key, wave);
     if (this.waves.size > 32) this.waves.delete(this.waves.keys().next().value);
@@ -143,7 +141,7 @@ export class NativeAudioEngine {
     v.output.gain.value = 0.52;
     v.level.gain.value = p.volume;
     v.amp.gain.value = 1 - p.motion / 2;
-    const wave = this.wave(p.harmonics);
+    const wave = this.wave(p.harmonics, p.wavePosition, p.waveTable);
     for (let i = 0; i < 2; i++) {
       const sign = i ? 1 : -1,
         osc = own(c.createOscillator()),
@@ -352,8 +350,8 @@ export class NativeAudioEngine {
       if (changed("pitch"))
         for (const osc of v.pitchedSources)
           osc.frequency.setTargetAtTime(params.pitch, now, 0.03);
-      if (changed("harmonics")) {
-        const wave = this.wave(params.harmonics);
+      if (["harmonics", "wavePosition", "waveTable"].some(changed)) {
+        const wave = this.wave(params.harmonics, params.wavePosition, params.waveTable);
         for (const osc of v.pitchedSources) osc.setPeriodicWave(wave);
       }
       for (const tone of v.tones) {

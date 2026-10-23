@@ -1,3 +1,4 @@
+import { WAVETABLES } from './oscillator/wavetable.js';
 import { delayEchoes } from "./delay.js";
 
 // Sound definitions are independent of UI, renderer, and audio backend.
@@ -232,6 +233,8 @@ export const PARAMETERS = [
     unit: "s",
     description: "Duration of the reverberant decay.",
   },
+  { id: "wavePosition", label: "Position", group: "oscillator", min: 0, max: 1, value: 0, unit: "%", description: "Morph continuously through the selected wavetable." },
+  { id: "waveTable", label: "Wavetable", group: "oscillator", min: 0, max: 2, value: 0, unit: "", description: "Choose Basic shapes, Hollow, or Formant." },
 ];
 export const PARAM_BY_ID = Object.fromEntries(PARAMETERS.map((p) => [p.id, p]));
 export const BASE = Object.freeze(
@@ -422,6 +425,7 @@ export function denormalize(id, n) {
 }
 export function formatValue(id, value) {
   const p = PARAM_BY_ID[id];
+  if (id === "waveTable") return WAVETABLES[Math.round(value)];
   if (id === "rate") return `${value.toFixed(1)} Hz`;
   if (p.unit === "%") return `${Math.round(value * 100)}%`;
   if (p.unit === "s")
@@ -491,11 +495,13 @@ export function validateDocument(input) {
   const legacyFilter = !Object.hasOwn(input.params, "cutoffLow");
   const params = {};
   for (const p of PARAMETERS) {
-    const v = p.id === "cutoffLow" && legacyFilter ? 20 : input.params[p.id];
+    const v = p.id === "cutoffLow" && legacyFilter ? 20 :
+      ["wavePosition", "waveTable"].includes(p.id) && !Object.hasOwn(input.params, p.id) ? p.value : input.params[p.id];
     if (typeof v !== "number" || !Number.isFinite(v) || v < p.min || v > p.max)
       throw new Error(`Invalid ${p.label.toLowerCase()} value.`);
     params[p.id] = v;
   }
+  if (!Number.isInteger(params.waveTable)) throw new Error("Invalid wavetable selection.");
   if (params.cutoffLow > params.cutoff)
     throw new Error("Low cutoff must not exceed high cutoff.");
   const routes = input.routes.map((r, i) => {

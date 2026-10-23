@@ -1,6 +1,8 @@
 import { installPlayOnceShortcut } from "./ui/play-once.js";
-import { installLiveRange } from "./ui/live-range.js";
-import { FilterRange, constrainCutoff } from "./ui/filter-range.js";
+import { Knob } from "./ui/knob.js";
+import { WavetableView } from "./ui/wavetable.js";
+import { WAVETABLES } from "./oscillator/wavetable.js";
+import { constrainCutoff } from "./ui/filter-range.js";
 import {
   BASE,
   PARAMETERS,
@@ -48,7 +50,14 @@ let mode = "sculpt",
   toastTimer = null,
   frameTime = 0;
 const inputs = new Map();
-let filterRange = null;
+const wavetable = new WavetableView($("#wavetable-canvas"), value => {
+  store.edit(doc => { doc.params.wavePosition = value; }, "parameter");
+}, () => store.commit());
+const tableSelect = $("#wavetable-select");
+WAVETABLES.forEach((label, i) => tableSelect.add(new Option(label, String(i))));
+tableSelect.addEventListener("change", () => store.transaction(doc => { doc.params.waveTable = Number(tableSelect.value); }, "parameter"));
+const positionKnob = parameterKnob(PARAMETERS.find(p => p.id === "wavePosition"));
+$("#wavetable-position").append(positionKnob.element);
 function toast(message, action) {
   $("#toast").textContent = message;
   if (action) {
@@ -62,97 +71,30 @@ function toast(message, action) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), action ? 9000 : 3600);
 }
+function parameterKnob(p) {
+  return new Knob({ id: `param-${p.id}`, label: p.label, min: p.min, max: p.max,
+    unit: p.unit, value: store.document.params[p.id], format: value => formatValue(p.id, value),
+    normalize: value => normalize(p.id, value), denormalize: n => denormalize(p.id, n),
+    constrain: value => {
+      value = Math.max(p.min, Math.min(p.max, value));
+      return ["cutoff", "cutoffLow"].includes(p.id) ? constrainCutoff(store.document.params, p.id, value) : value;
+    },
+    reset: () => store.initial.params[p.id],
+    onInput: value => { store.edit(doc => { doc.params[p.id] = value; }, "parameter"); $("#parameter-note").textContent = p.description; },
+    onCommit: () => store.commit(),
+  });
+}
 function makeControls() {
-  const container = $("#parameter-controls");
-  container.replaceChildren();
-  inputs.clear();
-  filterRange = null;
-  for (const p of PARAMETERS.filter((p) => p.group === group)) {
-    if (p.id === "cutoffLow") continue;
-    if (p.id === "cutoff") {
-      filterRange = new FilterRange({
-        onEdit: (id, value) =>
-          store.edit((doc) => {
-            doc.params[id] = value;
-          }, "parameter"),
-        onCommit: () => store.commit(),
-        onReset: (id) =>
-          store.transaction((doc) => {
-            doc.params[id] = constrainCutoff(
-              doc.params,
-              id,
-              store.initial.params[id],
-            );
-          }, "parameter"),
-      });
-      filterRange.update(store.document.params);
-      container.append(filterRange.element);
-      continue;
-    }
-    const wrapper = document.createElement("div");
-    wrapper.className = "parameter-control";
-    const row = document.createElement("div");
-    row.className = "control-label";
-    const label = document.createElement("label");
-    label.htmlFor = `param-${p.id}`;
-    label.textContent = p.label;
-    const output = document.createElement("output");
-    output.htmlFor = `param-${p.id}`;
-    const input = document.createElement("input");
-    input.type = "range";
-    input.id = `param-${p.id}`;
-    input.min = 0;
-    input.max = 1000;
-    input.step = 1;
-    installLiveRange(input);
-    input.setAttribute("aria-label", p.label);
-    input.title = p.description;
-    const ends = document.createElement("div");
-    ends.className = "range-ends";
-    const low = document.createElement("span"),
-      high = document.createElement("span");
-    low.textContent = formatValue(p.id, p.min);
-    high.textContent = formatValue(p.id, p.max);
-    ends.append(low, high);
-    row.append(label, output);
-    wrapper.append(row, input, ends);
-    container.append(wrapper);
-    inputs.set(p.id, { input, output, wrapper });
-    input.addEventListener("input", () => {
-      const value = denormalize(p.id, Number(input.value) / 1000);
-      store.edit((doc) => {
-        doc.params[p.id] = value;
-      }, "parameter");
-      wrapper.classList.add("active");
-      $("#parameter-note").textContent = p.description;
-    });
-    input.addEventListener("change", () => {
-      store.commit();
-      wrapper.classList.remove("active");
-    });
-    input.addEventListener("focus", () => {
-      $("#parameter-note").textContent = p.description;
-    });
-    input.addEventListener("pointerenter", () => {
-      $("#parameter-note").textContent = p.description;
-    });
-    input.addEventListener("dblclick", () => {
-      store.transaction((doc) => {
-        doc.params[p.id] = store.initial.params[p.id];
-      }, "parameter");
-    });
+  const container = $("#parameter-controls"); container.replaceChildren(); inputs.clear();
+  for (const p of PARAMETERS.filter(p => p.group === group)) {
+    const knob = parameterKnob(p); container.append(knob.element); inputs.set(p.id, knob);
   }
 }
 function syncControls() {
-  filterRange?.update(store.document.params);
-  for (const [id, { input, output }] of inputs) {
-    const value = store.document.params[id],
-      n = normalize(id, value);
-    input.value = n * 1000;
-    input.style.setProperty("--fill", `${n * 100}%`);
-    input.setAttribute("aria-valuetext", formatValue(id, value));
-    output.textContent = formatValue(id, value);
-  }
+  for (const [id, knob] of inputs) knob.setValue(store.document.params[id]);
+  positionKnob.setValue(store.document.params.wavePosition);
+  tableSelect.value = String(store.document.params.waveTable);
+  wavetable.update(store.document.params);
 }
 const thumbnailPaths = {
   saw: "M4 16 Q30 1 60 7 T116 16 M4 16 Q30 31 60 25 T116 16 M4 16 Q60 5 116 16 M4 16 Q60 27 116 16 M4 16H116",

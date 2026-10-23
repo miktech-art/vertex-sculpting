@@ -385,3 +385,14 @@ test("editing effects during a loop tail neither restarts ended envelopes nor ke
   assert.ok(voice.delay.wet.connections.includes(voice.level));
   engine.disposeVoice(voice);
 });
+
+test('wavetable changes update active oscillators without replacing their voices or pitch', async () => {
+  const engine = new NativeAudioEngine(), voice = await engine.trigger({...PRESETS[0].params});
+  const sources=[...voice.pitchedSources], original=sources[0].wave.imag.slice();
+  engine.update({...voice.params,waveTable:2,wavePosition:.6});
+  assert.deepEqual(voice.pitchedSources,sources);
+  assert.notDeepEqual(sources[0].wave.imag,original);
+  assert.ok(sources.every(source=>source.startTime===voice.start));
+  assert.ok(sources.every(source=>source.frequency.events.length===0));
+  engine.disposeVoice(voice);
+});
