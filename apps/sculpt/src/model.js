@@ -1,4 +1,4 @@
-import {validateLfos,egTargetLimit,validEgTarget} from "./lfo.js";
+import {validateLfos,egTargetLimit,validEgTarget,normalizeAssignments} from "./lfo.js";
 import { WAVETABLES } from './oscillator/wavetable.js';
 import { delayEchoes } from "./delay.js";
 
@@ -443,6 +443,7 @@ export function formatValue(id, value) {
 export const duration = (p) => p.attack + p.decay + p.hold + p.release;
 export function envelopeAt(p, t) {
   if (t < 0) return 0;
+  if (p.envelopeEnabled === false) return clamp((duration(p)-t)/.01);
   if (t < p.attack) return t / p.attack;
   t -= p.attack;
   if (t < p.decay) return 1 - ((1 - p.sustain) * t) / p.decay;
@@ -509,6 +510,7 @@ export function validateDocument(input) {
       const limit=egTargetLimit(env.target);
       if(!Number.isFinite(env.amount)||Math.abs(env.amount)>limit)throw new Error('Invalid envelope depth.');
       const result={target:env.target,amount:env.amount};
+      if(env.enabled!==undefined){if(typeof env.enabled!=='boolean')throw new Error('Invalid EG power state.');result.enabled=env.enabled;}
       for(const id of ['attack','decay','sustain','hold','release']){
         const p=PARAM_BY_ID[id],value=env[id];
         if(!Number.isFinite(value)||value<p.min||value>p.max)throw new Error('Invalid envelope stage.');
@@ -522,10 +524,12 @@ export function validateDocument(input) {
     if(!validEgTarget(target)||!Number.isFinite(amount)||Math.abs(amount)>egTargetLimit(target))throw new Error('Invalid first envelope routing.');
     params.envelopeTarget=target;params.envelopeAmount=amount;
   }
+  if(input.params.envelopeEnabled!==undefined){if(typeof input.params.envelopeEnabled!=='boolean')throw new Error('Invalid EG power state.');params.envelopeEnabled=input.params.envelopeEnabled;}
   if(input.params.lfos!==undefined)params.lfos=validateLfos(input.params.lfos);
   for(const env of [...(params.envelopes||[]),{target:params.envelopeTarget||'amplitude'}]){
     if(env.target.startsWith('lfo')&&Number(env.target.split(':')[1])>=(params.lfos?.length??1))throw new Error('Envelope refers to a missing LFO.');
   }
+  normalizeAssignments(params);
   if (!Number.isInteger(params.waveTable)) throw new Error("Invalid wavetable selection.");
   if (params.cutoffLow > params.cutoff)
     throw new Error("Low cutoff must not exceed high cutoff.");

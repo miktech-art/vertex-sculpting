@@ -11,12 +11,12 @@ test('extra envelopes survive public preset round trips and legacy presets stay 
     assert.throws(()=>validateDocument({...doc,params:{...doc.params,envelopes:[invalid]}}));
   }
 });
-test('envelopes add in semitones, position and octaves and respect parameter limits',()=>{
+test('envelopes modulate semitones, position and octaves with one instance per destination',()=>{
   let p={...BASE,envelopes:[env]};
   assert.equal(modulatedParams(p,env.attack).pitch,BASE.pitch*2);
   p.envelopes=[{...env,target:'wavePosition',amount:1}];assert.equal(modulatedParams(p,env.attack).wavePosition,1);
   p.envelopes=[{...env,target:'cutoff',amount:-2}];assert.equal(modulatedParams(p,env.attack).cutoff,BASE.cutoff/4);
-  p.envelopes=[env,env];assert.equal(modulatedParams(p,env.attack).pitch,BASE.pitch*4);
+  p.envelopes=[env,env];assert.equal(modulatedParams(p,env.attack).pitch,BASE.pitch*2);
 });
 test('held envelopes sustain and release from their own current level at note-off',()=>{
   assert.equal(envelopeValue(env,5,{held:true}),env.sustain);
@@ -49,7 +49,7 @@ test('EGs modulate a chosen LFO rate and depth while other instances remain inde
   assert.ok(Math.abs(modulatedParams(depth,.25).pitch-BASE.pitch*2)<1e-8);
 });
 test('LFO instances and EG-to-LFO routes survive preset round trips and reject invalid inputs',()=>{
-  const doc=makeDocument();doc.params.lfos=[defaultLfo(),{...defaultLfo(),shape:5,amount:4}];
+  const doc=makeDocument();doc.params.lfos=[defaultLfo(),{...defaultLfo(),shape:5,amount:4,target:'cutoff'}];
   doc.params.envelopes=[{...env,target:'lfoDepth:1',amount:.5}];
   assert.deepEqual(validateDocument(doc).params.lfos,doc.params.lfos);
   assert.deepEqual(validateDocument(doc).params.envelopes,doc.params.envelopes);
@@ -69,7 +69,7 @@ test('the first EG can use the same modulation destinations and round-trips its 
   assert.equal(validateDocument(doc).params.envelopeTarget,'pitch');
   assert.equal(validateDocument(doc).params.envelopeAmount,12);
   assert.ok(Math.abs(modulatedParams(p,p.attack).pitch-BASE.pitch*2)<1e-8);
-  const amplitude={...BASE,envelopes:[{...env,target:'amplitude',amount:1}]};
+  const amplitude={...BASE,envelopeTarget:'none',envelopeAmount:0,envelopes:[{...env,target:'amplitude',amount:1}]};
   assert.equal(modulatedParams(amplitude,0).amplitude,0);
   assert.ok(Math.abs(modulatedParams(amplitude,env.attack).amplitude-BASE.volume)<1e-10);
 });

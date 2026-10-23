@@ -1,7 +1,7 @@
 import {routeSelect} from "./route-select.js";
 import {Knob} from './knob.js';
 import {TableSelect} from './table-select.js';
-import {defaultLfo,getLfos,LFO_SHAPES,lfoWave,MOD_LIMITS} from '../lfo.js';
+import {defaultLfo,getLfos,LFO_SHAPES,lfoWave,MOD_LIMITS,lfoDestinations,availableDestinations} from '../lfo.js';
 export class LfoPanel {
   constructor({onEdit,onAdd,onCommit}){
     Object.assign(this,{onEdit,onAdd,onCommit});this.selected=0;this.knobs=new Map();
@@ -11,7 +11,7 @@ export class LfoPanel {
   }
   setParams(params){
     this.params=params;this.lfos=getLfos(params);if(this.selected>=this.lfos.length)this.selected=0;
-    const lfo=this.lfos[this.selected],key=`${this.lfos.length}:${this.selected}:${lfo.target}`;
+    const lfo=this.lfos[this.selected],key=`${this.selected}:${this.lfos.map(l=>`${l.target}:${l.enabled!==false}`).join(",")}`;
     if(key!==this.key){this.key=key;this.build();}
     this.shapes.setValue(lfo.shape);
     for(const [id,knob] of this.knobs)knob.setValue(lfo[id]);
@@ -20,15 +20,19 @@ export class LfoPanel {
   build(){
     const lfo=this.lfos[this.selected],container=document.querySelector('#lfo-selectors');container.replaceChildren();
     for(let i=0;i<this.lfos.length;i++){
-      const b=document.createElement('button');b.className='envelope-selector';b.classList.toggle('selected',i===this.selected);
+      const b=document.createElement('button');b.className='envelope-selector';b.classList.toggle('selected',i===this.selected);b.classList.toggle('enabled',this.lfos[i].enabled!==false);
       b.setAttribute('aria-label',`LFO ${i+1}`);b.setAttribute('aria-pressed',i===this.selected);
       b.addEventListener('click',()=>{this.selected=i;this.setParams(this.params);});container.append(b);
     }
-    const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.setAttribute('aria-label','Add LFO');add.disabled=this.lfos.length>=8;
-    add.addEventListener('click',()=>{this.selected=this.lfos.length;this.onAdd({...defaultLfo(),amount:2});});container.append(add);
+    const free=availableDestinations(lfoDestinations,this.lfos,-1).filter(([target])=>target!=='none');
+    const power=document.querySelector('#lfo-power'),enabled=lfo.enabled!==false;
+    power.setAttribute('aria-label',`Turn ${enabled?'off':'on'} LFO ${this.selected+1}`);power.setAttribute('aria-pressed',enabled);
+    power.onclick=()=>{this.onEdit(this.selected,{enabled:!enabled});this.onCommit();};
+    const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.setAttribute('aria-label','Add LFO');add.disabled=this.lfos.length>=8||!free.length;
+    add.addEventListener('click',()=>{this.selected=this.lfos.length;const target=free[0]?.[0];if(target)this.onAdd({...defaultLfo(),target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5,none:0}[target]});});container.append(add);
     const route=document.querySelector('#lfo-routing');route.replaceChildren();
-    routeSelect(route,{label:'LFO destination',value:lfo.target,options:[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],['amplitude','Amplitude']],onChange:target=>{
-      this.onEdit(this.selected,{target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5}[target]});this.onCommit();
+    routeSelect(route,{label:'LFO destination',value:lfo.target,options:availableDestinations(lfoDestinations,this.lfos,this.selected),onChange:target=>{
+      this.onEdit(this.selected,{target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5,none:0}[target]});this.onCommit();
     }});
     const controls=document.querySelector('#lfo-controls');controls.replaceChildren();this.knobs.clear();
     for(const [id,label,min,max] of [['rate','Rate',.05,30],['amount','Depth',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase','Phase',0,1],['delay','Delay',0,2],['fade','Fade',0,3],['offset','Offset',-1,1]]){

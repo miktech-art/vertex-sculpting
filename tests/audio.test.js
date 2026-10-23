@@ -456,3 +456,30 @@ test('LFOs keep scheduling through held notes and stop refreshing after gate-off
   assert.equal(voice.modulationTask,null);assert.equal(voice.held,false);
   engine.disposeVoice(voice);assert.equal(voice.tasks.size,0);
 });
+
+test('switching an LFO off restores running pitch and amplitude automation without retriggering',async()=>{
+  for(const target of ['pitch','amplitude']){
+    const engine=new NativeAudioEngine();
+    const lfo={shape:0,target,rate:2,amount:target==='pitch'?12:1,phase:0,delay:0,fade:0,offset:0};
+    const voice=await engine.trigger({...BASE,lfos:[lfo]},{held:true});
+    engine.context.currentTime=voice.start+.2;
+    engine.update({...voice.params,lfos:[{...lfo,enabled:false}]});
+    const values=(target==='pitch'?voice.tones[0].osc.frequency:voice.level.gain).events.at(-1).values;
+    const expected=target==='pitch'?BASE.pitch:BASE.volume;
+    assert.ok(values.every(value=>Math.abs(value-expected)<1e-7));
+    assert.equal(voice.modulationTask,null);assert.equal(engine.voices.size,1);
+    engine.disposeVoice(voice);
+  }
+});
+test('the primary EG can be bypassed and restored on a held voice without restarting it',async()=>{
+  const engine=new NativeAudioEngine(),voice=await engine.trigger({...BASE,envelopeEnabled:false},{held:true});
+  assert.deepEqual(voice.envelope.gain.events,[{type:'set',value:1,time:voice.start}]);
+  engine.context.currentTime=voice.start+1;
+  engine.update(BASE);
+  assert.equal(voice.params.envelopeEnabled,undefined);
+  assert.equal(voice.envelope.gain.events.at(-1).value,BASE.sustain);
+  engine.update({...BASE,envelopeEnabled:false});
+  assert.equal(voice.envelope.gain.events.at(-1).value,1);
+  engine.release(voice);assert.equal(voice.envelope.gain.events.at(-1).value,0);
+  assert.equal(engine.voices.size,1);engine.disposeVoice(voice);
+});

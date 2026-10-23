@@ -1,5 +1,5 @@
 export const LFO_SHAPES=['Sine','Triangle','Saw up','Saw down','Square','Sample & hold'];
-export const MOD_LIMITS={pitch:48,wavePosition:1,cutoff:8,amplitude:1};
+export const MOD_LIMITS={pitch:48,wavePosition:1,cutoff:8,amplitude:1,none:48};
 export const defaultLfo=()=>({shape:0,target:'pitch',rate:1,amount:0,phase:0,delay:0,fade:0,offset:0});
 export const getLfos=p=>p.lfos||[defaultLfo()];
 export function lfoWave(shape,phase){
@@ -17,6 +17,7 @@ export function validateLfos(value){
   return value.map(lfo=>{
     if(!lfo||!Object.hasOwn(MOD_LIMITS,lfo.target))throw new Error('Invalid LFO destination.');
     const result={target:lfo.target};
+    if(lfo.enabled!==undefined){if(typeof lfo.enabled!=='boolean')throw new Error('Invalid LFO power state.');result.enabled=lfo.enabled;}
     for(const [key,min,max] of [['shape',0,5],['rate',.05,30],['amount',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase',0,1],['delay',0,2],['fade',0,3],['offset',-1,1]]){
       const n=lfo[key];if(!Number.isFinite(n)||n<min||n>max||(key==='shape'&&!Number.isInteger(n)))throw new Error(`Invalid LFO ${key}.`);
       result[key]=n;
@@ -25,6 +26,29 @@ export function validateLfos(value){
   });
 }
 
-export const modulationEnvelopes=params=>params.envelopeTarget&&params.envelopeTarget!=='amplitude'
-  ?[{...params,target:params.envelopeTarget,amount:params.envelopeAmount??0},...(params.envelopes||[])]:params.envelopes||[];
+export const modulationEnvelopes=params=>exclusiveInstances([
+  {...params,target:params.envelopeTarget||'amplitude',amount:params.envelopeAmount??0,enabled:params.envelopeEnabled!==false},...(params.envelopes||[])
+]).filter((env,index)=>env.enabled!==false&&env.target!=='none'&&!(index===0&&env.target==='amplitude'));
 export const validEgTarget=target=>typeof target==='string'&&(Object.hasOwn(MOD_LIMITS,target)||/^lfo(?:Rate|Depth):[0-7]$/.test(target));
+
+export const egDestinations=params=>[['amplitude','Amplitude'],['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],...getLfos(params).flatMap((_,i)=>[[`lfoRate:${i}`,`LFO ${i+1} rate`],[`lfoDepth:${i}`,`LFO ${i+1} depth`]])];
+export const lfoDestinations=[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],['amplitude','Amplitude']];
+export const envelopeInstances=params=>[{target:params.envelopeTarget||'amplitude',enabled:params.envelopeEnabled!==false},...(params.envelopes||[])];
+export function availableDestinations(options,instances,index){
+  const used=new Set(instances.filter((_,i)=>i!==index).map(i=>i.target).filter(t=>t!=='none'));
+  return [['none','Unassigned'],...options.filter(([target])=>!used.has(target))];
+}
+// Keep legacy instance settings and indices while freeing duplicate destinations.
+export function exclusiveInstances(instances){
+  const used=new Set();
+  return instances.map(instance=>{
+    if(instance.target==='none'||used.has(instance.target))return {...instance,target:'none'};
+    used.add(instance.target);return instance;
+  });
+}
+export function normalizeAssignments(params){
+  if(params.envelopes)params.envelopes=exclusiveInstances(envelopeInstances(params)).slice(1);
+  if(params.lfos)params.lfos=exclusiveInstances(params.lfos);
+  return params;
+}
+export const activeLfos=params=>exclusiveInstances(getLfos(params)).map(l=>l.enabled===false?{...l,target:'none'}:l);

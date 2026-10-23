@@ -1,6 +1,6 @@
 import {modulatedParams} from "../audio/modulation.js";
 import {voiceEnvelopeAt} from "../audio/live-envelope.js";
-import {getLfos,modulationEnvelopes} from "../lfo.js";
+import {getLfos,modulationEnvelopes,activeLfos} from "../lfo.js";
 import { buildNoiseTexture, buildReverbGlow } from "./texture.js";
 import { ridgeDecibels, ridgeStrength } from "../spectral/ridges.js";
 import { buildEchoLayout, presentProgress, timeTickStep } from "./echoes.js";
@@ -37,6 +37,7 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
   const response = createFilterResponse(params, sampleRate);
   const toneGain = 1 - params.noise;
   const contour = {
+    ...(params.envelopeEnabled===false?{envelopeEnabled:false}:{}),
     attack: denormalize("attack", m.onset),
     decay: denormalize("decay", m.decayShape),
     sustain: m.plateau,
@@ -48,7 +49,7 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
     body = m.body * 100 + m.twist * 15 + m.spread * 14,
     twist = m.twist * 3.6,
     spread = m.spread * 34;
-  const modulated=getLfos(params).some(l=>l.amount!==0)||modulationEnvelopes(params).some(e=>e.amount!==0);
+  const modulated=activeLfos(params).some(l=>l.target!=='none'&&l.amount!==0)||modulationEnvelopes(params).some(e=>e.amount!==0);
   const maxRate=Math.max(...getLfos(params).map(l=>l.rate),modulationEnvelopes(params).some(e=>e.amount!==0&&e.target.startsWith('lfoRate:'))?100:0);
   const points = modulated?Math.max(121,Math.min(2049,Math.ceil(total*maxRate*16)+1)):121;
   const baseMappings=modulated?resolveMappings(params,routes):null;
@@ -421,7 +422,7 @@ export class SculptureRenderer {
     const dt = this.lastFrame ? Math.min(0.1, now - this.lastFrame) : 0.016;
     this.lastFrame = now;
     const doc=this.compare||this.document,last=this.events.at(-1);
-    const active=doc&&(getLfos(doc.params).some(l=>l.amount!==0)||modulationEnvelopes(doc.params).some(e=>e.amount!==0));
+    const active=doc&&(activeLfos(doc.params).some(l=>l.target!=='none'&&l.amount!==0)||modulationEnvelopes(doc.params).some(e=>e.amount!==0));
     const state=active&&last&&now>=last.start?last:null;
     const windowDuration=this.geometry?.echoLayout.duration||duration(doc?.params||BASE);
     const timeOffset=state?.held?Math.floor((now-state.start)/windowDuration)*windowDuration:0;

@@ -1,6 +1,6 @@
 import {routeSelect} from "./ui/route-select.js";
 import {LfoPanel} from "./ui/lfo.js";
-import {getLfos,egTargetLimit} from "./lfo.js";
+import {getLfos,egTargetLimit,egDestinations,envelopeInstances,availableDestinations} from "./lfo.js";
 import { soundPreview } from "./ui/sound-preview.js";
 import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
@@ -85,37 +85,41 @@ function toast(message, action) {
 }
 const envelopeStages=['attack','decay','sustain','hold','release'];
 function selectedParams(params=store.document.params){
-  return selectedEnvelope>0?{...params,...params.envelopes?.[selectedEnvelope-1]}:params;
+  return selectedEnvelope>0?{...params,...params.envelopes?.[selectedEnvelope-1],envelopeEnabled:params.envelopes?.[selectedEnvelope-1]?.enabled!==false}:params;
 }
 function editSelectedEnvelope(changes){
   store.edit(doc=>{
     if(selectedEnvelope>0&&doc.params.envelopes?.[selectedEnvelope-1])Object.assign(doc.params.envelopes[selectedEnvelope-1],changes);
-    else {const {target,amount,...stages}=changes;Object.assign(doc.params,stages);if(target!==undefined)doc.params.envelopeTarget=target;if(amount!==undefined)doc.params.envelopeAmount=amount;}
-  },'parameter');
+    else {const {target,amount,enabled,...stages}=changes;Object.assign(doc.params,stages);if(enabled!==undefined)doc.params.envelopeEnabled=enabled;if(target!==undefined)doc.params.envelopeTarget=target;if(amount!==undefined)doc.params.envelopeAmount=amount;}
+  },Object.hasOwn(changes,'enabled')?'envelopes':'parameter');
 }
 function renderEnvelopeSelectors(){
   const params=store.document.params,envs=params.envelopes||[];
   if(selectedEnvelope>envs.length)selectedEnvelope=0;
+  const instances=envelopeInstances(params),destinations=egDestinations(params),free=availableDestinations(destinations,instances,-1).filter(([target])=>target!=='none');
   const container=$('#envelope-selectors');container.replaceChildren();
   for(let i=0;i<=envs.length;i++){
     const b=document.createElement('button');b.className='envelope-selector';
-    b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
+    b.classList.toggle('enabled',instances[i].enabled!==false);b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
     b.setAttribute('aria-label',i===0?'Envelope 1':`Envelope ${i+1}`);
     b.title=i===0?`Envelope 1: ${params.envelopeTarget||'amplitude'}`:`Envelope ${i+1}: ${envs[i-1].target}`;
     b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});container.append(b);
   }
-  const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8;
+  const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8||!free.length;
   add.addEventListener('click',()=>{
+    const target=free[0]?.[0];if(!target)return;
     selectedEnvelope=envs.length+1;
-    store.edit(doc=>{doc.params.envelopes=[...(doc.params.envelopes||[]),{target:'pitch',amount:12,attack:.01,decay:.2,sustain:0,hold:.3,release:.15}];},'envelopes');
+    store.edit(doc=>{doc.params.envelopes=[...(doc.params.envelopes||[]),{target,amount:target.startsWith('lfoRate:')?2:target.startsWith('lfoDepth:')?.25:({amplitude:1,pitch:12,wavePosition:.5,cutoff:2}[target]??0),attack:.01,decay:.2,sustain:0,hold:.3,release:.15}];},'envelopes');
     store.commit();
   });container.append(add);
   const route=$('#envelope-routing');route.replaceChildren();
   const depthSlot=$('#envelope-depth-slot');depthSlot.replaceChildren();
   const env=envs[selectedEnvelope-1]||{target:params.envelopeTarget||'amplitude',amount:params.envelopeAmount??0};
-  const destinations=[['amplitude','Amplitude'],['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],...getLfos(params).flatMap((_,i)=>[[`lfoRate:${i}`,`LFO ${i+1} rate`],[`lfoDepth:${i}`,`LFO ${i+1} depth`]])];
-  routeSelect(route,{label:'Envelope destination',options:destinations,value:env.target,onChange:target=>{
-    editSelectedEnvelope({target,amount:target.startsWith('lfoRate:')?2:target.startsWith('lfoDepth:')?.25:{amplitude:1,pitch:12,wavePosition:.5,cutoff:2}[target]});store.commit();renderEnvelopeSelectors();
+  const power=$('#envelope-power'),enabled=instances[selectedEnvelope].enabled!==false;
+  power.setAttribute('aria-label',`Turn ${enabled?'off':'on'} EG ${selectedEnvelope+1}`);power.setAttribute('aria-pressed',enabled);
+  power.onclick=()=>{editSelectedEnvelope({enabled:!enabled});store.commit();};
+  routeSelect(route,{label:'Envelope destination',options:availableDestinations(destinations,instances,selectedEnvelope),value:env.target,onChange:target=>{
+    editSelectedEnvelope({target,amount:target.startsWith('lfoRate:')?2:target.startsWith('lfoDepth:')?.25:({amplitude:1,pitch:12,wavePosition:.5,cutoff:2,none:0}[target]??0)});store.commit();renderEnvelopeSelectors();
   }});
   const limit=egTargetLimit(env.target);
   const depth=new Knob({id:'envelope-depth',label:'Depth',min:-limit,max:limit,value:env.amount,

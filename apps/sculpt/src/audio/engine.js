@@ -159,12 +159,17 @@ export class NativeAudioEngine {
     if (p.delayMix > 0) this.ensureDelay(v, true);
     if (p.reverbMix > 0) this.ensureReverb(v, true);
     const gain = v.envelope.gain;
-    gain.setValueAtTime(0, start);
-    gain.linearRampToValueAtTime(1, start + p.attack);
-    gain.linearRampToValueAtTime(p.sustain, start + p.attack + p.decay);
-    if (!held) {
-      gain.setValueAtTime(p.sustain, start + p.attack + p.decay + p.hold);
-      gain.linearRampToValueAtTime(0, start + duration(p));
+    if(p.envelopeEnabled===false){
+      gain.setValueAtTime(1,start);
+      if(!held){gain.setValueAtTime(1,start+duration(p)-.01);gain.linearRampToValueAtTime(0,start+duration(p));}
+    }else {
+      gain.setValueAtTime(0, start);
+      gain.linearRampToValueAtTime(1, start + p.attack);
+      gain.linearRampToValueAtTime(p.sustain, start + p.attack + p.decay);
+      if (!held) {
+        gain.setValueAtTime(p.sustain, start + p.attack + p.decay + p.hold);
+        gain.linearRampToValueAtTime(0, start + duration(p));
+      }
     }
     scheduleModulation(this,v,start);
     this.voices.add(v);
@@ -328,6 +333,7 @@ export class NativeAudioEngine {
       if (![...new Set([...Object.keys(old),...Object.keys(params)])].some(changed)) continue;
       const sourceAlive = v.held || now < v.start + v.duration;
       const envelopeChanged = [
+        "envelopeEnabled",
         "attack",
         "decay",
         "sustain",
@@ -343,6 +349,7 @@ export class NativeAudioEngine {
       Object.assign(v.params, structuredClone(params));
       if(!params.envelopes)delete v.params.envelopes;
       if(!params.lfos)delete v.params.lfos;
+      if(params.envelopeEnabled===undefined)delete v.params.envelopeEnabled;
       if(!params.envelopeTarget){delete v.params.envelopeTarget;delete v.params.envelopeAmount;}
       if (!sourceAlive)
         for (const id of ["attack", "decay", "sustain", "hold", "release"])

@@ -1811,10 +1811,10 @@ dialog input:not([type]) {
 .envelope-selector { position: relative; width: 24px; height: 20px; min-height: 20px; border: none; border-radius: 0; background: transparent; }
 .envelope-selector::before { content: ''; position: absolute; width: 8px; height: 8px; border: 1px solid #999; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); background: transparent; pointer-events: none; transition: border-color .1s, background .1s, box-shadow .1s; }
 .envelope-selector.selected { background: transparent; }
-.envelope-selector.selected::before { background: #ddd; border-color: #ddd; }
-.envelope-selector:hover::before { border-color: #fff; box-shadow: 0 0 5px #ffffff55; }
-.envelope-selector:not(.selected):hover::before { background: #ffffff20; }
-.envelope-selector.selected:hover::before { background: #fff; }
+.envelope-selector.enabled::before { background: #ddd; border-color: #ddd; }
+.envelope-selector:hover::before, .envelope-selector.selected::before { border-color: #fff; box-shadow: 0 0 5px #ffffff88; }
+.envelope-selector:not(.enabled):hover::before { background: #ffffff20; }
+.envelope-selector.enabled:hover::before { background: #fff; }
 .envelope-selectors .envelope-add { margin: 2px 0; }
 .wavetable-options, .modulation-strip .wavetable-options { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #fff transparent; }
 .wavetable-options::-webkit-scrollbar { width: 1px; height: 0; }
@@ -1831,3 +1831,8 @@ dialog input:not([type]) {
 .sculpture-transport .transport-time { font-size: 9px; color: var(--quiet); }
 .sculpture-transport #loop-button { font-size: 10px; }
 .sculpture-transport .transport-divider { display: none; }
+
+.generator-heading { display: flex; align-items: center; gap: 7px; }
+.modulation-power { width: 22px; height: 22px; padding: 4px; border: 0; background: transparent; color: #666; }
+.modulation-power svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
+.modulation-power[aria-pressed="true"], .modulation-power:hover { color: #ddd; }
