@@ -271,7 +271,7 @@ export const TARGETS = [
   {
     id: "grain",
     label: "Grain",
-    description: "Fine displacement and particles.",
+    description: "Density of the broadband noise particle field.",
   },
   {
     id: "twist",
@@ -351,12 +351,12 @@ export const TARGETS = [
   {
     id: "halo",
     label: "Diffuse halo",
-    description: "A fine cloud around the form.",
+    description: "A faint diffuse glow behind the sound.",
   },
   {
     id: "haloTail",
     label: "Halo extent",
-    description: "Extent of the reverberant cloud.",
+    description: "Length of the diffuse reverberant tail.",
   },
 ];
 const pairs = [

@@ -47,7 +47,7 @@ export const VISUAL_EXAMPLES = {
   spectralPeak: a => bands("spectralPeak", a),
   thickness: a => [line(0, 14, 30, 14, 1, 0.7 + a * 2.5)],
   body: a => [body(1 + a * 7), line(0, 14, 30, 14, 0.35)],
-  grain: a => [wave(a * 0.8, 13), ...dots(a)],
+  grain: a => [...dots(a), ...dots(a,28)],
   twist: a => [wave(4, 0.5 + a * 2, 14), wave(4, 0.5 + a * 2, 14, Math.PI, 0.4)],
   detail: a => Array.from({ length: 2 + Math.round(a * 5) }, (_, i) => body(1 + i * 1.25, 0.6)),
   edge: a => [body(6, 0.3), wave(a * 1.4, 8, 8), wave(a * 1.4, 8, 20)],
@@ -63,8 +63,8 @@ export const VISUAL_EXAMPLES = {
   echoes: a => echo(a, "echoes"),
   echoSpacing: a => echo(a, "echoSpacing"),
   persistence: a => echo(a, "persistence"),
-  halo: a => [body(3, 0.8), ...dots(a)],
-  haloTail: a => [body(3, 0.8, 12), ...dots(0.8, 12 + a * 18, true)],
+  halo: a => [body(3,.8),body(5,a*.18,32,0,14),body(7,a*.12,34,0,14)],
+  haloTail: a => [body(3,.8,12),body(5,.18,12+a*18),body(7,.1,12+a*18)],
 };
 
 export function createVisualExample(target) {

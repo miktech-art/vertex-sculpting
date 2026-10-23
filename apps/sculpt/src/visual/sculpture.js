@@ -1,3 +1,4 @@
+import { buildNoiseTexture, buildReverbGlow } from "./texture.js";
 import { ridgeDecibels, ridgeStrength } from "../spectral/ridges.js";
 import { buildEchoLayout, presentProgress, timeTickStep } from "./echoes.js";
 import {
@@ -18,12 +19,6 @@ import {
 
 const TAU = Math.PI * 2;
 const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
-const hash = (i, j = 0) => {
-  let n = Math.imul(i + 171, 374761393) ^ Math.imul(j + 439, 668265263);
-  n = Math.imul(n ^ (n >>> 13), 1274126177);
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
-};
-
 // Geometry is deterministic: identical sound + mapping always gives the same object.
 export function buildGeometry(params, m, sampleRate = 48000) {
   const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
@@ -44,12 +39,11 @@ export function buildGeometry(params, m, sampleRate = 48000) {
   const total = duration(contour),
     length = 360 + Math.min(220, total * 38),
     body = m.body * 100 + m.twist * 15 + m.spread * 14,
-    grain = m.grain * 52,
     twist = m.twist * 3.6,
     spread = m.spread * 34;
   const points = 121,
     bands =
-      body > 0.05 || grain > 0.05 || m.edge > 0.04
+      body > 0.05 || m.edge > 0.04
         ? HARMONIC_BANDS.slice(1)
         : [],
     lines = [];
@@ -105,14 +99,11 @@ export function buildGeometry(params, m, sampleRate = 48000) {
             1 -
             m.motion * 0.5 +
             m.motion * 0.5 * Math.sin(t * denormalize("rate", m.rate) * TAU),
-          radius = (body * position * modal + teeth) * e ** 0.6 * wave,
-          jitter = (hash(i, j) - 0.5) * grain * Math.sin(Math.PI * u) ** 0.5;
+          radius = (body * position * modal + teeth) * e ** 0.6 * wave;
         line.push({
           x: (u - 0.5) * length,
-          y: sign * (Math.cos(a) * radius + spread * e * position) + jitter,
-          z:
-            sign * Math.sin(a) * radius * 0.8 +
-            (hash(i + 31, j) - 0.5) * grain * 0.6,
+          y: sign * (Math.cos(a) * radius + spread * e * position),
+          z: sign * Math.sin(a) * radius * 0.8,
           u,
           e,
         });
@@ -130,34 +121,16 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       });
     }
   }
-  const particles = [];
-  const n = Math.round(m.grain * 650 + m.halo * 650);
-  for (let i = 0; i < n; i++) {
-    const u = hash(i, 57),
-      e = envelopeAt(contour, u * total),
-      a = hash(i, 63) * TAU,
-      r =
-        (body + grain + 15 + m.halo * 46) *
-        (0.3 + hash(i, 39)) *
-        (0.15 + e * 0.85);
-    particles.push({
-      x: (u - 0.5) * length + (hash(i, 78) - 0.5) * m.haloTail * 90,
-      y: Math.cos(a) * r,
-      z: Math.sin(a) * r * 0.8,
-      u,
-      alpha:
-        (0.08 + hash(i, 70) * 0.32) *
-        Math.min(
-          2.5,
-          response(
-            params.pitch *
-              HARMONIC_BANDS[Math.floor(hash(i, 91) * HARMONIC_BANDS.length)]
-                .center,
-          ),
-        ) **
-          0.7,
-      size: 0.35 + hash(i, 76) * 0.8,
-    });
+  const noise = buildNoiseTexture(params,{length,total,contour,response,sampleRate,grain:m.grain});
+  const particles = noise.particles;
+  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,spread:m.halo,extent:m.haloTail});
+  const echoLayout = buildEchoLayout(total,length,{
+    mix:denormalize("delayMix",m.echoes),delay:denormalize("delayTime",m.echoSpacing),
+    feedback:denormalize("feedback",m.persistence),separation:Math.max(32,body*.7 + params.noise*24),
+  });
+  if(glow.length) {
+    echoLayout.duration = Math.max(echoLayout.duration,total + params.reverbDecay);
+    echoLayout.length = echoLayout.duration * echoLayout.unitsPerSecond;
   }
   let minY = 0,
     maxY = 0;
@@ -173,17 +146,13 @@ export function buildGeometry(params, m, sampleRate = 48000) {
   return {
     lines,
     particles,
+    glow,
     bounds: { minY, maxY },
     length,
     total,
     thickness: 0.65 + m.thickness * 4.4,
     brightness: clamp(m.brightness / normalize("volume", BASE.volume), 0, 1.5),
-    echoLayout: buildEchoLayout(total, length, {
-      mix: denormalize("delayMix", m.echoes),
-      delay: denormalize("delayTime", m.echoSpacing),
-      feedback: denormalize("feedback", m.persistence),
-      separation: Math.max(32, body * 0.7 + grain * 0.3),
-    }),
+    echoLayout,
     halo: m.halo,
   };
 }
@@ -436,6 +405,7 @@ export class SculptureRenderer {
       offset = copy.offset,
       scale = copy.scale;
     const c = this.ctx;
+    if (g.glow?.length && copy.index === 0) this.drawHalo(g,copy,opacity);
     for (const line of g.lines) {
       const pts = line.points;
       const amplitude = line.spectralLevel ?? Math.min(3, line.filterGain ?? 1) ** 0.7;
@@ -527,6 +497,22 @@ export class SculptureRenderer {
         c.fillRect(v.x, v.y, pt.size, pt.size);
       }
     }
+  }
+  drawHalo(g,copy,opacity) {
+    const c=this.ctx;
+    c.save();
+    for(const halo of g.glow) {
+      const center=this.project(halo,copy.offset,copy.scale);
+      const edge=this.project({...halo,y:halo.radius},copy.offset,copy.scale);
+      const radius=Math.max(1,Math.hypot(edge.x-center.x,edge.y-center.y));
+      const alpha=halo.alpha*opacity*g.brightness;
+      const gradient=c.createRadialGradient(center.x,center.y,0,center.x,center.y,radius);
+      gradient.addColorStop(0,`rgba(255,255,255,${alpha})`);
+      gradient.addColorStop(.45,`rgba(255,255,255,${alpha*.35})`);
+      gradient.addColorStop(1,'rgba(255,255,255,0)');
+      c.fillStyle=gradient;c.fillRect(center.x-radius,center.y-radius,radius*2,radius*2);
+    }
+    c.restore();
   }
   destroy() {
     this.observer.disconnect();
