@@ -340,7 +340,7 @@ document.querySelectorAll("[data-mode]").forEach((button) =>
 );
 window.addEventListener("hashchange", workspaceFromHash);
 workspaceFromHash();
-// Leaving for the independent Beatbox page must flush any pending session edit.
+// Keep pending edits when leaving or reloading the page.
 window.addEventListener("pagehide", () => {
   stop();
   store.persist();

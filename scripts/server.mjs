@@ -12,8 +12,7 @@ const types = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-// The dev server reads Sculpt directly from source; Beatbox is rebuilt by Vite's watcher.
-export function createStaticServer({ root = resolve(projectRoot, 'dist'), beatboxRoot } = {}) {
+export function createStaticServer({ root = resolve(projectRoot, 'dist') } = {}) {
   return createServer(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { Allow: 'GET, HEAD' }).end();
@@ -25,10 +24,8 @@ export function createStaticServer({ root = resolve(projectRoot, 'dist'), beatbo
         res.writeHead(404).end();
         return;
       }
-      const beatbox = beatboxRoot && (pathname === '/beatbox' || pathname.startsWith('/beatbox/'));
-      const base = resolve(beatbox ? beatboxRoot : root);
-      const relative = beatbox ? pathname.slice('/beatbox'.length) : pathname;
-      let file = resolve(base, `.${relative}`);
+      const base = resolve(root);
+      let file = resolve(base, `.${pathname}`);
       if (file !== base && !file.startsWith(base + sep)) {
         res.writeHead(404).end();
         return;
@@ -57,7 +54,7 @@ export function createStaticServer({ root = resolve(projectRoot, 'dist'), beatbo
 export function listen(server) {
   const port = Number(process.env.PORT || 5177);
   server.on('error', error => { console.error(error.message); process.exitCode = 1; });
-  server.listen(port, '127.0.0.1', () => console.log(`Sound/Sculpt + Beatbox: http://localhost:${port}`));
+  server.listen(port, '127.0.0.1', () => console.log(`Sound/Sculpt: http://localhost:${port}`));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

@@ -1,74 +1,58 @@
-# Vertex Sculpting — Sound/Sculpt + Beatbox
+# Sound/Sculpt
 
-A browser instrument and shape sequencer. Sculpt creates sounds and their visual mappings; Connections edits those mappings; Beatbox sequences notes around editable 3D shapes. The pages keep their own visual styles and share saved Sculpt instruments.
+A browser instrument for sculpting sound and exploring its visual mappings. **Sculpt** edits a native synthesizer and its 3D form; **Connections** edits the relationships between sound parameters and visual properties.
 
-## Quick start
+This branch, `mikael/sculpt`, is the standalone version. It was created from `mikael/integration`; the combined application remains on that branch.
 
-Use Node.js 24+ and npm. With nvm, run `nvm install` to use `.nvmrc`.
+## Run locally
+
+Use Node.js 24+ (or `nvm install` with the included `.nvmrc`). There are no package dependencies to install.
 
 ```sh
-git clone https://github.com/miktech-art/vertex-sculpting.git
+git clone --branch mikael/sculpt https://github.com/miktech-art/vertex-sculpting.git
 cd vertex-sculpting
-npm run setup
 npm run dev
 ```
 
-Open **http://localhost:5177**. All three tabs run on this same origin so saved sounds are available to Beatbox. Camera access works on localhost or HTTPS and requires browser permission. Audio starts after a user interaction.
-
-In development, refresh after editing Sculpt. Beatbox rebuilds automatically when its source changes; refresh once the terminal reports the build finished. Stop with Ctrl+C. Set `PORT` to change the default port.
-
-## Commands
+Open **http://localhost:5177**. Source changes appear after refreshing the browser. Stop with Ctrl+C; set `PORT` to choose a different port. Camera tracking requires permission and localhost or HTTPS. Audio begins after a user interaction.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run setup` | Install Beatbox's exact locked dependencies; repeat after its lockfile changes |
-| `npm run dev` | Build, serve Sculpt source, and watch/rebuild Beatbox |
-| `npm test` | Run all Sculpt and Beatbox unit tests |
-| `npm run test:sculpt` | Run Sculpt and shared-module tests |
-| `npm run test:beatbox` | Run Beatbox unit tests |
+| `npm run dev` | Serve source directly, with no build or installation |
+| `npm test` | Test synthesis, geometry, gestures, saved sounds, and the local server |
 | `npm run build` | Generate the complete static site in `dist/` |
-| `npm run build:beatbox` | Rebuild only `dist/beatbox/` |
-| `npm run preview` | Serve the existing production build on localhost:5177 |
+| `npm run preview` | Serve an existing production build on localhost:5177 |
 
-Python is no longer required. The root project has no npm dependencies; `setup` installs the separate Beatbox package.
-
-## Where to edit
+## Source layout
 
 ```text
-apps/
-  sculpt/                 Sculpt + Connections: HTML, CSS, native ES modules
-    src/audio/            Web Audio engine, live envelopes, WAV export
-    src/tracking/         Camera worker and gesture bindings
-    src/sculpt-instruments.js  Shared saved-instrument adapter
-    vendor/mediapipe/     Camera runtime, model, licenses
-  beatbox/                Vertex Sequencer: Vite + Three.js
-    src/                  Scene, editing, transport, sampler, persistence
-    public/stems/         Five bundled WAVs; replace source copies here
-tests/                   Sculpt, shared-module, and local-server tests
-scripts/                 Build and local development tools
-docs/                    Architecture and retained implementation notes
-dist/                    Generated site, ignored by Git
+apps/sculpt/
+  index.html, style.css   Interface and styles
+  src/model.js           Parameters, preset validation, mapping definitions
+  src/state.js           Persistence, sound library, undo/redo
+  src/audio/             Native Web Audio synthesis and WAV export
+  src/visual/            Procedural sculpture geometry and rendering
+  src/ui/                Envelope, filter, and connection controls
+  src/tracking/          Camera worker and hand gestures
+  vendor/mediapipe/      Bundled runtime, model, and licenses
+tests/                   Node test suite
+scripts/                 Static build and local server
+docs/                    Architecture and reference notes
+dist/                    Generated output, ignored by Git
 ```
 
-Edit source in `apps/`, never generated `dist/`. Beatbox imports the native audio engine and saved-instrument adapter from Sculpt; changing those modules can affect both apps. See [architecture](docs/ARCHITECTURE.md) and [contributing](CONTRIBUTING.md).
+## Sounds and controls
 
-## Saved sounds and scenes
+The factory saw starts with harmonics and a short ADSR envelope. Detune, noise, drive, tremolo, delay, and reverb start off. Source, Contour, and Space provide live parameter editing; Connections controls visual mappings. Camera gestures can control the envelope and Loop transport.
 
-- Sculpt's bottom bar saves, renames, deletes, and restores sounds. JSON export/import provides portable sound backups.
-- **Import preset**, below My sounds, adds each valid preset as a separate saved sound and selects its card. Importing never replaces an existing library entry. The factory saw starts with harmonics and a simple ADSR envelope; detune, noise, drive, tremolo, delay, and reverb are off. Existing saved sounds and resumed working edits retain their settings.
-- Beatbox restores boxes, notes, effects, instruments, tempo, selection, and view after navigation or reload. Playback returns paused. Its intro appears once per browser; F1 opens help.
-- Save a Sculpt sound, return to Beatbox, select a box, and choose **Instrument → Sculpted sounds**. The box shows that sound's static 3D sculpture instead of its usual cloud. Choosing a preset instrument restores the cloud. Assigned definitions are archived in the scene so deleting a library sound does not break existing boxes.
+Use the bottom shelf to save, rename, delete, restore, and switch sounds. **Import preset**, below My sounds, creates and selects a separate saved card. Export JSON for portable backups and WAV for rendered audio.
 
-These records live in browser localStorage, not in GitHub. Different browsers, ports, and domains have separate storage. Local development does not automatically receive the live site's saved sounds, and collaborators do not automatically share libraries.
+The session, sound library, and Recently deleted collection use browser localStorage. Existing saved sounds and working edits retain their settings. Browsers, domains, and ports have separate storage; GitHub does not synchronize your personal library.
 
-## Samples and third-party files
+## Development and publishing
 
-The supplied samples are included in `apps/beatbox/public/stems/`: `kick.wav`, `clap.wav`, `cymbal.wav`, `synth.wav`, and `bass.wav`. Replace those exact filenames and rebuild. Do not edit copies under `dist/`.
+See [contributing](CONTRIBUTING.md) and [architecture](docs/ARCHITECTURE.md). Edit source in `apps/sculpt/`; generated `dist/` files are replaced by builds. CI tests and builds this branch and pull requests. It does not deploy automatically.
 
-MediaPipe's runtime and hand model are retained locally so camera tracking does not depend on a runtime CDN. See [third-party notes](docs/THIRD_PARTY.md) for provenance and licenses.
+The existing [hosted app](https://sound-form-mikvesch.sandywasp257.chatgpt.site/) uses the identity in `.openai/hosting.json` and serves `dist/`. Local commits, GitHub pushes, and publishing are separate actions. Commit and publish verified changes as requested; push only when authorized.
 
-## Collaboration and publishing
-
-Work in separate branches, open pull requests, and merge passing changes into `main`. Ongoing integration work uses `mikael/integration`. GitHub Actions runs the tests and production build on pull requests and pushes to `main` or `mikael/integration`.
-
-The current hosted app is [Sound/Sculpt](https://sound-form-mikvesch.sandywasp257.chatgpt.site/). This repository retains its `.openai/hosting.json` identity and builds the expected `dist/` directory. GitHub pushes do **not** deploy it automatically. Deploy a tested build from merged `main` through the existing Sites publishing workflow. Bring any hosting-side source changes back into this repository before the next deployment.
+Third-party provenance and licenses are documented in [third-party notes](docs/THIRD_PARTY.md).

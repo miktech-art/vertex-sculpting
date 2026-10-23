@@ -1,30 +1,18 @@
 # Architecture
 
-## Applications
+`apps/sculpt/` is a buildless native ES-module application. Its source layout is also its served layout. `index.html` loads `src/app.js`, which composes the Sculpt and Connections views.
 
-`apps/sculpt/` is a buildless application: its source layout is also its served layout. `index.html` loads `src/app.js`; `src/model.js` defines synthesis parameters and preset validation; `src/state.js` manages documents, undo history, and browser persistence. UI, procedural visuals, audio, and camera tracking have separate modules. The camera worker loads bundled MediaPipe assets relative to itself.
+- `model.js`: parameter ranges, physical units, factory preset, validation, and visual mappings.
+- `state.js`: current document, saved and deleted sounds, persistence, and undo/redo.
+- `audio/`: native Web Audio synthesis, effects, live envelope editing, and offline WAV rendering.
+- `visual/`: deterministic geometry generated from the sound and its mappings; canvas rendering and temporal echoes.
+- `ui/`: envelope, filter-band, slider, and connection controls.
+- `tracking/`: camera controller, gesture geometry, and a worker using the bundled MediaPipe runtime and hand model.
 
-`apps/beatbox/` is a Vite application using Three.js and Web Audio. Its original module chain and runtime behavior are preserved. `src/lib/session.js` serializes and validates scenes; `core.js` loads the saved Sculpt instrument list; `audio.js` renders Sculpt presets to cached AudioBuffers with the native Sculpt engine. The original subsystem notes remain in `apps/beatbox/docs/`.
+Both views share one document. Sculpt's localStorage key remains `sound-form:session:v1`; preset schema and library IDs remain compatible. No accounts or backend library are required. Files can be exported and imported as JSON; rendering to WAV runs in the browser.
 
-## Integration boundaries
+`npm run dev` serves source directly with the Node static server. `npm run build` replaces `dist/` with a clean copy of `apps/sculpt/`. `npm run preview` serves the resulting static site. Neither development nor production needs a package install. CI runs the Node tests and static build without a bundler.
 
-- Navigation: Sculpt and Connections use root hash views; Beatbox is `/beatbox/`.
-- Instrument reading: `apps/sculpt/src/sculpt-instruments.js` reads Sculpt's saved library without writing it.
-- Rendering: Beatbox imports `apps/sculpt/src/audio/engine.js`; Vite bundles this engine and its dependencies into Beatbox. There is no second copy of its source.
-- Box visuals: `apps/beatbox/src/visual/sculpture.js` builds static Three.js line/particle geometry from Sculpt's shared geometry builder and the assigned document's mappings. `cloud.js` switches between this preview and the original cloud per box. Geometry is cached by document, fitted to the box without distortion, and disposed on reassignment or deletion.
-- Persistence: Sculpt uses `sound-form:session:v1`. Beatbox uses `vertex.session.v1` and `vertex.intro.seen.v1`. Assigned Sculpt definitions are archived in the Beatbox scene. Names and stable IDs remain separate.
-- Both pages must share the same scheme, hostname, and port to see the same localStorage. There is no backend or shared account database.
+`.openai/hosting.json` retains the existing hosted project's identity and declares `dist/` as the static output. Publication and GitHub synchronization remain separate.
 
-## Build and development
-
-`npm run build` clears root `dist/`, copies `apps/sculpt/` into it, builds Beatbox from its locked package, and copies that output into `dist/beatbox/`. Source samples are copied by Vite. Generated files are not committed.
-
-`npm run dev` first builds everything, then serves Sculpt directly from `apps/sculpt/` and Beatbox from `dist/beatbox/`. Vite watches Beatbox and the Sculpt modules it imports. Refresh to see changes. `npm run preview` serves only the completed production output, useful for checking the exact deployment artifact. Local servers bind to loopback and require no Python or extra server dependencies.
-
-`.openai/hosting.json` retains the existing hosted project's identity and declares root `dist/` as its static directory. The GitHub workflow only checks code; publishing remains separate. Source history from the managed Site is retained before the repository-layout cleanup commit.
-
-## Tests and historical notes
-
-`npm test` uses Node's built-in runner for both applications and the local server. Tests import source directly, so they can run before a build. Production bundling then verifies cross-application imports and all five sample paths.
-
-`docs/sculpt-reference.md` and Beatbox's `docs/ORIGINAL_*.md` preserve original design and implementation context. Their old paths and setup commands are historical; current workflow instructions live in the root README and CONTRIBUTING.md.
+`docs/sculpt-reference.md` preserves historical synthesis and gesture design notes; use the root README for current paths and commands. The standalone branch preserves previous application history without rewriting it.

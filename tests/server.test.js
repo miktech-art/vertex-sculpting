@@ -5,19 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStaticServer } from '../scripts/server.mjs';
 
-test('local server serves both applications and rejects private or escaping paths', async t => {
-  const temp = await mkdtemp(join(tmpdir(), 'vertex-server-'));
+test('local server serves Sculpt and rejects private or escaping paths', async t => {
+  const temp = await mkdtemp(join(tmpdir(), 'sculpt-server-'));
   const sculpt = join(temp, 'sculpt');
-  const beatbox = join(temp, 'beatbox');
   await mkdir(join(sculpt, 'vendor'), { recursive: true });
-  await mkdir(join(beatbox, 'stems'), { recursive: true });
   await writeFile(join(sculpt, 'index.html'), 'sculpt');
   await writeFile(join(sculpt, 'vendor', 'model.wasm'), 'wasm');
   await writeFile(join(sculpt, '.env'), 'private');
   await writeFile(join(temp, 'secret.txt'), 'outside');
-  await writeFile(join(beatbox, 'index.html'), 'beatbox');
-  await writeFile(join(beatbox, 'stems', 'kick.wav'), 'sample');
-  const server = createStaticServer({ root: sculpt, beatboxRoot: beatbox });
+  await mkdir(join(sculpt, 'assets'), { recursive: true });
+  await writeFile(join(sculpt, 'assets', 'index.html'), 'asset index');
+  const server = createStaticServer({ root: sculpt });
   t.after(async () => {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
@@ -29,15 +27,12 @@ test('local server serves both applications and rejects private or escaping path
   });
   const url = `http://127.0.0.1:${server.address().port}`;
 
-  await t.test('routes root and Beatbox, preserving directory-relative assets', async () => {
+  await t.test('serves the root and preserves directory-relative assets', async () => {
     assert.equal(await (await fetch(url)).text(), 'sculpt');
-    const redirect = await fetch(`${url}/beatbox?test=1`, { redirect: 'manual' });
+    const redirect = await fetch(`${url}/assets?test=1`, { redirect: 'manual' });
     assert.equal(redirect.status, 308);
-    assert.equal(redirect.headers.get('location'), '/beatbox/?test=1');
-    assert.equal(await (await fetch(`${url}/beatbox/`)).text(), 'beatbox');
-    const sample = await fetch(`${url}/beatbox/stems/kick.wav`);
-    assert.equal(sample.headers.get('content-type'), 'audio/wav');
-    assert.equal(await sample.text(), 'sample');
+    assert.equal(redirect.headers.get('location'), '/assets/?test=1');
+    assert.equal(await (await fetch(`${url}/assets/`)).text(), 'asset index');
     const wasm = await fetch(`${url}/vendor/model.wasm`);
     assert.equal(wasm.headers.get('content-type'), 'application/wasm');
   });
@@ -48,7 +43,7 @@ test('local server serves both applications and rejects private or escaping path
     assert.equal(await response.text(), '');
   });
   await t.test('returns useful error statuses and does not expose dotfiles or sibling files', async () => {
-    for (const path of ['/.env', '/%2e%2e%2fsecret.txt', '/missing', '/beatbox/.git/config']) {
+    for (const path of ['/.env', '/%2e%2e%2fsecret.txt', '/missing', '/assets/.git/config']) {
       assert.equal((await fetch(url + path)).status, 404, path);
     }
     assert.equal((await fetch(`${url}/%invalid`)).status, 400);

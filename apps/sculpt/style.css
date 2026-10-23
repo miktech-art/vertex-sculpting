@@ -117,7 +117,7 @@ a {
   border-radius: 6px;
   padding: 4px;
 }
-.mode-switch :is(button, .workspace-link) {
+.mode-switch button {
   font-size: 13px;
   padding: 9px 21px;
   border-radius: 3px;
@@ -1354,7 +1354,7 @@ dialog input:not([type]) {
     gap: 2px;
     padding: 3px;
   }
-  .mode-switch :is(button, .workspace-link) {
+  .mode-switch button {
     padding: 8px 10px;
     font-size: 12px;
   }

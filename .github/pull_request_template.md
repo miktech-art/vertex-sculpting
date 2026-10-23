@@ -8,4 +8,4 @@ Describe the problem and the resulting behavior.
 - [ ] `npm run build`
 - [ ] Checked affected pages in the browser; include screenshots for visual changes.
 
-Mention any changes to saved sounds, scene storage, or the shared audio engine.
+Mention any changes to saved sounds, browser storage, or the audio engine.
