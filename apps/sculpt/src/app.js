@@ -1,6 +1,7 @@
+import {instanceRow} from "./ui/instance-selector.js";
 import {routeSelect} from "./ui/route-select.js";
 import {LfoPanel} from "./ui/lfo.js";
-import {getLfos,egTargetLimit,egDestinations,envelopeInstances,availableDestinations} from "./lfo.js";
+import {getLfos,egTargetLimit,egDestinations,envelopeInstances,availableDestinations,removeEnvelope,removeLfo,selectionAfterRemoval} from "./lfo.js";
 import { soundPreview } from "./ui/sound-preview.js";
 import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
@@ -47,6 +48,7 @@ const lfoPanel=new LfoPanel({
     doc.params.lfos=structuredClone(getLfos(doc.params));Object.assign(doc.params.lfos[index],changes);
   },'lfo-parameter'),
   onAdd:lfo=>{store.edit(doc=>{doc.params.lfos=[...structuredClone(getLfos(doc.params)),lfo];},'lfos');store.commit();},
+  onRemove:index=>{store.edit(doc=>removeLfo(doc.params,index),'lfos');store.commit();},
   onCommit:()=>store.commit(),
 });
 const mapping = new MappingEditor(store);
@@ -103,7 +105,11 @@ function renderEnvelopeSelectors(){
     b.classList.toggle('enabled',instances[i].enabled!==false);b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
     b.setAttribute('aria-label',i===0?'Envelope 1':`Envelope ${i+1}`);
     b.title=i===0?`Envelope 1: ${params.envelopeTarget||'amplitude'}`:`Envelope ${i+1}: ${envs[i-1].target}`;
-    b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});container.append(b);
+    b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});
+    container.append(instanceRow(b,`Delete EG ${i+1}`,envs.length?()=>{
+      selectedEnvelope=selectionAfterRemoval(selectedEnvelope,i,envs.length+1);
+      store.edit(doc=>removeEnvelope(doc.params,i),'envelopes');store.commit();
+    }:null));
   }
   const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8||!free.length;
   add.addEventListener('click',()=>{

@@ -52,3 +52,33 @@ export function normalizeAssignments(params){
   return params;
 }
 export const activeLfos=params=>exclusiveInstances(getLfos(params)).map(l=>l.enabled===false?{...l,target:'none'}:l);
+
+export function selectionAfterRemoval(selected,removed,count){
+  return selected>removed?selected-1:Math.min(selected,count-2);
+}
+export function removeEnvelope(params,index){
+  const envs=params.envelopes||[];
+  if(!envs.length||!Number.isInteger(index)||index<0||index>envs.length)return false;
+  if(index===0){
+    const next=envs[0];
+    for(const stage of ['attack','decay','sustain','hold','release'])params[stage]=next[stage];
+    params.envelopeTarget=next.target;params.envelopeAmount=next.amount;
+    if(next.enabled===undefined)delete params.envelopeEnabled;else params.envelopeEnabled=next.enabled;
+    params.envelopes=envs.slice(1);
+  }else params.envelopes=envs.filter((_,i)=>i!==index-1);
+  return true;
+}
+export function removeLfo(params,index){
+  const lfos=getLfos(params);
+  if(lfos.length<=1||!Number.isInteger(index)||index<0||index>=lfos.length)return false;
+  params.lfos=lfos.filter((_,i)=>i!==index);
+  const remap=target=>{
+    const match=/^(lfo(?:Rate|Depth)):([0-7])$/.exec(target||'');
+    if(!match)return target;
+    const linked=Number(match[2]);
+    return linked===index?'none':`${match[1]}:${linked>index?linked-1:linked}`;
+  };
+  if(params.envelopeTarget!==undefined)params.envelopeTarget=remap(params.envelopeTarget);
+  if(params.envelopes)params.envelopes=params.envelopes.map(env=>({...env,target:remap(env.target)}));
+  return true;
+}

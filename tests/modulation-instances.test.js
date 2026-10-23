@@ -48,3 +48,41 @@ test('the primary EG bypass is flat while held and ends with a finite click-free
   assert.deepEqual(futureEnvelope(p,10,{held:true}),[]);
   assert.deepEqual(futureEnvelope(p,10,{releaseAt:10}),[{time:10.01,value:0}]);
 });
+
+import {removeEnvelope,removeLfo,selectionAfterRemoval} from '../apps/sculpt/src/lfo.js';
+test('removing the first EG promotes the next instance with its contour, destination and power intact',()=>{
+  const p={...BASE,envelopeEnabled:false,envelopes:[{...env,enabled:true},{...env,target:'cutoff',amount:2}]};
+  assert.equal(removeEnvelope(p,0),true);
+  assert.equal(p.envelopeTarget,'pitch');assert.equal(p.envelopeAmount,12);assert.equal(p.envelopeEnabled,true);
+  for(const stage of ['attack','decay','sustain','hold','release'])assert.equal(p[stage],env[stage]);
+  assert.deepEqual(p.envelopes,[{...env,target:'cutoff',amount:2}]);
+  assert.doesNotThrow(()=>validateDocument({...makeDocument(),params:p}));
+  assert.equal(removeEnvelope(p,0),true);assert.equal(p.envelopeEnabled,undefined);
+  const snapshot=structuredClone(p);assert.equal(removeEnvelope(p,0),false);assert.deepEqual(p,snapshot);
+});
+test('deleting a later EG leaves the primary EG and other contours untouched',()=>{
+  const p={...BASE,envelopes:[env,{...env,target:'wavePosition',amount:.5},{...env,target:'cutoff',amount:2}]};
+  assert.equal(removeEnvelope(p,2),true);
+  assert.deepEqual(p,{...BASE,envelopes:[env,{...env,target:'cutoff',amount:2}]});
+  for(const index of [-1,4,1.5])assert.equal(removeEnvelope(p,index),false);
+});
+test('LFO removal clears deleted links, shifts surviving links, and frees destinations',()=>{
+  const p={...BASE,envelopeTarget:'lfoDepth:2',envelopeAmount:.5,
+    envelopes:[{...env,target:'lfoRate:0',amount:2},{...env,target:'lfoDepth:1',amount:.5}],
+    lfos:[{...defaultLfo(),amount:12},{...defaultLfo(),target:'cutoff',amount:2,enabled:false},{...defaultLfo(),target:'amplitude',amount:.5}]};
+  const survivor=structuredClone(p.lfos[2]);
+  assert.equal(removeLfo(p,1),true);
+  assert.deepEqual(p.lfos[1],survivor);assert.equal(p.envelopeTarget,'lfoDepth:1');
+  assert.equal(p.envelopes[0].target,'lfoRate:0');assert.equal(p.envelopes[1].target,'none');assert.equal(p.envelopes[1].amount,.5);
+  assert.ok(availableDestinations(lfoDestinations,p.lfos,0).some(([target])=>target==='cutoff'));
+  assert.doesNotThrow(()=>validateDocument({...makeDocument(),params:p}));
+  assert.equal(removeLfo(p,0),true);assert.equal(p.envelopeTarget,'lfoDepth:0');assert.equal(p.envelopes[0].target,'none');
+  const snapshot=structuredClone(p);assert.equal(removeLfo(p,0),false);assert.deepEqual(p,snapshot);
+});
+test('selection stays on the same surviving instance or moves to the nearest one when deleted',()=>{
+  assert.equal(selectionAfterRemoval(2,0,4),1);
+  assert.equal(selectionAfterRemoval(0,2,4),0);
+  assert.equal(selectionAfterRemoval(1,1,4),1);
+  assert.equal(selectionAfterRemoval(3,3,4),2);
+  assert.equal(selectionAfterRemoval(0,0,2),0);
+});

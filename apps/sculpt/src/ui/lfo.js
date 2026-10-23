@@ -1,10 +1,11 @@
+import {instanceRow} from "./instance-selector.js";
 import {routeSelect} from "./route-select.js";
 import {Knob} from './knob.js';
 import {TableSelect} from './table-select.js';
-import {defaultLfo,getLfos,LFO_SHAPES,lfoWave,MOD_LIMITS,lfoDestinations,availableDestinations} from '../lfo.js';
+import {defaultLfo,getLfos,LFO_SHAPES,lfoWave,MOD_LIMITS,lfoDestinations,availableDestinations,selectionAfterRemoval} from '../lfo.js';
 export class LfoPanel {
-  constructor({onEdit,onAdd,onCommit}){
-    Object.assign(this,{onEdit,onAdd,onCommit});this.selected=0;this.knobs=new Map();
+  constructor({onEdit,onAdd,onRemove,onCommit}){
+    Object.assign(this,{onEdit,onAdd,onRemove,onCommit});this.selected=0;this.knobs=new Map();
     this.shapes=new TableSelect(document.querySelector('#lfo-shape'),shape=>{this.onEdit(this.selected,{shape});this.onCommit();},{labels:LFO_SHAPES,label:'LFO waveform',id:'lfo-waveform-options'});
     this.canvas=document.querySelector('#lfo-canvas');this.ctx=this.canvas.getContext('2d');
     this.observer=new ResizeObserver(()=>this.draw());this.observer.observe(this.canvas);
@@ -22,7 +23,10 @@ export class LfoPanel {
     for(let i=0;i<this.lfos.length;i++){
       const b=document.createElement('button');b.className='envelope-selector';b.classList.toggle('selected',i===this.selected);b.classList.toggle('enabled',this.lfos[i].enabled!==false);
       b.setAttribute('aria-label',`LFO ${i+1}`);b.setAttribute('aria-pressed',i===this.selected);
-      b.addEventListener('click',()=>{this.selected=i;this.setParams(this.params);});container.append(b);
+      b.addEventListener('click',()=>{this.selected=i;this.setParams(this.params);});
+      container.append(instanceRow(b,`Delete LFO ${i+1}`,this.lfos.length>1?()=>{
+        this.selected=selectionAfterRemoval(this.selected,i,this.lfos.length);this.key=null;this.onRemove(i);
+      }:null));
     }
     const free=availableDestinations(lfoDestinations,this.lfos,-1).filter(([target])=>target!=='none');
     const power=document.querySelector('#lfo-power'),enabled=lfo.enabled!==false;

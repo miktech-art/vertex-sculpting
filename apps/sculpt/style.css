@@ -1836,3 +1836,11 @@ dialog input:not([type]) {
 .modulation-power { width: 22px; height: 22px; padding: 4px; border: 0; background: transparent; color: #666; }
 .modulation-power svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
 .modulation-power[aria-pressed="true"], .modulation-power:hover { color: #ddd; }
+
+.modulation-instance { display: flex; align-items: center; height: 20px; flex: none; }
+.modulation-strip .adsr-layout:has(.instance-delete), .lfo-layout:has(.instance-delete) { grid-template-columns: 44px minmax(80px,1fr) minmax(180px,48%); }
+.envelope-selectors:has(.instance-delete) { align-items: flex-start; }
+.envelope-selectors:has(.instance-delete) .envelope-add { margin-left: 5px; }
+.instance-delete { display: grid; place-items: center; width: 20px; height: 20px; padding: 4px; border: none; background: transparent; color: #666; }
+.instance-delete svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1; }
+.instance-delete:hover { color: #ddd; }
