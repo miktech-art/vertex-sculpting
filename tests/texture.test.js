@@ -46,7 +46,7 @@ test('reverb energy stays faint and decays after the source ends',()=>{
   const g=geometry(patch),body=g.glow.filter(pt=>pt.time>.6&&pt.time<.9),tail=g.glow.filter(pt=>pt.time>g.total&&pt.time<g.total+.1);
   assert.ok(body.length&&tail.length);
   assert.ok(Math.max(...tail.map(pt=>pt.alpha))<Math.max(...body.map(pt=>pt.alpha)));
-  assert.ok(g.glow.every(pt=>pt.alpha<.01 && Number.isFinite(pt.levelDb)));
+  assert.ok(g.glow.every(pt=>pt.alpha<.04 && Number.isFinite(pt.levelDb)));
 });
 test('fully noisy input also feeds the reverb glow',()=>{
   const g=geometry({...p,noise:1,reverbMix:.4});
@@ -114,12 +114,22 @@ test('every reverb blur stays after the source onset, including sharp attacks an
     assert.ok(g.glow.every(pt=>pt.time>0 && pt.x-pt.radiusX>=-g.length/2-1e-10));
   }
 });
-test('reverb visual exposure follows wet gain and source level in power, without logarithmic boosting',()=>{
+test('reverb visual exposure follows wet gain and source level in RMS amplitude, without a hard visibility floor',()=>{
   const soft=geometry({...p,reverbMix:.25}),wet=geometry({...p,reverbMix:.5});
   const quiet=geometry({...p,reverbMix:.5,volume:p.volume/2});
   const at=(g,t)=>g.glow.find(pt=>pt.kind==='shell'&&pt.time===t);
   const b=wet.glow.find(pt=>pt.kind==='shell'&&pt.time>.3),a=at(soft,b.time),q=at(quiet,b.time);
-  assert.ok(Math.abs(b.alpha/a.alpha-4)<1e-10);
-  assert.ok(Math.abs(b.alpha/q.alpha-4)<1e-10);
+  assert.ok(Math.abs(b.alpha/a.alpha-2)<1e-10);
+  assert.ok(Math.abs(b.alpha/q.alpha-2)<1e-10);
   assert.ok(Math.abs(b.levelDb-a.levelDb-6.0206)<.001);
+});
+
+test('faint reverb contributions accumulate before final display attenuation',()=>{
+  const stops=[];let composites=0,finalAlpha=0;
+  const layer={width:0,height:0,getContext:()=>({clearRect(){},save(){},restore(){},translate(){},rotate(){},scale(){},fillRect(){},createRadialGradient(){return {addColorStop(_,color){stops.push(color);}};}})};
+  const fake={size:{width:800,height:400},createHaloCanvas:()=>layer,ctx:{save(){},restore(){},drawImage(){composites++;finalAlpha=this.globalAlpha;}},project:pt=>pt};
+  const halo={x:0,y:0,z:0,radiusX:10,radiusY:20,radiusZ:20,alpha:.0001};
+  SculptureRenderer.prototype.drawHalo.call(fake,{glow:[halo],brightness:1},{offset:{},scale:1},1);
+  assert.equal(composites,1);assert.equal(finalAlpha,1/16);
+  assert.ok(stops.includes('rgba(255,255,255,0.0016)'));
 });

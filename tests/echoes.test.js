@@ -132,7 +132,10 @@ test("viewing scale remains fixed on a delay edit until Fit time is requested", 
     targets: {},
     size: { width: 1200, height: 800 },
     needsBuild: true,
-    autoFit: true,
+    zoom: 1,
+    pan: {x:0,y:0},
+    yaw: 0,
+    pitch: 0,
   });
   renderer.updateMapping(0.016);
   const zoom = renderer.zoom,

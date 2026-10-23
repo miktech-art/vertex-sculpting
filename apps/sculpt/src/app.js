@@ -120,8 +120,6 @@ function loadPreset(preset) {
   stop();
   mapping.selected = null;
   store.load(makeDocument(preset), null, `factory:${preset.id}`);
-  renderer.resetView();
-  miniRenderer.resetView();
   toast(`${preset.name} loaded`);
 }
 function renderHeader() {
@@ -395,8 +393,6 @@ $("#new-sound-button").addEventListener("click", () => switchSound(() => {
   stop();
   mapping.selected = null;
   store.load(makeDocument({ name: "Untitled", params: BASE }), null, "new");
-  renderer.resetView();
-  miniRenderer.resetView();
   toast("New sound workspace — edits are remembered automatically");
 }));
 $("#save-form").addEventListener("submit", (e) => {
@@ -423,8 +419,6 @@ function loadSavedSound(doc) {
     stop();
     mapping.selected = null;
     store.load(doc, doc.libraryId);
-    renderer.resetView();
-    miniRenderer.resetView();
     toast(`${doc.name} loaded`);
   });
 }
@@ -596,8 +590,6 @@ $("#import-file").addEventListener("change", async (e) => {
         store.importSaved(doc);
         stop();
         mapping.selected = null;
-        renderer.resetView();
-        miniRenderer.resetView();
         toast(`${doc.name} imported and saved`);
       } catch (error) {
         toast(error.message);

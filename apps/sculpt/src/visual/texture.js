@@ -134,9 +134,10 @@ export function buildReverbGlow(params,{length,total,contour,response,noiseAmpli
       }
     }
     const wetPower = power*params.reverbMix**2*sourcePower;
-    // Fixed exposure in linear power: no log boost or invented dry-sound mask.
+    // Display amplitude (sqrt power), like the audio level. Linear-power alpha
+    // was quantized to zero in 8-bit Canvas gradients at audible wet levels.
     const relativePower = wetPower / NOISE_REFERENCE_RMS**2;
-    const alpha = .12 * relativePower;
+    const alpha = .09 * Math.sqrt(relativePower);
     if(alpha < .000001) continue;
     const levelDb = wetPower>0 ? 10*Math.log10(wetPower) : -Infinity;
     const current=time<=total?profileAt(time):{y:0,z:0};

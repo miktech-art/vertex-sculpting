@@ -172,12 +172,13 @@ export class SculptureRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.createNoiseCanvas = () => document.createElement("canvas");
+    this.createHaloCanvas = () => document.createElement("canvas");
     this.ctx = canvas.getContext("2d");
     this.yaw = 0;
     this.pitch = 0;
+    this.axialRotation = 0;
     this.zoom = 1;
     this.pan = { x: 0, y: 0 };
-    this.autoFit = true;
     this.targets = {};
     this.routeValues = new Map();
     this.geometry = null;
@@ -197,6 +198,8 @@ export class SculptureRenderer {
         y: e.clientY,
         yaw: this.yaw,
         pitch: this.pitch,
+        axialRotation: this.axialRotation,
+        axialDrag: e.pointerType === "mouse" && e.button === 0,
         pan: { ...this.pan },
         // Primary mouse drag always rotates; other pointer/gesture controls stay intact.
         panning: e.shiftKey && !(e.button === 0 && e.pointerType === "mouse"),
@@ -212,11 +215,17 @@ export class SculptureRenderer {
         return;
       }
       this.yaw = this.drag.yaw + (e.clientX - this.drag.x) * 0.007;
-      this.pitch = clamp(
-        this.drag.pitch + (e.clientY - this.drag.y) * 0.006,
-        -1.1,
-        1.1,
-      );
+      if (this.drag.axialDrag) {
+        // Spin around the object's own longitudinal (time/fundamental) axis,
+        // before yaw. Applying this after yaw would tilt the time axis instead.
+        this.axialRotation = this.drag.axialRotation + (e.clientY - this.drag.y) * .006;
+      } else {
+        this.pitch = clamp(
+          this.drag.pitch + (e.clientY - this.drag.y) * 0.006,
+          -1.1,
+          1.1,
+        );
+      }
     });
     const end = () => {
       this.drag = null;
@@ -235,14 +244,14 @@ export class SculptureRenderer {
       },
       { passive: false },
     );
-    canvas.addEventListener("dblclick", () => this.resetView());
   }
   resetView() {
     this.yaw = 0;
     this.pitch = 0;
+    this.axialRotation = 0;
     this.zoom = 1;
     this.pan = { x: 0, y: 0 };
-    this.autoFit = true;
+    this.fitTimeline();
   }
   frontView() {
     this.resetView();
@@ -252,6 +261,7 @@ export class SculptureRenderer {
     if (!g || !this.size.width || !this.size.height) return;
     this.yaw = 0;
     this.pitch = 0;
+    this.axialRotation = 0;
     const base = Math.min(this.size.width / 680, this.size.height / 180);
     const lastY = g.echoLayout.copies.at(-1).offset.y;
     this.zoom = clamp(
@@ -267,7 +277,6 @@ export class SculptureRenderer {
       x: (-(g.echoLayout.length - g.length) * base * this.zoom) / 2,
       y: (-(g.bounds.minY + g.bounds.maxY + lastY) * base * this.zoom) / 2,
     };
-    this.autoFit = false;
   }
   resize() {
     const r = this.canvas.getBoundingClientRect();
@@ -276,7 +285,6 @@ export class SculptureRenderer {
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (this.autoFit && this.geometry) this.fitTimeline();
   }
   setSampleRate(rate) {
     if (this.sampleRate !== rate) {
@@ -289,7 +297,6 @@ export class SculptureRenderer {
     this.needsBuild = true;
     if (instant) {
       this.routeValues.clear();
-      this.autoFit = true;
     }
   }
   setCompare(doc) {
@@ -339,7 +346,6 @@ export class SculptureRenderer {
       this.targets = vals;
       this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000);
       this.needsBuild = false;
-      if (this.autoFit) this.fitTimeline();
     }
     return moving;
   }
@@ -352,10 +358,13 @@ export class SculptureRenderer {
       sy = Math.sin(this.yaw),
       cp = Math.cos(this.pitch),
       sp = Math.sin(this.pitch);
-    const xx = x * cy + z * sy,
-      zz = -x * sy + z * cy,
-      yy = y * cp - zz * sp,
-      depth = y * sp + zz * cp;
+    const axial = this.axialRotation ?? 0,
+      localY = y * Math.cos(axial) - z * Math.sin(axial),
+      localZ = y * Math.sin(axial) + z * Math.cos(axial);
+    const xx = x * cy + localZ * sy,
+      zz = -x * sy + localZ * cy,
+      yy = localY * cp - zz * sp,
+      depth = localY * sp + zz * cp;
     const camera = 1000 / (1000 + depth);
     const fit = Math.min(w / 680, h / 180) * this.zoom;
     return {
@@ -507,7 +516,7 @@ export class SculptureRenderer {
   }
   drawNoise(g) {
     const {width,height}=this.size;
-    const key=JSON.stringify([width,height,this.yaw,this.pitch,this.zoom,this.pan,g.echoLayout.copies]);
+    const key=JSON.stringify([width,height,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,g.echoLayout.copies]);
     const render=c=>{
       for(const copy of [...g.echoLayout.copies].reverse()){
         const opacity=copy.gain ** .7;
@@ -528,8 +537,23 @@ export class SculptureRenderer {
     this.ctx.drawImage(this.noiseCanvas,0,0,width,height);this.ctx.restore();
   }
   drawHalo(g,copy,opacity) {
-    const c=this.ctx;
+    // Accumulate faint gradients at higher exposure, then attenuate the whole
+    // layer once. Otherwise each audible low-level contribution rounds to zero
+    // separately in Canvas's 8-bit alpha channel.
+    this.haloCanvas ||= this.createHaloCanvas?.();
+    const layer=this.haloCanvas;
+    const peak=Math.max(...g.glow.map(pt=>pt.alpha))*opacity*g.brightness;
+    const exposure=layer?Math.min(16,.5/Math.max(1e-9,peak*12)):1;
+    const c=layer?layer.getContext('2d'):this.ctx;
+    if(layer){
+      const {width,height}=this.size;
+      if(layer.width!==Math.ceil(width)||layer.height!==Math.ceil(height)){
+        layer.width=Math.ceil(width);layer.height=Math.ceil(height);
+      }
+      c.clearRect(0,0,layer.width,layer.height);
+    }
     c.save();
+    if(layer)c.globalCompositeOperation='lighter';
     for(const halo of g.glow) {
       const center=this.project(halo,copy.offset,copy.scale);
       const vectors=[['x',halo.radiusX],['y',halo.radiusY],['z',halo.radiusZ]].map(([axis,radius])=>{
@@ -540,7 +564,7 @@ export class SculptureRenderer {
       const a=vectors.reduce((sum,v)=>sum+v.x*v.x,0),b=vectors.reduce((sum,v)=>sum+v.x*v.y,0),d=vectors.reduce((sum,v)=>sum+v.y*v.y,0);
       const disc=Math.sqrt((a-d)**2+4*b*b),angle=.5*Math.atan2(2*b,a-d);
       const major=Math.max(1,Math.sqrt((a+d+disc)/2)),minor=Math.max(1,Math.sqrt(Math.max(0,(a+d-disc)/2)));
-      const alpha=halo.alpha*opacity*g.brightness;
+      const alpha=halo.alpha*opacity*g.brightness*exposure;
       c.save();c.translate(center.x,center.y);c.rotate(angle);c.scale(major,minor);
       const gradient=c.createRadialGradient(0,0,0,0,0,1);
       gradient.addColorStop(0,`rgba(255,255,255,${alpha})`);
@@ -551,6 +575,10 @@ export class SculptureRenderer {
       c.fillStyle=gradient;c.fillRect(-1,-1,2,2);c.restore();
     }
     c.restore();
+    if(layer){
+      this.ctx.save();this.ctx.globalAlpha=1/exposure;
+      this.ctx.drawImage(layer,0,0,this.size.width,this.size.height);this.ctx.restore();
+    }
   }
   destroy() {
     this.observer.disconnect();
