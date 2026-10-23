@@ -1709,8 +1709,10 @@ dialog input:not([type]) {
 }
 @media (max-width: 420px) { .parameter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-.stage-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
-.stage-actions .history-actions { margin: 0; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-.stage-actions .history-actions #reset-sound { margin-left: 0; }
-.stage-actions .stage-tools { position: static; }
-.stage-actions #reset-view { font-size: 13px; padding: 0; width: auto; height: auto; }
+.stage-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.stage-actions #compare-button { margin-top: 0; }
+.stage-actions .history-actions { margin: 0; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+.history-stack { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.history-stack > .text-button { font-size: 11px; }
+
+@media (max-height: 850px) and (min-width: 761px) { .stage { min-height: 150px; } }

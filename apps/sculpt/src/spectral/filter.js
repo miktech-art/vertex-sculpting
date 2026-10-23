@@ -80,7 +80,8 @@ export function bandAmplitude(band, params, response) {
     after += (amplitude * response(params.pitch * h)) ** 2;
   }
   return {
-    source: Math.sqrt(before / band.partials.length),
+    // Sum band power: a group represents all of its partials, not their average.
+    source: Math.sqrt(before),
     gain: before > 0 ? Math.sqrt(after / before) : 0,
   };
 }

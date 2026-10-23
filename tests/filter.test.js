@@ -140,7 +140,7 @@ test("old presets gain a neutral low edge and replace only the old default filte
   );
 });
 
-test("resonance crinkles only bands near a cutoff, without adding brightness or glow", () => {
+test("resonance retains localized crinkles and spectral ridge strength follows its actual filter boost", () => {
   const params = {
     ...PRESETS.find(p => p.id === 'synth').params,
     pitch: 220,
@@ -166,12 +166,8 @@ test("resonance crinkles only bands near a cutoff, without adding brightness or 
   assert.ok(movement(3520) > 5);
   assert.ok(movement(220) < 1e-8);
   assert.ok(movement(21120) < 1e-8);
-  assert.deepEqual(
-    base.lines.map((l) => l.filterGain),
-    resonant.lines.map((l) => l.filterGain),
-  );
-  assert.deepEqual(
-    base.lines.map((l) => l.alpha),
-    resonant.lines.map((l) => l.alpha),
-  );
+  const near = base.lines.findIndex(l => l.frequency === 3520);
+  assert.ok(resonant.lines[near].filterGain > base.lines[near].filterGain * 5);
+  assert.ok(resonant.lines[near].spectralLevel > base.lines[near].spectralLevel);
+  assert.ok(Math.abs(resonant.lines[0].spectralLevel - base.lines[0].spectralLevel) < .01);
 });

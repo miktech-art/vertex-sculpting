@@ -1,3 +1,4 @@
+import { ridgeDecibels, ridgeStrength } from "../spectral/ridges.js";
 import { buildEchoLayout, presentProgress, timeTickStep } from "./echoes.js";
 import {
   createFilterResponse,
@@ -29,19 +30,10 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     highCut = denormalize("cutoff", m.spectralHigh ?? 1);
   const crinkle = (frequency) =>
     cutoffResonanceWeight(frequency, lowCut, highCut, m.spectralPeak ?? 0);
-  const response = createFilterResponse(
-    {
-      cutoffLow: denormalize("cutoffLow", m.spectralLow ?? 0),
-      cutoff: denormalize("cutoff", m.spectralHigh ?? 1),
-      // Brightness encodes rejection; resonance is drawn as crinkles, not glow.
-      resonance: 0.1,
-    },
-    sampleRate,
-  );
-  const spectrumParams = {
-    ...params,
-    harmonics: Math.max(params.harmonics, m.edge * 0.35),
-  };
+  // Spectral levels follow the actual source/filter settings. Connections may
+  // sculpt their geometry, but cannot invent oscillator partials or bypass filtering.
+  const response = createFilterResponse(params, sampleRate);
+  const toneGain = 1 - params.noise;
   const contour = {
     attack: denormalize("attack", m.onset),
     decay: denormalize("decay", m.decayShape),
@@ -85,11 +77,15 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     kind: "core",
     frequency: params.pitch,
     filterGain: response(params.pitch),
+    spectralLevel: ridgeStrength(response(params.pitch) * toneGain),
+    levelDb: ridgeDecibels(response(params.pitch) * toneGain),
   });
   for (let j = 0; j < bands.length; j++) {
     const band = bands[j],
       position = Math.log(band.center) / Math.log(96),
-      energy = bandAmplitude(band, spectrumParams, response),
+      energy = bandAmplitude(band, params, response),
+      spectralAmplitude = energy.source * energy.gain * toneGain,
+      spectralLevel = ridgeStrength(spectralAmplitude),
       resonanceShape = crinkle(params.pitch * band.center);
     for (const sign of [-1, 1]) {
       const line = [];
@@ -123,7 +119,9 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       }
       lines.push({
         points: line,
-        alpha: (0.32 + 0.16 * ((j % 4) / 3)) * energy.source ** 0.28,
+        alpha: spectralLevel,
+        spectralLevel,
+        levelDb: ridgeDecibels(spectralAmplitude),
         width: 0.5 + 0.35 * (m.edge + resonanceShape),
         kind: "filament",
         frequency: params.pitch * band.center,
@@ -440,10 +438,13 @@ export class SculptureRenderer {
     const c = this.ctx;
     for (const line of g.lines) {
       const pts = line.points;
-      const amplitude = Math.min(3, line.filterGain ?? 1) ** 0.7;
+      const amplitude = line.spectralLevel ?? Math.min(3, line.filterGain ?? 1) ** 0.7;
 
+      // Use the same level for the static ridge AND playhead; an absent partial
+      // must not reappear as a bright sweep during playback.
       if (amplitude < 0.002) continue;
-      c.strokeStyle = `rgba(237,237,237,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
+      const baseAlpha = line.spectralLevel === undefined ? line.alpha : line.kind === 'core' ? 1 : .85;
+      c.strokeStyle = `rgba(237,237,237,${clamp(baseAlpha * amplitude * g.brightness * opacity)})`;
       c.lineCap = "round";
       if (line.kind === "core") {
         // One filled ribbon avoids overlapping translucent caps and their visible texture.

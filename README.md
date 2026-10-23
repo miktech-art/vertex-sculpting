@@ -60,3 +60,5 @@ See [contributing](CONTRIBUTING.md) and [architecture](docs/ARCHITECTURE.md). Ed
 The existing [hosted app](https://sound-form-mikvesch.sandywasp257.chatgpt.site/) uses the identity in `.openai/hosting.json` and serves `dist/`. Local commits, GitHub pushes, and publishing are separate actions. Commit and publish verified changes as requested; push only when authorized.
 
 Third-party provenance and licenses are documented in [third-party notes](docs/THIRD_PARTY.md).
+
+Harmonic ridge strength uses the oscillator coefficients and actual low/high-pass response (including resonance), summed as band power and displayed on a −60 to 0 dB relative scale with a gentle visual fade. The playhead uses the same strength, so absent harmonics stay absent during playback. Connections affect geometry without introducing extra spectral energy. This is an analytical source/filter spectrum, not a measured post-effects spectrogram or an SPL-calibrated hearing model; drive, delay, reverb, detune, and headphone response are not included in those harmonic levels.

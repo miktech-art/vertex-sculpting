@@ -396,3 +396,14 @@ test('wavetable changes update active oscillators without replacing their voices
   assert.ok(sources.every(source=>source.frequency.events.length===0));
   engine.disposeVoice(voice);
 });
+
+test('live sine-to-triangle sweep updates oscillator coefficients throughout the first third', async()=>{
+  const engine=new NativeAudioEngine(), voice=await engine.trigger({...BASE,harmonics:1,wavePosition:0});
+  const osc=voice.pitchedSources[0];assert.equal(osc.wave.imag[3],0);
+  engine.update({...voice.params,wavePosition:.01});const quiet=osc.wave.imag[3];
+  engine.update({...voice.params,wavePosition:.33});const louder=osc.wave.imag[3];
+  assert.ok(quiet<0);assert.ok(Math.abs(louder/quiet-33)<1e-4);
+  assert.equal(osc.wave.imag[2],0);
+  engine.update({...voice.params,wavePosition:.34});assert.ok(osc.wave.imag[2]>0);
+  engine.disposeVoice(voice);
+});

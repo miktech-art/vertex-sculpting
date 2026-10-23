@@ -54,11 +54,12 @@
               <button id="compare-button" class="text-button" title="Hold to see and hear the saved version">
                 Hold to compare <span>↔</span>
               </button>
-              <div class="history-actions" aria-label="Sound history">
-                <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
-                <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
+              <div class="history-stack">
                 <button id="reset-sound" class="text-button" title="Restore the saved version or factory settings">Reset</button>
-                <button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button>
+                <div class="history-actions" aria-label="Sound history">
+                  <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
+                  <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
+                </div>
               </div>
             </div>
           </div>
@@ -72,6 +73,9 @@
               <span id="note-label">A3</span
               ><span class="coordinate-separator">/</span
               ><span id="pitch-label">220 Hz</span>
+            </div>
+            <div class="stage-tools">
+              <button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button>
             </div>
           </section>
           <section
