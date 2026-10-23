@@ -46,17 +46,12 @@ button:disabled {
 button:hover:not(:disabled) {
   color: #ffffff;
 }
-button:focus-visible,
-a:focus-visible,
-canvas:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 4px;
+/* Focus remains functional without browser selection rings. */
+*:focus, *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
-input:focus-visible,
-select:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-}
+* { -webkit-tap-highlight-color: transparent; }
 button {
   transition:
     color 0.15s,
@@ -1568,8 +1563,6 @@ dialog input:not([type]) {
   cursor: move;
 }
 .envelope-handle:focus-visible {
-  outline: 1px solid #bfbfbf;
-  outline-offset: 0;
   border-radius: 50%;
 }
 @media (max-height: 850px) and (min-width: 761px) {
@@ -1660,7 +1653,7 @@ dialog input:not([type]) {
 .saved-card-item { position: relative; flex: none; }
 .saved-card-item .saved-card { padding-right: 32px; }
 .sound-menu-button { position: absolute; right: 3px; top: 3px; width: 28px; height: 28px; color: var(--muted); font-size: 20px; border-radius: 3px; line-height: 1; }
-.sound-menu-button:hover, .sound-menu-button:focus-visible { color: var(--text); background: #ffffff12; }
+.sound-menu-button:hover { color: var(--text); background: #ffffff12; }
 .saved-row > button:first-child { min-width: 0; overflow-wrap: anywhere; }
 .saved-row-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
 .saved-row-actions button { font-size: 11px; padding: 8px 0; }
@@ -1690,19 +1683,17 @@ dialog input:not([type]) {
 .parameter-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-content: start; }
 .knob-control { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 12px 0; min-width: 0; }
 .knob-label { grid-column: 2; align-self: end; color: #9b9b9b; font-size: 10px; line-height: 1.4; }
-.knob-dial { grid-column: 1; grid-row: 1 / 3; width: 38px; height: 38px; cursor: ns-resize; touch-action: none; border-radius: 50%; }
+.knob-dial { grid-column: 1; grid-row: 1 / 3; width: 38px; height: 38px; cursor: default; touch-action: none; border-radius: 50%; }
 .knob-dial svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .knob-dial path { fill: none; stroke: #cccccc; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
-.knob-dial:hover path, .knob-dial:focus-visible path { stroke: #ffffff; }
 .knob-dragging, .knob-dragging * { cursor: none !important; }
 .knob-value { grid-column: 2; align-self: start; min-width: 0; width: 100%; padding: 1px 0; border: none; border-radius: 0; background: transparent; color: #e5e5e5; font: 10px var(--mono); line-height: 1.5; outline-offset: 2px; }
-.knob-value:focus { background: #202020; }
 #connection-details .knob-control { padding: 10px 0; grid-template-columns: 44px minmax(0, 1fr); }
 .wavetable-panel { flex: none; border-bottom: 1px solid var(--line); padding-bottom: 11px; margin-bottom: 17px; }
 .wavetable-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .wavetable-heading select { background: transparent; border: 0; color: #bcbcbc; font: 10px var(--mono); padding: 4px 0; max-width: 150px; }
 .wavetable-heading option { color: #eeeeee; background: #151515; }
-#wavetable-canvas { display: block; width: 100%; height: 132px; cursor: ns-resize; touch-action: none; }
+#wavetable-canvas { display: block; width: 100%; height: 132px; cursor: default; touch-action: none; }
 #wavetable-position .knob-control { padding: 0; width: 135px; margin-left: auto; }
 .control-tabs { margin-top: 15px; gap: 24px; }
 @media (max-width: 760px) {
