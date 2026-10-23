@@ -1795,3 +1795,12 @@ dialog input:not([type]) {
  .modulation-strip .timeline-section { height: 220px; min-height: 220px; }
  .lfo-panel { border-left: 0; border-top: 1px solid var(--line-soft) !important; }
 }
+/* Stable instance order and centered routing above each generator. */
+.modulation-strip .section-caption { display: grid; grid-template-columns: 1fr auto 1fr; }
+.modulation-strip .section-caption > :last-child { justify-self: end; }
+.modulation-strip .section-caption .envelope-routing { justify-self: center; }
+.modulation-strip .route-select .wavetable-trigger { gap: 5px; letter-spacing: normal; }
+.modulation-strip .wavetable-options { top: calc(100% + 7px); bottom: auto; max-height: 240px; overflow-y: auto; z-index: 100; }
+.lfo-waveform-heading { display: flex; justify-content: flex-end; min-height: 20px; }
+.lfo-waveform-heading .wavetable-select { display: inline-block; }
+.lfo-graph { align-self: center; }

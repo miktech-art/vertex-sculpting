@@ -343,6 +343,7 @@ export class NativeAudioEngine {
       Object.assign(v.params, structuredClone(params));
       if(!params.envelopes)delete v.params.envelopes;
       if(!params.lfos)delete v.params.lfos;
+      if(!params.envelopeTarget){delete v.params.envelopeTarget;delete v.params.envelopeAmount;}
       if (!sourceAlive)
         for (const id of ["attack", "decay", "sustain", "hold", "release"])
           v.params[id] = old[id];

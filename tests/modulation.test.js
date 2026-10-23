@@ -62,3 +62,14 @@ test('releasing a held EG preserves the LFO phase accumulated before note-off',(
   const after=modulatedParams(p,1,{held:false,releaseAt:1});
   assert.ok(Math.abs(before.pitch-after.pitch)<1e-8);
 });
+
+test('the first EG can use the same modulation destinations and round-trips its routing',()=>{
+  const p={...BASE,envelopeTarget:'pitch',envelopeAmount:12};
+  const doc=makeDocument();doc.params=p;
+  assert.equal(validateDocument(doc).params.envelopeTarget,'pitch');
+  assert.equal(validateDocument(doc).params.envelopeAmount,12);
+  assert.ok(Math.abs(modulatedParams(p,p.attack).pitch-BASE.pitch*2)<1e-8);
+  const amplitude={...BASE,envelopes:[{...env,target:'amplitude',amount:1}]};
+  assert.equal(modulatedParams(amplitude,0).amplitude,0);
+  assert.ok(Math.abs(modulatedParams(amplitude,env.attack).amplitude-BASE.volume)<1e-10);
+});

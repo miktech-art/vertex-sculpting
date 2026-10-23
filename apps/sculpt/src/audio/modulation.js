@@ -1,4 +1,4 @@
-import {getLfos,lfoWave,MOD_LIMITS} from "../lfo.js";
+import {getLfos,lfoWave,MOD_LIMITS,modulationEnvelopes} from "../lfo.js";
 import {duration,clamp} from '../model.js';
 import {voiceEnvelopeAt} from './live-envelope.js';
 export function envelopeValue(env,time,voice={}) {
@@ -9,15 +9,18 @@ export function envelopeValue(env,time,voice={}) {
 }
 export function modulatedParams(params,time,voice={}) {
   const sums={pitch:0,wavePosition:0,cutoff:0,amplitude:0};
-  const egValues=(params.envelopes||[]).map(env=>({target:env.target,value:envelopeValue(env,time,voice)*env.amount}));
-  for(const env of egValues)if(Object.hasOwn(sums,env.target))sums[env.target]+=env.value;
+  const envelopes=modulationEnvelopes(params);
+  const egValues=envelopes.map(env=>({target:env.target,value:envelopeValue(env,time,voice)*env.amount}));
+  let envelopeGain=1;
+  for(const env of envelopes)if(env.target==='amplitude')envelopeGain*=clamp(1+env.amount*(envelopeValue(env,time,voice)-1),0,2);
+  for(const env of egValues)if(env.target!=='amplitude'&&Object.hasOwn(sums,env.target))sums[env.target]+=env.value;
   const lfos=getLfos(params);
   for(let index=0;index<lfos.length;index++){
     const lfo=lfos[index],t=time-lfo.delay;
     if(t<0)continue;
     // Integrate the EG-controlled rate from note onset, so phase stays anchored
     // when rate changes rather than jumping backwards or restarting each cycle.
-    const rateEnvs=(params.envelopes||[]).filter(e=>e.target===`lfoRate:${index}`);
+    const rateEnvs=envelopes.filter(e=>e.target===`lfoRate:${index}`);
     let phase=lfo.phase;
     if(rateEnvs.length){
       const previous=voice.lfoPhaseCache?.get(index);
@@ -39,11 +42,11 @@ export function modulatedParams(params,time,voice={}) {
   return {pitch:clamp(params.pitch*2**(sums.pitch/12),20,20000),
     wavePosition:clamp(params.wavePosition+sums.wavePosition),
     cutoff:clamp(params.cutoff*2**sums.cutoff,params.cutoffLow,20000),
-    amplitude:params.volume*clamp(1+sums.amplitude,0,2)};
+    amplitude:params.volume*envelopeGain*clamp(1+sums.amplitude,0,2)};
 }
 // Audio-clock automation also works in OfflineAudioContext (WAV export).
 export function scheduleModulation(engine,v,now) {
-  const envs=v.params.envelopes||[];
+  const envs=modulationEnvelopes(v.params);
   const lfos=getLfos(v.params),activeLfo=lfos.some(l=>l.amount!==0)||envs.some(e=>e.target.startsWith("lfo"));
   if(!envs.length&&!activeLfo&&!v.hadModulation)return;
   v.hadModulation=true;
@@ -80,7 +83,7 @@ export function scheduleModulation(engine,v,now) {
     }
   }
   automate(v.filters.high.frequency,samples.map(s=>s.cutoff));
-  if(lfos.some(l=>l.target==='amplitude')||v.hadLfoAmplitude){
+  if(lfos.some(l=>l.target==='amplitude')||envs.some(e=>e.target==='amplitude')||v.hadLfoAmplitude){
     v.hadLfoAmplitude=true;automate(v.level.gain,samples.map(s=>s.amplitude));
   }
   if(v.modulationTask){clearTimeout(v.modulationTask);v.tasks.delete(v.modulationTask);v.modulationTask=null;}

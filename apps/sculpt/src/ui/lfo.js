@@ -1,3 +1,4 @@
+import {routeSelect} from "./route-select.js";
 import {Knob} from './knob.js';
 import {TableSelect} from './table-select.js';
 import {defaultLfo,getLfos,LFO_SHAPES,lfoWave,MOD_LIMITS} from '../lfo.js';
@@ -18,7 +19,7 @@ export class LfoPanel {
   }
   build(){
     const lfo=this.lfos[this.selected],container=document.querySelector('#lfo-selectors');container.replaceChildren();
-    for(const i of [this.selected,...this.lfos.map((_,i)=>i).filter(i=>i!==this.selected)]){
+    for(let i=0;i<this.lfos.length;i++){
       const b=document.createElement('button');b.className='envelope-selector';b.classList.toggle('selected',i===this.selected);
       b.setAttribute('aria-label',`LFO ${i+1}`);b.setAttribute('aria-pressed',i===this.selected);
       b.addEventListener('click',()=>{this.selected=i;this.setParams(this.params);});container.append(b);
@@ -26,13 +27,9 @@ export class LfoPanel {
     const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.setAttribute('aria-label','Add LFO');add.disabled=this.lfos.length>=8;
     add.addEventListener('click',()=>{this.selected=this.lfos.length;this.onAdd({...defaultLfo(),amount:2});});container.append(add);
     const route=document.querySelector('#lfo-routing');route.replaceChildren();
-    const wrapper=document.createElement('div');wrapper.className='envelope-destination';
-    const select=document.createElement('select');select.setAttribute('aria-label','LFO destination');
-    const targets=[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],['amplitude','Amplitude']];
-    for(const [value,label] of targets){const o=document.createElement('option');o.value=value;o.textContent=label;select.append(o);}
-    select.value=lfo.target;select.style.width=`${targets.find(t=>t[0]===lfo.target)[1].length*.62+.15}em`;
-    select.addEventListener('change',()=>{this.onEdit(this.selected,{target:select.value,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5}[select.value]});this.onCommit();});
-    wrapper.append(select);route.append(wrapper);
+    routeSelect(route,{label:'LFO destination',value:lfo.target,options:[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],['amplitude','Amplitude']],onChange:target=>{
+      this.onEdit(this.selected,{target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5}[target]});this.onCommit();
+    }});
     const controls=document.querySelector('#lfo-controls');controls.replaceChildren();this.knobs.clear();
     for(const [id,label,min,max] of [['rate','Rate',.05,30],['amount','Depth',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase','Phase',0,1],['delay','Delay',0,2],['fade','Fade',0,3],['offset','Offset',-1,1]]){
       const knob=new Knob({id:`lfo-${id}`,label,min,max,value:lfo[id],

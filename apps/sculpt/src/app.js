@@ -1,3 +1,4 @@
+import {routeSelect} from "./ui/route-select.js";
 import {LfoPanel} from "./ui/lfo.js";
 import {getLfos,egTargetLimit} from "./lfo.js";
 import { soundPreview } from "./ui/sound-preview.js";
@@ -89,18 +90,18 @@ function selectedParams(params=store.document.params){
 function editSelectedEnvelope(changes){
   store.edit(doc=>{
     if(selectedEnvelope>0&&doc.params.envelopes?.[selectedEnvelope-1])Object.assign(doc.params.envelopes[selectedEnvelope-1],changes);
-    else Object.assign(doc.params,changes);
+    else {const {target,amount,...stages}=changes;Object.assign(doc.params,stages);if(target!==undefined)doc.params.envelopeTarget=target;if(amount!==undefined)doc.params.envelopeAmount=amount;}
   },'parameter');
 }
 function renderEnvelopeSelectors(){
   const params=store.document.params,envs=params.envelopes||[];
   if(selectedEnvelope>envs.length)selectedEnvelope=0;
   const container=$('#envelope-selectors');container.replaceChildren();
-  for(const i of [selectedEnvelope,...Array.from({length:envs.length+1},(_,i)=>i).filter(i=>i!==selectedEnvelope)]){
+  for(let i=0;i<=envs.length;i++){
     const b=document.createElement('button');b.className='envelope-selector';
     b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
-    b.setAttribute('aria-label',i===0?'Amplitude envelope':`Envelope ${i+1}`);
-    b.title=i===0?'Amplitude':`Envelope ${i+1}: ${envs[i-1].target}`;
+    b.setAttribute('aria-label',i===0?'Envelope 1':`Envelope ${i+1}`);
+    b.title=i===0?`Envelope 1: ${params.envelopeTarget||'amplitude'}`:`Envelope ${i+1}: ${envs[i-1].target}`;
     b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});container.append(b);
   }
   const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8;
@@ -111,21 +112,16 @@ function renderEnvelopeSelectors(){
   });container.append(add);
   const route=$('#envelope-routing');route.replaceChildren();
   const depthSlot=$('#envelope-depth-slot');depthSlot.replaceChildren();
-  const env=envs[selectedEnvelope-1]||{target:'amplitude',amount:0};
-  const select=document.createElement('select');select.setAttribute('aria-label','Envelope destination');
-  const destinations=selectedEnvelope?[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],...getLfos(params).flatMap((_,i)=>[[`lfoRate:${i}`,`LFO ${i+1} rate`],[`lfoDepth:${i}`,`LFO ${i+1} depth`]])]:[['amplitude','Amplitude']];
-  for(const [value,label] of destinations){
-    const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);
-  }
-  select.value=env.target;
-  select.style.width=`${destinations.find(([value])=>value===env.target)[1].length*.62+.15}em`;
-  const wrapper=document.createElement('div');wrapper.className='envelope-destination';wrapper.append(select);route.append(wrapper);
-  select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:select.value.startsWith('lfoRate:')?2:select.value.startsWith('lfoDepth:')?.25:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
+  const env=envs[selectedEnvelope-1]||{target:params.envelopeTarget||'amplitude',amount:params.envelopeAmount??0};
+  const destinations=[['amplitude','Amplitude'],['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],...getLfos(params).flatMap((_,i)=>[[`lfoRate:${i}`,`LFO ${i+1} rate`],[`lfoDepth:${i}`,`LFO ${i+1} depth`]])];
+  routeSelect(route,{label:'Envelope destination',options:destinations,value:env.target,onChange:target=>{
+    editSelectedEnvelope({target,amount:target.startsWith('lfoRate:')?2:target.startsWith('lfoDepth:')?.25:{amplitude:1,pitch:12,wavePosition:.5,cutoff:2}[target]});store.commit();renderEnvelopeSelectors();
+  }});
   const limit=egTargetLimit(env.target);
   const depth=new Knob({id:'envelope-depth',label:'Depth',min:-limit,max:limit,value:env.amount,
-    format:v=>env.target==='amplitude'?'—':(env.target==='wavePosition'||env.target.startsWith('lfoDepth:'))?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
+    format:v=>env.target==='amplitude'&&!selectedEnvelope?'—':(env.target==='amplitude'||env.target==='wavePosition'||env.target.startsWith('lfoDepth:'))?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
     onInput:value=>editSelectedEnvelope({amount:value}),onCommit:()=>store.commit()});
-  if(!selectedEnvelope){depth.element.classList.add('inactive-depth');depth.editor.disabled=true;depth.dial.setAttribute('aria-disabled','true');depth.dial.tabIndex=-1;}
+  if(!selectedEnvelope&&env.target==='amplitude'){depth.element.classList.add('inactive-depth');depth.editor.disabled=true;depth.dial.setAttribute('aria-disabled','true');depth.dial.tabIndex=-1;}
   depthSlot.append(depth.element);
 }
 function makeEnvelopeControls(){
@@ -701,7 +697,7 @@ $("#wav-button").addEventListener("click", async () => {
 installHoldLoopShortcut(document, () => {
   setLoop(true);
   play();
-}, stop, () => tableSelect.isOpen || lfoPanel.shapes.isOpen || !!document.querySelector("dialog[open]"));
+}, stop, () => tableSelect.isOpen || lfoPanel.shapes.isOpen || !!document.querySelector('.route-select [role="listbox"]:not([hidden])') || !!document.querySelector("dialog[open]"));
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(

@@ -24,3 +24,7 @@ export function validateLfos(value){
     return result;
   });
 }
+
+export const modulationEnvelopes=params=>params.envelopeTarget&&params.envelopeTarget!=='amplitude'
+  ?[{...params,target:params.envelopeTarget,amount:params.envelopeAmount??0},...(params.envelopes||[])]:params.envelopes||[];
+export const validEgTarget=target=>typeof target==='string'&&(Object.hasOwn(MOD_LIMITS,target)||/^lfo(?:Rate|Depth):[0-7]$/.test(target));
