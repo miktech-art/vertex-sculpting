@@ -1,7 +1,7 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../apps/sculpt/src/state.js';
-import { BASE, makeDocument } from '../apps/sculpt/src/model.js';
+import { BASE, PRESETS, makeDocument } from '../apps/sculpt/src/model.js';
 const data = new Map();
 let blocked = false;
 globalThis.localStorage = {
@@ -223,4 +223,55 @@ test('failed or malformed imports leave the current sound, library and undo hist
   assert.throws(() => store.importSaved({ schema: 'bad' }));
   assert.deepEqual(store.snapshot(), snapshot);
   assert.deepEqual(store.saved, saved);
+});
+
+function factory(store, id) {
+  const preset = PRESETS.find(p => p.id === id);
+  store.load(makeDocument(preset), null, `factory:${id}`);
+}
+test('each factory sound keeps independent parameters and connections across switches and reload', () => {
+  const store=fresh(); factory(store,'kick');
+  store.edit(d=>{d.params.pitch=80;d.routes[0].amount=.31;});store.commit();
+  factory(store,'bass'); store.edit(d=>d.params.pitch=110);store.commit();store.persist();
+  const reload=fresh();factory(reload,'kick');
+  assert.equal(reload.document.params.pitch,80);assert.equal(reload.document.routes[0].amount,.31);
+  assert.equal(reload.initial.params.pitch,55);
+  factory(reload,'bass');assert.equal(reload.document.params.pitch,110);
+  assert.equal(reload.saved.length,0);
+});
+test('saved sound working edits survive switching without overwriting its named comparison baseline', () => {
+  const store=fresh(), first=store.save('First');
+  store.edit(d=>d.params.noise=.27);store.commit();factory(store,'bass');store.persist();
+  const reload=fresh();reload.load(first,first.libraryId);
+  assert.equal(reload.document.params.noise,.27);assert.equal(reload.initial.params.noise,first.params.noise);
+  assert.equal(reload.saved[0].params.noise,first.params.noise);
+  reload.save('First updated');factory(reload,'synth');reload.load(reload.saved[0],first.libraryId);
+  assert.equal(reload.document.params.noise,.27);assert.equal(reload.initial.params.noise,.27);
+});
+test('saving a copy keeps the source working state, and New sound resumes until it is named', () => {
+  const store=fresh();factory(store,'kick');store.edit(d=>d.params.pitch=82);store.commit();
+  store.save('Kick copy');factory(store,'kick');assert.equal(store.document.params.pitch,82);
+  store.load(makeDocument({name:'Untitled',params:BASE}),null,'new');
+  store.edit(d=>d.params.noise=.41);store.commit();factory(store,'synth');store.persist();
+  const reload=fresh();reload.load(makeDocument({name:'Untitled',params:BASE}),null,'new');
+  assert.equal(reload.document.params.noise,.41);reload.save('Named draft');
+  reload.load(makeDocument({name:'Untitled',params:BASE}),null,'new');
+  assert.equal(reload.document.params.noise,BASE.noise);
+});
+test('rename and delete/restore preserve an inactive sound workspace', () => {
+  const store=fresh(), saved=store.save('Original');
+  store.edit(d=>d.params.noise=.38);store.commit();factory(store,'bass');
+  store.renameSaved(saved.libraryId,'Renamed');store.deleteSaved(saved.libraryId);store.persist();
+  const reload=fresh();reload.restoreSaved(saved.libraryId);reload.load(reload.saved[0],saved.libraryId);
+  assert.equal(reload.document.name,'Renamed');assert.equal(reload.document.params.noise,.38);
+});
+test('undoing a resumed edit is retained when switching away and back', () => {
+  const store=fresh();factory(store,'kick');store.edit(d=>d.params.pitch=88);store.commit();store.undo();
+  factory(store,'bass');factory(store,'kick');assert.equal(store.document.params.pitch,55);
+});
+test('failed copy save restores its sound identity and cached edits', () => {
+  const store=fresh();factory(store,'kick');store.edit(d=>d.params.pitch=86);store.commit();
+  blocked=true;assert.throws(()=>store.save('Copy'),/Could not save/);blocked=false;
+  assert.equal(store.activeSoundKey,'factory:kick');factory(store,'bass');factory(store,'kick');
+  assert.equal(store.document.params.pitch,86);assert.equal(store.saved.length,0);
 });

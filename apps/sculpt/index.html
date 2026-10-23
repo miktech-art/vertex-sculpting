@@ -50,23 +50,19 @@
                 >
               </h1>
             </div>
-            <button
-              id="compare-button"
-              class="text-button"
-              title="Hold to see and hear the loaded preset"
-            >
-              Hold to compare <span>↔</span>
-            </button>
+            <div class="stage-actions">
+              <button id="compare-button" class="text-button" title="Hold to see and hear the saved version">
+                Hold to compare <span>↔</span>
+              </button>
+              <div class="history-actions" aria-label="Sound history">
+                <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
+                <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
+                <button id="reset-sound" class="text-button" title="Restore the saved version or factory settings">Reset</button>
+                <button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button>
+              </div>
+            </div>
           </div>
           <section class="stage" aria-label="Interactive sound sculpture">
-            <div class="stage-coordinate top-left">
-              <span class="crosshair">+</span>
-              <span id="view-label">FRONT VIEW</span>
-            </div>
-            <div class="stage-coordinate top-right">
-              <span class="state-dot"></span
-              ><span id="stage-state">PAUSED</span>
-            </div>
             <canvas
               id="sculpture"
               aria-label="Three-dimensional sound sculpture. Drag to rotate; scroll to zoom; double-click to reset."
@@ -76,16 +72,6 @@
               <span id="note-label">A3</span
               ><span class="coordinate-separator">/</span
               ><span id="pitch-label">220 Hz</span>
-            </div>
-            <div class="stage-tools">
-              <button
-                id="reset-view"
-                class="icon-button"
-                aria-label="Reset sculpture view"
-                title="Reset view"
-              >
-                ⌖
-              </button>
             </div>
           </section>
           <section
@@ -195,29 +181,6 @@
             <div id="connection-details"></div>
           </div>
           <div class="inspector-bottom">
-            <div class="history-actions">
-              <button
-                id="undo-button"
-                class="text-button"
-                aria-label="Undo"
-                title="Undo (⌘Z)"
-              >
-                ↶ Undo</button
-              ><button
-                id="redo-button"
-                class="text-button"
-                aria-label="Redo"
-                title="Redo (⌘⇧Z)"
-              >
-                ↷ Redo</button
-              ><button
-                id="reset-sound"
-                class="text-button"
-                title="Reset the current sound to its loaded state"
-              >
-                Reset
-              </button>
-            </div>
             <button id="save-button" class="save-button">
               <span>Save sound</span><span>↗</span>
             </button>
@@ -310,15 +273,6 @@
           ><button type="submit" class="solid-button">Save sound ↗</button>
         </div>
       </form>
-    </dialog>
-    <dialog id="unsaved-dialog" aria-labelledby="unsaved-title">
-      <h2 id="unsaved-title">Keep your changes?</h2>
-      <p>Save your current sound before switching. Your saved sounds will stay in the bottom bar.</p>
-      <div class="dialog-actions unsaved-actions">
-        <button class="text-button" data-close-dialog="unsaved-dialog">Cancel</button>
-        <button id="discard-changes" class="text-button">Discard changes</button>
-        <button id="save-and-continue" class="solid-button">Save &amp; continue</button>
-      </div>
     </dialog>
     <dialog id="sound-options-dialog" aria-labelledby="sound-options-title">
       <form id="sound-options-form">

@@ -119,7 +119,7 @@ function renderPresets() {
 function loadPreset(preset) {
   stop();
   mapping.selected = null;
-  store.load(makeDocument(preset));
+  store.load(makeDocument(preset), null, `factory:${preset.id}`);
   renderer.resetView();
   miniRenderer.resetView();
   toast(`${preset.name} loaded`);
@@ -127,12 +127,11 @@ function loadPreset(preset) {
 function renderHeader() {
   const doc = store.document;
   $("#preset-title").firstChild.textContent = doc.name;
-  const factory = PRESETS.find((p) => p.name === doc.name);
   $("#modified-indicator").hidden =
     JSON.stringify(doc.params) === JSON.stringify(store.initial.params) &&
     JSON.stringify(doc.routes) === JSON.stringify(store.initial.routes);
   for (const card of document.querySelectorAll(".preset-card")) {
-    const active = !store.activeSavedId && card.dataset.preset === factory?.id;
+    const active = store.activeSoundKey === `factory:${card.dataset.preset}`;
     card.classList.toggle("active", active);
     card.setAttribute("aria-pressed", active);
   }
@@ -286,16 +285,7 @@ window.addEventListener("pagehide", () => {
   stop();
   store.persist();
 });
-$("#reset-view").addEventListener("click", () => {
-  renderer.resetView();
-  $("#view-label").textContent = "FRONT VIEW";
-});
-$("#sculpture").addEventListener("pointermove", (e) => {
-  if (e.buttons) $("#view-label").textContent = "PERSPECTIVE";
-});
-$("#sculpture").addEventListener("dblclick", () => {
-  $("#view-label").textContent = "FRONT VIEW";
-});
+$("#reset-view").addEventListener("click", () => renderer.resetView());
 $("#undo-button").addEventListener("click", () => store.undo());
 $("#redo-button").addEventListener("click", () => store.redo());
 $("#reset-sound").addEventListener("click", () => {
@@ -384,16 +374,14 @@ for (const dialog of document.querySelectorAll("dialog"))
         dialog.close();
     }
   });
-let pendingSoundAction = null;
 function switchSound(action) {
-  if (!store.hasUnsavedChanges) return action();
-  pendingSoundAction = action;
-  $("#unsaved-dialog").showModal();
+  if (!store.persist()) { toast("Could not keep your edits in this browser. Export JSON before switching."); return; }
+  action();
+  if (!store.persist()) toast("Could not keep this workspace in browser storage. Export JSON to keep your work.");
 }
-function openSaveDialog(continuing = false) {
+function openSaveDialog() {
   stop();
   $("#save-name").setCustomValidity("");
-  if (!continuing) pendingSoundAction = null;
   $("#save-name").value = store.document.name;
   $("#save-copy-option").hidden = !store.activeSavedId;
   $("#save-copy").checked = false;
@@ -406,21 +394,11 @@ for (const id of ["save-button", "bar-save-button"])
 $("#new-sound-button").addEventListener("click", () => switchSound(() => {
   stop();
   mapping.selected = null;
-  store.load(makeDocument({ name: "Untitled", params: BASE }));
+  store.load(makeDocument({ name: "Untitled", params: BASE }), null, "new");
   renderer.resetView();
   miniRenderer.resetView();
-  toast("New sound ready — sculpt it, then save it below");
+  toast("New sound workspace — edits are remembered automatically");
 }));
-$("#discard-changes").addEventListener("click", () => {
-  $("#unsaved-dialog").close();
-  const action = pendingSoundAction;
-  pendingSoundAction = null;
-  action?.();
-});
-$("#save-and-continue").addEventListener("click", () => {
-  $("#unsaved-dialog").close();
-  openSaveDialog(true);
-});
 $("#save-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = $("#save-name").value.trim();
@@ -438,9 +416,6 @@ $("#save-form").addEventListener("submit", (e) => {
   }
   $("#save-dialog").close();
   toast(`“${name}” saved in this browser`);
-  const action = pendingSoundAction;
-  pendingSoundAction = null;
-  action?.();
 });
 $("#save-name").addEventListener("input", () => $("#save-name").setCustomValidity(""));
 function loadSavedSound(doc) {
@@ -701,12 +676,6 @@ function animate(ms) {
     frameTime = ms;
     const elapsed = playing ? Math.max(0, now - activeEvent.start) : 0;
     $("#play-button").classList.toggle("playing", !!playing);
-    $(".state-dot").classList.toggle("playing", !!playing);
-    $("#stage-state").textContent = playing
-      ? "PLAYING"
-      : compare
-        ? "ORIGINAL FORM"
-        : "PAUSED";
     if (playing) {
       const minutes = Math.floor(elapsed / 60)
           .toString()
