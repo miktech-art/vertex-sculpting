@@ -188,7 +188,7 @@ test("live pitch updates pitched voices without changing the tremolo rate", asyn
   assert.equal(lfo.frequency.events.length, 0);
   engine.disposeVoice(voice);
 });
-test("gesture voices sustain until released and then have a finite effect tail", async () => {
+test("held voices sustain until released and then have a finite effect tail", async () => {
   const engine = new NativeAudioEngine(),
     voice = await engine.trigger({ ...PRESETS[0].params, reverbMix: 0.2 }, { held: true });
   assert.equal(voice.held, true);

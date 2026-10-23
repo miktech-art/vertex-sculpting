@@ -2,6 +2,8 @@
 
 A browser instrument for sculpting sound and exploring its visual mappings. **Sculpt** edits a native synthesizer and its 3D form; **Connections** edits the relationships between sound parameters and visual properties.
 
+The interface and sculpture rendering use only black, white, and gray. There is no camera access, hand tracking, or model download.
+
 This branch, `mikael/sculpt`, is the standalone version. It was created from `mikael/integration`; the combined application remains on that branch.
 
 ## Run locally
@@ -14,12 +16,12 @@ cd vertex-sculpting
 npm run dev
 ```
 
-Open **http://localhost:5177**. Source changes appear after refreshing the browser. Stop with Ctrl+C; set `PORT` to choose a different port. Camera tracking requires permission and localhost or HTTPS. Audio begins after a user interaction.
+Open **http://localhost:5177**. Source changes appear after refreshing the browser. Stop with Ctrl+C; set `PORT` to choose a different port. Audio begins after a user interaction.
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Serve source directly, with no build or installation |
-| `npm test` | Test synthesis, geometry, gestures, saved sounds, and the local server |
+| `npm test` | Test synthesis, geometry, saved sounds, and the local server |
 | `npm run build` | Generate the complete static site in `dist/` |
 | `npm run preview` | Serve an existing production build on localhost:5177 |
 
@@ -33,8 +35,6 @@ apps/sculpt/
   src/audio/             Native Web Audio synthesis and WAV export
   src/visual/            Procedural sculpture geometry and rendering
   src/ui/                Envelope, filter, and connection controls
-  src/tracking/          Camera worker and hand gestures
-  vendor/mediapipe/      Bundled runtime, model, and licenses
 tests/                   Node test suite
 scripts/                 Static build and local server
 docs/                    Architecture and reference notes
@@ -43,7 +43,7 @@ dist/                    Generated output, ignored by Git
 
 ## Sounds and controls
 
-The factory saw starts with harmonics and a short ADSR envelope. Detune, noise, drive, tremolo, delay, and reverb start off. Source, Contour, and Space provide live parameter editing; Connections controls visual mappings. Camera gestures can control the envelope and Loop transport.
+The factory saw starts with harmonics and a short ADSR envelope. Detune, noise, drive, tremolo, delay, and reverb start off. Source, Contour, and Space provide live parameter editing; Connections controls visual mappings.
 
 Use the bottom shelf to save, rename, delete, restore, and switch sounds. **Import preset**, below My sounds, creates and selects a separate saved card. Export JSON for portable backups and WAV for rendered audio.
 

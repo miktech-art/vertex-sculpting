@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#080909" />
+    <meta name="theme-color" content="#090909" />
     <meta
       name="description"
       content="Native sound synthesis and sound-to-visual mapping editor."
@@ -146,76 +146,6 @@
           </div>
         </main>
         <aside class="inspector" aria-label="Sound controls">
-          <section
-            id="camera-panel"
-            class="camera-panel"
-            aria-label="Webcam and hand tracking"
-            data-state="off"
-            data-model="unloaded"
-          >
-            <div class="camera-heading">
-              <span class="eyebrow">CAMERA</span
-              ><button id="camera-button" class="text-button">Enable</button>
-            </div>
-            <div class="camera-frame">
-              <video
-                id="camera-video"
-                autoplay
-                playsinline
-                muted
-                hidden
-                aria-label="Mirrored webcam video"
-              ></video>
-              <canvas
-                id="hand-overlay"
-                aria-label="Detected left and right hand landmarks"
-              ></canvas>
-              <div id="camera-placeholder">Camera off</div>
-            </div>
-            <div class="camera-binding">
-              <span>Left index ↑ → Loop</span>
-              <div
-                class="finger-indicators"
-                aria-label="Loop pose requirements"
-              >
-                <span
-                  data-finger="middle"
-                  data-curled="false"
-                  aria-label="Middle finger extended"
-                  >M</span
-                ><span
-                  data-finger="ring"
-                  data-curled="false"
-                  aria-label="Ring finger extended"
-                  >R</span
-                ><span
-                  data-finger="pinky"
-                  data-curled="false"
-                  aria-label="Pinky finger extended"
-                  >P</span
-                ><span
-                  data-finger="index"
-                  data-curled="false"
-                  aria-label="Left index lowered"
-                  >I</span
-                >
-              </div>
-            </div>
-            <div class="camera-binding">
-              <span>Hand distance → Release</span>
-              <div class="release-indicators">
-                <span id="left-open" data-valid="false">L ↑</span
-                ><span id="right-pinch" data-valid="false">R pinch</span>
-              </div>
-            </div>
-            <div class="camera-binding">
-              <span>Hand distance → Attack</span>
-              <div class="release-indicators">
-                <span id="right-open" data-valid="false">R ↑</span
-                ><span id="left-pinch" data-valid="false">L pinch</span>
-              </div>
-            </div>
-          </section>
           <div id="sound-inspector">
             <div class="inspector-heading">
               <span class="eyebrow">PARAMETERS</span>

@@ -186,7 +186,7 @@ export class ContourView {
     this.onScaleChange(extent);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, w, h);
-    c.strokeStyle = "#323532";
+    c.strokeStyle = "#343434";
     c.lineWidth = 0.7;
     c.beginPath();
     c.moveTo(10, y(0));
@@ -214,7 +214,7 @@ export class ContourView {
     c.beginPath();
     c.moveTo(x(0), y(0));
     for (const point of this.points) c.lineTo(point.x, point.y);
-    c.strokeStyle = "#dddeda";
+    c.strokeStyle = "#dddddd";
     c.lineWidth = 1.1;
     c.stroke();
     const parent = this.parent.getBoundingClientRect();
@@ -224,9 +224,9 @@ export class ContourView {
       const active = this.drag?.id === point.id || this.focused === point.id;
       c.beginPath();
       c.arc(point.x, point.y, active ? 4.5 : 3.5, 0, Math.PI * 2);
-      c.fillStyle = active ? "#d9baa0" : "#ffffff";
+      c.fillStyle = active ? "#bfbfbf" : "#ffffff";
       c.fill();
-      c.fillStyle = active ? "#d9baa0" : "#989e96";
+      c.fillStyle = active ? "#bfbfbf" : "#9c9c9c";
       c.fillText(point.letter, point.x, point.y - 10);
       const button = this.handles.get(point.id);
       button.style.left = rect.left - parent.left + point.x + "px";
@@ -243,14 +243,14 @@ export class ContourView {
     if (progress !== null && progress >= 0 && progress <= 1) {
       const seconds = progress * duration(p),
         xx = x(seconds);
-      c.strokeStyle = "#d9baa0";
+      c.strokeStyle = "#bfbfbf";
       c.beginPath();
       c.moveTo(xx, 8);
       c.lineTo(xx, y(0));
       c.stroke();
       c.beginPath();
       c.arc(xx, y(envelopeAt(p, seconds)), 2.5, 0, Math.PI * 2);
-      c.fillStyle = "#d9baa0";
+      c.fillStyle = "#bfbfbf";
       c.fill();
     }
   }

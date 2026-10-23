@@ -11,7 +11,7 @@ npm test
 npm run build
 ```
 
-Check affected controls in the browser. For persistence changes, import a sound, confirm it has its own card, reload it, and verify existing sounds remain usable. Camera changes also need a live permission and tracking check.
+Check affected controls in the browser. For persistence changes, import a sound, confirm it has its own card, reload it, and verify existing sounds remain usable.
 
 Preserve browser storage keys and preset schemas. Format changes require compatible migrations and tests. Keep personal recordings, preset backups, credentials, dependencies, and generated builds out of commits.
 

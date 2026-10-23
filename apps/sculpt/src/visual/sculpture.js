@@ -411,8 +411,8 @@ export class SculptureRenderer {
         z: 0,
       }).x;
     c.lineWidth = 0.6;
-    c.strokeStyle = "#343934";
-    c.fillStyle = "#737b70";
+    c.strokeStyle = "#383838";
+    c.fillStyle = "#797979";
     c.font = "10px SFMono-Regular,Consolas,monospace";
     c.textAlign = "center";
     c.beginPath();
@@ -443,7 +443,7 @@ export class SculptureRenderer {
       const amplitude = Math.min(3, line.filterGain ?? 1) ** 0.7;
 
       if (amplitude < 0.002) continue;
-      c.strokeStyle = `rgba(238,237,232,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
+      c.strokeStyle = `rgba(237,237,237,${clamp(line.alpha * amplitude * g.brightness * opacity)})`;
       c.lineCap = "round";
       if (line.kind === "core") {
         // One filled ribbon avoids overlapping translucent caps and their visible texture.
@@ -522,7 +522,7 @@ export class SculptureRenderer {
     {
       for (const pt of g.particles) {
         const v = this.project(pt, offset, scale);
-        c.fillStyle = `rgba(229,229,223,${pt.alpha * opacity * g.brightness})`;
+        c.fillStyle = `rgba(229,229,229,${pt.alpha * opacity * g.brightness})`;
         c.fillRect(v.x, v.y, pt.size, pt.size);
       }
     }

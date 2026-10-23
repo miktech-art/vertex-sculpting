@@ -7,7 +7,7 @@ const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const types = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
-  '.json': 'application/json', '.wasm': 'application/wasm', '.wav': 'audio/wav',
+  '.json': 'application/json', '.wav': 'audio/wav',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
 };

@@ -7,7 +7,6 @@
 - `audio/`: native Web Audio synthesis, effects, live envelope editing, and offline WAV rendering.
 - `visual/`: deterministic geometry generated from the sound and its mappings; canvas rendering and temporal echoes.
 - `ui/`: envelope, filter-band, slider, and connection controls.
-- `tracking/`: camera controller, gesture geometry, and a worker using the bundled MediaPipe runtime and hand model.
 
 Both views share one document. Sculpt's localStorage key remains `sound-form:session:v1`; preset schema and library IDs remain compatible. No accounts or backend library are required. Files can be exported and imported as JSON; rendering to WAV runs in the browser.
 
@@ -15,4 +14,4 @@ Both views share one document. Sculpt's localStorage key remains `sound-form:ses
 
 `.openai/hosting.json` retains the existing hosted project's identity and declares `dist/` as the static output. Publication and GitHub synchronization remain separate.
 
-`docs/sculpt-reference.md` preserves historical synthesis and gesture design notes; use the root README for current paths and commands. The standalone branch preserves previous application history without rewriting it.
+`docs/sculpt-reference.md` preserves historical synthesis and visual design notes; use the root README for current paths and commands. The standalone branch preserves previous application history without rewriting it.

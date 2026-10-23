@@ -79,30 +79,6 @@ Visual direction informed by Chronophase and the user's local VoidWave sculpture
 
 Version 0.2 resets prior browser sounds and custom connections once, keeps only the sine factory preset, inverts the pitch/thickness default connection, and increases interface fonts by 2 px. New saves and mapping edits persist normally after the reset.
 
-## Camera and hand bindings (v0.4.1)
-
-Enable Camera in the upper right. The browser must allow camera access. Video and both labeled hand overlays are visible in the panel. Camera frames stay in the browser; MediaPipe assets are served from the app's origin.
-
-Loop: raise a single anatomical left index finger upward, with middle/ring/pinky bent; thumb is unrestricted and palm contact is not required. Hold to enable the existing finite-note Loop transport, lower it to disable further repeats. The current note and its tails finish normally. Gesture motion does not change pitch. A 140 ms acquisition and 100 ms dropout grace prevent flicker. The visible index enters within 50° of vertical and stays acquired within 60°, independent of palm facing; it may curve naturally. Extension uses the camera-image silhouette and tip position above the middle knuckle, rather than strict 3D joint angles or depth. Stop or manual Play/Space disarms the gesture until relaxed; camera loss, disabling Camera, and page hiding turn a gesture-owned loop off.
-
-Inference now receives the original, unmirrored camera frames, correcting the observed reversed hand assignment. Only the preview and overlay are mirrored. Hand selection uses model handedness with at least 70% confidence, never left/right screen position. Overlay labels L and R identify the selected anatomical hands.
-
-Release: hold an open left hand within 15° of vertical in 3D, regardless of which side faces the camera. Its overall long-finger direction sets tilt, rather than testing every finger in the image. Three clear extended long fingers suffice, tolerating one occluded finger; thumb pose is unrestricted for this binding. Once acquired, tilt can drift to 22° before disengaging, avoiding boundary flicker.
-
-Pinch the right thumb and index. Pinch entry allows a fingertip gap of 40% of palm scale (the larger of 3D palm width or 75% of wrist-to-middle-knuckle length); it stays pinched up to 62%. Close 2D fingertips can compensate for moderate 3D depth uncertainty at contact. Large 3D gaps still reject accidental projected overlap. Envelope gestures accept handedness confidence ≥55%; the loop gesture requires ≥70%.
-
-Horizontal separation between the left palm center and right pinch spans 20 ms–3 s logarithmically, from 8% to 60% of camera width. Greater separation means longer release; vertical motion does not affect it. Release changes update the preset, ADSR graph and sculpture. They apply to the current playing envelope and subsequent triggered notes. This gesture takes priority over the loop gesture and does not trigger a note itself.
-
-Release pose indicators have independent 50 ms acquisition and 180 ms dropout tolerance. The combined binding acquires after another 80 ms, with short interruptions tolerated rather than restarting acquisition. Missing hands or clearly broken poses freeze edits immediately, while stable indicators persist through short tracking gaps. Release values use 100 ms smoothing.
-
-Loop repeats use finite ADSR notes. Stop/Escape disarms all gestures until relaxed. Hiding the page or disabling Camera stops camera tracks and the worker. Each continuous gesture session is one undo transaction, including transitions between bindings.
-
-`src/tracking/gesture.js` contains camera-independent geometry and binding state; `controller.js` owns camera frames, preview, and callbacks; `worker.js` runs MediaPipe off the UI thread with at most one frame in flight (25 Hz cap). Runtime is MediaPipe Tasks Vision 1.1.1, model Hand Landmarker float16 v1; license and sources are in `dist/vendor/mediapipe/`.
-
-The v0.3 migration replaces the active v0.2 sound with saw, preserving connections and saves. v0.4 preserves the preset and edits.
-
-Geometry tests cover contact proximity, index extension, left-hand yaw through 360°, ±14° acceptance and excess tilt rejection, occluded fingers, pinch rotation/depth uncertainty, simultaneous pose jitter/dropouts, hand order/crossing, ranges and smoothing. Camera/model startup and UI are checked in the hosted browser. Physical poses and hand assignment still need the user's live test.
-
 ## Frequency band filter (v0.5)
 
 Filter band has two handles on a shared logarithmic 20 Hz–18 kHz track. The left handle sets the high-pass edge; the right handle sets the low-pass edge. Handles stop at one another. Pointer/touch dragging, clicking the nearest handle, arrow keys, and double-click reset work; each drag is one undo step. Both cutoff controls and resonance update active unreleased voices with 25 ms smoothing. Presets missing the low cutoff import at 20 Hz; previous default cutoff/detail and resonance/ridges routes migrate to the frequency-amplitude targets. Other parameters, saves and custom connections are preserved.
@@ -136,24 +112,6 @@ Transverse echo spacing is `max(32, body × 0.7 + grain × 0.3)` units per copy,
 The shared `src/delay.js` response stretches repeat decay by three times: actual audio feedback is the cube root of the stored Feedback control value. The first repeat level and delay interval stay unchanged. This produces roughly 2–3 times as many audible/visible repeats at nonzero feedback, up to 30. Zero feedback still produces one repeat. Live audio, offline WAV tail length, and sculpture copies use the same decay and threshold; saved parameter values and mappings are preserved.
 
 The app is named Sound/Sculpt. The original preset schema and browser storage key remain compatible with earlier Sound / Form versions.
-
-## Mirrored envelope gestures and transport (v0.8)
-
-The seconds axis is always visible, including at zero delay. Sculpture navigation instructions are removed from the stage; the interactions remain available. Space plays one finite note and disables Loop, including when a button, ADSR handle or parameter slider has focus. Holding Space does not retrigger. Text fields, dialogs and modified shortcuts keep their normal behavior; L remains the explicit Loop shortcut.
-
-Attack mirrors release: right hand upright within ±15° in any facing, left thumb/index pinch, lateral distance → attack (5 ms–1.6 s). Spreading farther apart lengthens attack. Both envelope bindings share geometry, stable pose latches, dropout tolerance and logarithmic smoothing. Neither envelope gesture triggers a note or moves pitch; both update the current sound and sculpture through the live parameter path. Pose indicators are separate. A continuous transition between attack and release remains a single undo transaction; Stop disarms all bindings until hands relax.
-
-## Index Loop gate (v0.8.1)
-
-Replaces the former right-index-height → pitch mapping and sustained gesture note. The single raised left index is now a held Loop gate. Height is ignored; the sound keeps its selected pitch. Envelope gestures retain priority. Loop pose changes do not create preset undo entries. Automatic loop retriggers do not disarm tracking; manual transport actions do. Space still plays one note and turns Loop off. Attack and release bindings are unchanged.
-
-## Visible raised index (v0.8.2)
-
-Loop index detection uses aspect-corrected 2D landmarks: finger reach relative to its chain length, upward tip direction, and a tip clearly above the first joint. This tolerates natural bends and incorrect MediaPipe world-depth estimates while rejecting a hooked, folded, sideways or lowered index. The working M/R/P checks, anatomical handedness, and Loop acquisition/dropout timing are unchanged. Tests include depth corruption, natural curvature, image/world disagreement, edge-on hands and tracking loss.
-
-## Left-hand Loop and compact camera panel (v0.8.3)
-
-Loop now uses the anatomical left hand, including M/R/P indicators and the highlighted L overlay. The right index no longer controls Loop. The recently corrected raised-index recognition and timing are unchanged. Attack and release hand assignments are unchanged. Removed the camera status row and instruction paragraph beneath the bindings; camera errors remain available in the Enable button tooltip.
 
 ## Visual examples (v0.9)
 

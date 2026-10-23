@@ -10,7 +10,7 @@ test('local server serves Sculpt and rejects private or escaping paths', async t
   const sculpt = join(temp, 'sculpt');
   await mkdir(join(sculpt, 'vendor'), { recursive: true });
   await writeFile(join(sculpt, 'index.html'), 'sculpt');
-  await writeFile(join(sculpt, 'vendor', 'model.wasm'), 'wasm');
+  await writeFile(join(sculpt, 'vendor', 'module.js'), 'export {};');
   await writeFile(join(sculpt, '.env'), 'private');
   await writeFile(join(temp, 'secret.txt'), 'outside');
   await mkdir(join(sculpt, 'assets'), { recursive: true });
@@ -33,8 +33,8 @@ test('local server serves Sculpt and rejects private or escaping paths', async t
     assert.equal(redirect.status, 308);
     assert.equal(redirect.headers.get('location'), '/assets/?test=1');
     assert.equal(await (await fetch(`${url}/assets/`)).text(), 'asset index');
-    const wasm = await fetch(`${url}/vendor/model.wasm`);
-    assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+    const module = await fetch(`${url}/vendor/module.js`);
+    assert.equal(module.headers.get('content-type'), 'text/javascript; charset=utf-8');
   });
   await t.test('HEAD has headers without a response body', async () => {
     const response = await fetch(url, { method: 'HEAD' });

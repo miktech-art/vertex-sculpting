@@ -19,7 +19,6 @@ import { NativeAudioEngine, encodeWav } from "./audio/engine.js";
 import { SculptureRenderer } from "./visual/sculpture.js";
 import { MappingEditor } from "./ui/mapping.js";
 import { ContourView } from "./ui/contour.js";
-import { HandController } from "./tracking/controller.js";
 
 const $ = (selector) => document.querySelector(selector);
 const store = new Store(),
@@ -47,8 +46,7 @@ let mode = "sculpt",
   playingPromise = false,
   playbackTicket = 0,
   toastTimer = null,
-  frameTime = 0,
-  hands = null;
+  frameTime = 0;
 const inputs = new Map();
 let filterRange = null;
 function toast(message, action) {
@@ -225,9 +223,8 @@ makeControls();
 renderPresets();
 sync(store.document, "load");
 
-async function play({ fromGesture = false } = {}) {
+async function play() {
   if (playingPromise) return;
-  if (!fromGesture) hands?.disarm();
   playingPromise = true;
   const ticket = playbackTicket;
   try {
@@ -257,12 +254,11 @@ function scheduleNext() {
   if (!looping || !activeEvent || activeEvent.held) return;
   const deadline = activeEvent.start + duration(activeEvent.params) + 0.18;
   loopTimer = setTimeout(
-    () => play({ fromGesture: true }),
+    () => play(),
     Math.max(30, (deadline - audio.now()) * 1000),
   );
 }
 function stop() {
-  hands?.disarm();
   playbackTicket++;
   clearTimeout(loopTimer);
   loopTimer = null;
@@ -373,7 +369,6 @@ $("#reset-mappings").addEventListener("click", () => {
 });
 function beginCompare() {
   if (compare) return;
-  hands?.disarm();
   compareWasPlaying =
     !!activeEvent && audio.now() - activeEvent.start < activeEvent.total;
   compare = true;
@@ -749,25 +744,6 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) stop();
 });
 
-hands = new HandController({
-  onEnable: () => audio.init(),
-  getRelease: () => store.document.params.release,
-  getAttack: () => store.document.params.attack,
-  onAttack: (attack) => {
-    store.document.params.attack = attack;
-    store.emit("gesture");
-  },
-  onEditing: (active) => (active ? store.begin() : store.commit()),
-  onRelease: (release) => {
-    store.document.params.release = release;
-    store.emit("gesture");
-  },
-  onLoop: (active) => {
-    setLoop(active);
-    if (active) play({ fromGesture: true });
-  },
-});
-
 function animate(ms) {
   const now = audio.context ? audio.now() : ms / 1000;
   const playing =
@@ -782,9 +758,7 @@ function animate(ms) {
     $("#play-button").classList.toggle("playing", !!playing);
     $(".state-dot").classList.toggle("playing", !!playing);
     $("#stage-state").textContent = playing
-      ? activeEvent.held
-        ? "GESTURE"
-        : "PLAYING"
+      ? "PLAYING"
       : compare
         ? "ORIGINAL FORM"
         : "PAUSED";
