@@ -199,6 +199,7 @@ export class SculptureRenderer {
         yaw: this.yaw,
         pitch: this.pitch,
         axialRotation: this.axialRotation,
+        axisLock: null,
         axialDrag: e.pointerType === "mouse" && e.button === 0,
         pan: { ...this.pan },
         // Primary mouse drag always rotates; other pointer/gesture controls stay intact.
@@ -214,18 +215,22 @@ export class SculptureRenderer {
         this.pan.y = this.drag.pan.y + e.clientY - this.drag.y;
         return;
       }
-      this.yaw = this.drag.yaw + (e.clientX - this.drag.x) * 0.007;
-      if (this.drag.axialDrag) {
-        // Spin around the object's own longitudinal (time/fundamental) axis,
-        // before yaw. Applying this after yaw would tilt the time axis instead.
-        this.axialRotation = this.drag.axialRotation + (e.clientY - this.drag.y) * .006;
-      } else {
-        this.pitch = clamp(
-          this.drag.pitch + (e.clientY - this.drag.y) * 0.006,
-          -1.1,
-          1.1,
-        );
+      const dx=e.clientX-this.drag.x, dy=e.clientY-this.drag.y;
+      if(this.drag.axialDrag){
+        if(!this.drag.axisLock){
+          if(Math.hypot(dx,dy)<4)return;
+          this.drag.axisLock=Math.abs(dx)>=Math.abs(dy)?'horizontal':'vertical';
+        }
+        if(this.drag.axisLock==='horizontal')this.yaw=this.drag.yaw+dx*.007;
+        else this.axialRotation=this.drag.axialRotation+dy*.006;
+        return;
       }
+      this.yaw = this.drag.yaw + dx * 0.007;
+      this.pitch = clamp(
+        this.drag.pitch + dy * 0.006,
+        -1.1,
+        1.1,
+      );
     });
     const end = () => {
       this.drag = null;

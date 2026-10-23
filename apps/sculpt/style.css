@@ -1716,3 +1716,7 @@ dialog input:not([type]) {
 .history-stack > .text-button { font-size: 11px; }
 
 @media (max-height: 850px) and (min-width: 761px) { .stage { min-height: 150px; } }
+
+.sound-edit-actions { display: flex; gap: 14px; }
+.sound-edit-actions .text-button { font-size: 11px; }
+.preset-card .sound-preview { display: block; width: 100%; height: 42px; pointer-events: none; }

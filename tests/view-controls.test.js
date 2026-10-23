@@ -16,7 +16,7 @@ test('left drag only rotates the sculpture, including with Shift held',()=>{
   for(const shiftKey of [false,true]){
     const {renderer:r,send}=view();r.pan={x:30,y:-20};
     send('pointerdown',{shiftKey});send('pointermove',{clientX:50,clientY:25,shiftKey});
-    assert.ok(Math.abs(r.yaw-.35)<1e-12);assert.equal(r.pitch,0);assert.equal(r.axialRotation,.15);
+    assert.ok(Math.abs(r.yaw-.35)<1e-12);assert.equal(r.pitch,0);assert.equal(r.axialRotation,0);
     assert.deepEqual(r.pan,{x:30,y:-20});send('pointerup');assert.equal(r.drag,null);
   }
 });
@@ -74,4 +74,17 @@ test('horizontal left drag turns around the sculpture center and vertical axis',
   assert.deepEqual(r.project({x:0,y:0,z:0}),middle);
   assert.equal(r.pitch,0);assert.equal(r.axialRotation,0);
   assert.ok(Math.abs(r.yaw-.98)<1e-12);
+});
+
+test('primary rotation locks to the first direction until release, with a small jitter threshold',()=>{
+  const {renderer:r,send}=view();
+  send('pointerdown');send('pointermove',{clientX:1,clientY:2});
+  assert.equal(r.drag.axisLock,null);assert.equal(r.yaw,0);assert.equal(r.axialRotation,0);
+  send('pointermove',{clientX:20,clientY:3});
+  send('pointermove',{clientX:30,clientY:250});
+  assert.equal(r.drag.axisLock,'horizontal');assert.equal(r.axialRotation,0);
+  send('pointerup');const yaw=r.yaw;
+  send('pointerdown');send('pointermove',{clientX:2,clientY:20});
+  send('pointermove',{clientX:250,clientY:30});
+  assert.equal(r.drag.axisLock,'vertical');assert.equal(r.yaw,yaw);assert.equal(r.axialRotation,.18);
 });

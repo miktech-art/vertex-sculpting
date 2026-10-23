@@ -60,13 +60,17 @@
                   <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
                   <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
                 </div>
+                <div class="sound-edit-actions">
+                  <button id="save-button" class="text-button">Save</button>
+                  <button id="new-sound-button" class="text-button">New</button>
+                </div>
               </div>
             </div>
           </div>
           <section class="stage" aria-label="Interactive sound sculpture">
             <canvas
               id="sculpture"
-              aria-label="Three-dimensional sound sculpture. Drag to rotate; scroll to zoom; double-click to reset."
+              aria-label="Three-dimensional sound sculpture. Drag one axis at a time to rotate; scroll to zoom."
               tabindex="0"
             ></canvas>
             <div class="stage-coordinate bottom-left">
@@ -101,10 +105,6 @@
             <div id="sound-cards" class="sound-cards" aria-label="Choose a sound">
               <div id="preset-cards" class="preset-cards"></div>
               <div id="saved-cards" class="preset-cards" aria-label="Saved sounds"></div>
-            </div>
-            <div class="sound-bar-actions">
-              <button id="bar-save-button" class="bar-save-button">Save sound</button>
-              <button id="new-sound-button" class="bar-new-button">+ New sound</button>
             </div>
             <div class="sound-library-actions">
               <button id="library-button" class="library-button">
@@ -185,9 +185,6 @@
             <div id="connection-details"></div>
           </div>
           <div class="inspector-bottom">
-            <button id="save-button" class="save-button">
-              <span>Save sound</span><span>↗</span>
-            </button>
             <div class="file-actions">
               <button id="export-button" class="text-button">
                 Export JSON</button

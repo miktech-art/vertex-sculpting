@@ -1,3 +1,4 @@
+import { soundPreview } from "./ui/sound-preview.js";
 import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
 import { WavetableView } from "./ui/wavetable.js";
@@ -96,12 +97,6 @@ function syncControls() {
   tableSelect.setValue(store.document.params.waveTable);
   wavetable.update(store.document.params);
 }
-const thumbnailPaths = {
-  kick: "M4 16 Q12 1 24 16 Q36 27 48 16 Q58 10 70 16 Q80 19 92 16 H116",
-  bass: "M4 16 Q18 2 32 16 T60 16 T88 16 T116 16",
-  'hi-hat': "M4 16 L12 6 18 25 24 9 30 22 36 11 42 20 48 13 54 19 60 14 66 18 72 15 78 17 86 16 H116",
-  synth: "M4 16 Q30 1 60 7 T116 16 M4 16 Q30 31 60 25 T116 16 M4 16 Q60 5 116 16 M4 16 Q60 27 116 16 M4 16H116",
-};
 function renderPresets() {
   const cards = $("#preset-cards");
   cards.replaceChildren();
@@ -111,7 +106,8 @@ function renderPresets() {
     button.dataset.preset = preset.id;
     button.title = `Load ${preset.name}`;
     button.setAttribute("aria-label", `Load ${preset.name}`);
-    button.innerHTML = `<svg viewBox="0 0 120 32" aria-hidden="true"><path d="${thumbnailPaths[preset.id]}"/></svg><span>${preset.name}</span>`;
+    const name=document.createElement('span');name.textContent=preset.name;
+    button.append(soundPreview(makeDocument(preset)),name);
     button.addEventListener("click", () => switchSound(() => loadPreset(preset)));
     cards.append(button);
   });
@@ -387,8 +383,11 @@ function openSaveDialog() {
   $("#save-dialog").showModal();
   $("#save-name").select();
 }
-for (const id of ["save-button", "bar-save-button"])
-  document.getElementById(id).addEventListener("click", () => openSaveDialog());
+$("#save-button").addEventListener("click", () => {
+  if(!store.activeSavedId){openSaveDialog();return;}
+  try {store.save(store.document.name);toast('Saved');}
+  catch(error){toast(error.message);}
+});
 $("#new-sound-button").addEventListener("click", () => switchSound(() => {
   stop();
   mapping.selected = null;
@@ -434,7 +433,7 @@ function renderSavedCards() {
     button.title = `Load ${doc.name}`;
     const name = document.createElement("span");
     name.textContent = doc.name;
-    button.append(name);
+    button.append(soundPreview(doc), name);
     button.addEventListener("click", () => loadSavedSound(doc));
     const item = document.createElement("div");
     item.className = "saved-card-item";
