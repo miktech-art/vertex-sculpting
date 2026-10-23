@@ -40,47 +40,7 @@
           </button>
         </div>
       </header>
-      <section class="transport">
-        <div class="transport-left">
-          <button id="play-button" class="play-button" aria-label="Play sound">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M5 3l8 5-8 5z" />
-            </svg></button
-          ><button id="stop-button" class="icon-button" aria-label="Stop sound">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <rect x="4" y="4" width="8" height="8" rx=".5" />
-            </svg>
-          </button>
-          <div class="transport-divider"></div>
-          <button
-            id="loop-button"
-            class="text-button"
-            aria-pressed="false"
-            title="Loop sound (L)"
-          >
-            <span class="loop-symbol">↻</span> Loop</button
-          ><span class="transport-time" id="transport-time">00:00.00</span>
-        </div>
 
-        <div class="transport-right">
-          <span id="audio-status" hidden></span
-          ><button
-            id="mute-button"
-            class="icon-button"
-            aria-label="Mute audio"
-            aria-pressed="false"
-          >
-            <svg viewBox="0 0 18 18" aria-hidden="true">
-              <path
-                d="M3 7h3l4-3v10l-4-3H3zM13 6q4 3 0 6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.2"
-              />
-            </svg>
-          </button>
-        </div>
-      </section>
           <section class="preset-strip" aria-label="Sound library">
             <div id="sound-cards" class="sound-cards" aria-label="Choose a sound">
               <div id="preset-cards" class="preset-cards"></div>
@@ -131,6 +91,46 @@
               ><span class="coordinate-separator">/</span
               ><span id="pitch-label">220 Hz</span>
             </div>
+      <section class="transport sculpture-transport" aria-label="Sculpture playback">
+        <div class="transport-left">
+          <button id="play-button" class="play-button" aria-label="Play sound">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5 3l8 5-8 5z" />
+            </svg></button
+          ><button id="stop-button" class="icon-button" aria-label="Stop sound">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="4" y="4" width="8" height="8" rx=".5" />
+            </svg>
+          </button>
+          <button
+            id="loop-button"
+            class="text-button"
+            aria-pressed="false"
+            title="Loop sound (L)"
+          >
+            <span class="loop-symbol">↻</span> Loop</button
+          ><span class="transport-time" id="transport-time">00:00.00</span>
+        </div>
+
+        <div class="transport-right">
+          <span id="audio-status" hidden></span
+          ><button
+            id="mute-button"
+            class="icon-button"
+            aria-label="Mute audio"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 18 18" aria-hidden="true">
+              <path
+                d="M3 7h3l4-3v10l-4-3H3zM13 6q4 3 0 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.2"
+              />
+            </svg>
+          </button>
+        </div>
+      </section>
             <div class="stage-tools">
               <button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button>
             </div>

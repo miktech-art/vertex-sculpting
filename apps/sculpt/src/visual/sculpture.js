@@ -1,3 +1,6 @@
+import {modulatedParams} from "../audio/modulation.js";
+import {voiceEnvelopeAt} from "../audio/live-envelope.js";
+import {getLfos,modulationEnvelopes} from "../lfo.js";
 import { buildNoiseTexture, buildReverbGlow } from "./texture.js";
 import { ridgeDecibels, ridgeStrength } from "../spectral/ridges.js";
 import { buildEchoLayout, presentProgress, timeTickStep } from "./echoes.js";
@@ -15,6 +18,8 @@ import {
   denormalize,
   envelopeAt,
   duration,
+  resolveMappings,
+  DEFAULT_ROUTES,
 } from "../model.js";
 
 const TAU = Math.PI * 2;
@@ -22,7 +27,7 @@ const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
 // Keep the most recent immutable noise fields shared by the main and mini views.
 const noiseFields = new Map();
 // Geometry is deterministic: identical sound + mapping always gives the same object.
-export function buildGeometry(params, m, sampleRate = 48000) {
+export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_ROUTES, voice = null) {
   const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
     highCut = denormalize("cutoff", m.spectralHigh ?? 1);
   const crinkle = (frequency) =>
@@ -43,8 +48,23 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     body = m.body * 100 + m.twist * 15 + m.spread * 14,
     twist = m.twist * 3.6,
     spread = m.spread * 34;
-  const points = 121,
-    bands =
+  const modulated=getLfos(params).some(l=>l.amount!==0)||modulationEnvelopes(params).some(e=>e.amount!==0);
+  const maxRate=Math.max(...getLfos(params).map(l=>l.rate),modulationEnvelopes(params).some(e=>e.amount!==0&&e.target.startsWith('lfoRate:'))?100:0);
+  const points = modulated?Math.max(121,Math.min(2049,Math.ceil(total*maxRate*16)+1)):121;
+  const baseMappings=modulated?resolveMappings(params,routes):null;
+  const state={...(voice||{}),lfoPhaseCache:new Map()};
+  const offset=voice?.timeOffset||0;
+  const samples=modulated?Array.from({length:points},(_,i)=>{
+    const t=i/(points-1)*total,at=t+offset,mod=modulatedParams(params,at,state);
+    const p={...params,pitch:mod.pitch,wavePosition:mod.wavePosition,cutoff:mod.cutoff,volume:mod.amplitude};
+    const mapped=resolveMappings(p,routes);
+    for(const id in mapped)mapped[id]=clamp((m[id]??0)+mapped[id]-baseMappings[id]);
+    const filter=createFilterResponse(p,sampleRate);
+    const amplitude=params.volume?mod.amplitude/params.volume:0;
+    return {t,params:p,mapped,response:filter,amplitude,
+      e:voice?voiceEnvelopeAt(contour,at,state):envelopeAt(contour,Math.min(total-.00001,t))};
+  }):null;
+  const bands =
       body > 0.05 || m.edge > 0.04
         ? HARMONIC_BANDS.slice(1)
         : [],
@@ -58,16 +78,22 @@ export function buildGeometry(params, m, sampleRate = 48000) {
           0.5 *
           Math.sin(u * total * denormalize("rate", m.rate) * TAU),
       e = envelopeAt(contour, Math.min(total - 0.00001, u * total)) * wave;
+    const sample=samples?.[i];
+    const localE=sample?sample.e*sample.amplitude*wave: e;
+    const p=sample?.params||params;
+    const strength=sample?ridgeStrength(sample.response(p.pitch))*toneGain**2*sample.amplitude:null;
     return {
+      ...(sample?{spectralLevel:strength,thickness:.65+sample.mapped.thickness*4.4,frequency:p.pitch,levelDb:ridgeDecibels(sample.response(p.pitch)*toneGain)}:{}),
       x: (u - 0.5) * length,
-      y: crinkle(params.pitch) * 13 * Math.sin(u * TAU * 22) ** 7 * e ** 0.6,
+      y: (sample?cutoffResonanceWeight(p.pitch,denormalize("cutoffLow",sample.mapped.spectralLow),denormalize("cutoff",sample.mapped.spectralHigh),sample.mapped.spectralPeak):crinkle(p.pitch)) * 13 * Math.sin(u * TAU * 22) ** 7 * localE ** 0.6,
       z: 0,
       u,
-      e,
+      e:localE,
     };
   });
   lines.push({
     points: center,
+    dynamic:modulated,
     alpha: 1,
     width: 1,
     kind: "core",
@@ -88,30 +114,38 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       for (let i = 0; i < points; i++) {
         const u = i / (points - 1),
           t = u * total,
+          sample=samples?.[i],p=sample?.params||params,
+          localResonance=sample?cutoffResonanceWeight(p.pitch*band.center,denormalize('cutoffLow',sample.mapped.spectralLow),denormalize('cutoff',sample.mapped.spectralHigh),sample.mapped.spectralPeak):resonanceShape,
           e = envelopeAt(contour, Math.min(total - 0.00001, t)),
-          a = twist * TAU * u,
+          a = (sample?sample.mapped.twist*3.6:twist) * TAU * u,
           modal = 0.65 + 0.35 * Math.sin(u * Math.PI),
           teeth =
             m.edge *
               8 *
               position *
               Math.sin(u * TAU * (8 + 18 * m.detail) + j * 0.7) ** 7 +
-            resonanceShape * 13 * Math.sin(u * TAU * 22 + j * 0.7) ** 7,
+            localResonance * 13 * Math.sin(u * TAU * 22 + j * 0.7) ** 7,
           wave =
             1 -
             m.motion * 0.5 +
             m.motion * 0.5 * Math.sin(t * denormalize("rate", m.rate) * TAU),
-          radius = (body * position * modal + teeth) * e ** 0.6 * wave;
+          localEnergy=sample?bandAmplitude(band,p,sample.response):energy,
+          strength=sample?ridgeStrength(localEnergy.source*localEnergy.gain)*toneGain**2*sample.amplitude:spectralLevel,
+          localE=sample?sample.e*sample.amplitude:e,
+          localBody=sample?sample.mapped.body*100+sample.mapped.twist*15+sample.mapped.spread*14:body,
+          radius = (localBody * position * modal + teeth) * localE ** 0.6 * wave;
         line.push({
+          ...(sample?{spectralLevel:strength,frequency:p.pitch*band.center,levelDb:ridgeDecibels(localEnergy.source*localEnergy.gain*toneGain)}:{}),
           x: (u - 0.5) * length,
-          y: sign * (Math.cos(a) * radius + spread * e * position),
+          y: sign * (Math.cos(a) * radius + (sample?sample.mapped.spread*34:spread) * localE * position),
           z: sign * Math.sin(a) * radius * 0.8,
           u,
-          e,
+          e:localE,
         });
       }
       lines.push({
         points: line,
+        dynamic:modulated,
         alpha: spectralLevel,
         spectralLevel,
         levelDb: ridgeDecibels(spectralAmplitude),
@@ -125,14 +159,14 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     }
   }
   const grain=Math.round(m.grain*8)/8;
-  const noiseKey=JSON.stringify([params.noise,params.volume,params.cutoffLow,params.cutoff,params.resonance,sampleRate,length,total,contour,grain]);
+  const noiseKey=JSON.stringify([modulated?samples.map(s=>[s.params.cutoff,s.params.volume,s.e]):null,params.noise,params.volume,params.cutoffLow,params.cutoff,params.resonance,sampleRate,length,total,contour,grain]);
   let noise=noiseFields.get(noiseKey);
   if(!noise){
-    noise=buildNoiseTexture(params,{length,total,contour,response,sampleRate,grain});
+    noise=buildNoiseTexture(params,{length,total,contour,response,sampleRate,grain,samples});
     noiseFields.set(noiseKey,noise);if(noiseFields.size>3)noiseFields.delete(noiseFields.keys().next().value);
   }
   const particles = noise.particles;
-  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,sampleRate,spread:m.halo,extent:m.haloTail,lines,particles});
+  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,sampleRate,spread:m.halo,extent:m.haloTail,lines,particles,samples});
   const echoLayout = buildEchoLayout(total,length,{
     mix:denormalize("delayMix",m.echoes),delay:denormalize("delayTime",m.echoSpacing),
     feedback:denormalize("feedback",m.persistence),separation:Math.max(32,body*.7 + params.noise*24),
@@ -153,6 +187,8 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     maxY = Math.max(maxY, point.y);
   }
   return {
+    modulated,
+    samples,
     lines,
     particles,
     noiseBatches:noise.batches,
@@ -172,6 +208,8 @@ export class SculptureRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.createNoiseCanvas = () => document.createElement("canvas");
+    this.stageLift = canvas.id === "sculpture" ? 32 : 0;
+    this.createSceneCanvas = () => document.createElement("canvas");
     this.createHaloCanvas = () => document.createElement("canvas");
     this.ctx = canvas.getContext("2d");
     this.yaw = 0;
@@ -287,6 +325,7 @@ export class SculptureRenderer {
     const r = this.canvas.getBoundingClientRect();
     this.size = { width: r.width, height: r.height };
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.pixelRatio=dpr;
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -349,7 +388,7 @@ export class SculptureRenderer {
     );
     if (changed || this.needsBuild) {
       this.targets = vals;
-      this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000);
+      this.geometry = buildGeometry(doc.params, vals, this.sampleRate ?? 48000, doc.routes, this.modulationVoice);
       this.needsBuild = false;
     }
     return moving;
@@ -374,13 +413,23 @@ export class SculptureRenderer {
     const fit = Math.min(w / 680, h / 180) * this.zoom;
     return {
       x: w / 2 + this.pan.x + xx * fit * camera,
-      y: h / 2 + this.pan.y + yy * fit * camera,
+      y: h / 2 - (this.stageLift||0) + this.pan.y + yy * fit * camera,
       depth,
     };
   }
   draw(now) {
     const dt = this.lastFrame ? Math.min(0.1, now - this.lastFrame) : 0.016;
     this.lastFrame = now;
+    const doc=this.compare||this.document,last=this.events.at(-1);
+    const active=doc&&(getLfos(doc.params).some(l=>l.amount!==0)||modulationEnvelopes(doc.params).some(e=>e.amount!==0));
+    const state=active&&last&&now>=last.start?last:null;
+    const windowDuration=this.geometry?.echoLayout.duration||duration(doc?.params||BASE);
+    const timeOffset=state?.held?Math.floor((now-state.start)/windowDuration)*windowDuration:0;
+    const stateKey=state?`${state.start}:${state.held}:${state.releaseAt}:${timeOffset}`:'idle';
+    if(this.modulationStateKey!==stateKey){
+      this.modulationStateKey=stateKey;this.modulationVoice=state?{held:state.held,releaseAt:state.releaseAt,releaseLevel:state.releaseLevel,timeOffset}:null;
+      if(active)this.needsBuild=true;
+    }
     this.updateMapping(dt);
     const c = this.ctx,
       { width: w, height: h } = this.size,
@@ -388,17 +437,25 @@ export class SculptureRenderer {
     if (!g) return;
     c.clearRect(0, 0, w, h);
     this.events = this.events.filter((e) => now - e.start < e.total + 0.25);
-    // Echoes are translations in time, with a small transverse separation.
-    // Draw every static copy once; the present slice then intersects each copy.
-    for (const copy of [...g.echoLayout.copies].reverse())
-      this.drawObject(g, copy, now);
+    // Cache time-varying spectral paths, rather than repainting every segment.
+    if(g.modulated)this.drawModulatedScene(g,now);
+    else for (const copy of [...g.echoLayout.copies].reverse())this.drawObject(g,copy,now);
     if(g.particles.length)this.drawNoise(g);
     this.drawTimeAxis(g);
   }
   drawTimeAxis(g) {
-    const c = this.ctx,
-      { width: w, height: h } = this.size,
-      y = h - 72;
+    const c = this.ctx,{width:w,height:h}=this.size;
+    const viewKey=JSON.stringify([w,h,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift]);
+    if(this.axisGeometry!==g||this.axisViewKey!==viewKey){
+      let bottom=h/2-(this.stageLift||0);
+      for(const line of g.lines)for(const pt of line.points){
+        if((pt.spectralLevel??line.spectralLevel??1)<.002)continue;
+        bottom=Math.max(bottom,this.project(pt).y);
+      }
+      for(const pt of g.particles)bottom=Math.max(bottom,this.project(pt).y);
+      this.axisY=clamp(bottom+26,40,h-78);this.axisGeometry=g;this.axisViewKey=viewKey;
+    }
+    const y=this.axisY;
     const x = (seconds) =>
       this.project({
         x: -g.length / 2 + seconds * g.echoLayout.unitsPerSecond,
@@ -434,6 +491,7 @@ export class SculptureRenderer {
       scale = copy.scale;
     const c = this.ctx;
     if (g.glow?.length && copy.index === 0) this.drawHalo(g,copy,opacity);
+    if(g.modulated){for(const line of g.lines)this.drawModulatedLine(g,line,copy,now);return;}
     for (const line of g.lines) {
       const pts = line.points;
       const amplitude = line.spectralLevel ?? Math.min(3, line.filterGain ?? 1) ** 0.7;
@@ -517,6 +575,43 @@ export class SculptureRenderer {
           c.shadowBlur = 0;
         }
       }
+    }
+  }
+  drawModulatedScene(g,now){
+    this.sceneCanvas ||= this.createSceneCanvas?.();
+    if(!this.sceneCanvas){for(const copy of [...g.echoLayout.copies].reverse())this.drawObject(g,copy,now);return;}
+    const {width,height}=this.size;
+    const key=JSON.stringify([width,height,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift,this.pixelRatio]);
+    if(this.sceneGeometry!==g||this.sceneKey!==key){
+      const dpr=this.pixelRatio||1;
+      this.sceneCanvas.width=Math.ceil(width*dpr);this.sceneCanvas.height=Math.ceil(height*dpr);
+      const previous=this.ctx,events=this.events;
+      try{
+        this.ctx=this.sceneCanvas.getContext('2d');this.ctx.setTransform(dpr,0,0,dpr,0,0);this.events=[];
+        for(const copy of [...g.echoLayout.copies].reverse())this.drawObject(g,copy,0);
+      }finally{this.ctx=previous;this.events=events;}
+      this.sceneGeometry=g;this.sceneKey=key;
+    }
+    this.ctx.drawImage(this.sceneCanvas,0,0,width,height);
+    for(const copy of g.echoLayout.copies)for(const line of g.lines)this.drawModulatedLine(g,line,copy,now,true);
+  }
+  drawModulatedLine(g,line,copy,now,highlightOnly=false){
+    const c=this.ctx,pts=line.points,opacity=copy.gain**.7;
+    const draw=(i,highlight=false)=>{
+      const a=pts[i-1],b=pts[i],strength=(a.spectralLevel+b.spectralLevel)/2;
+      if(strength<.002)return;
+      const start=this.project(a,copy.offset,copy.scale),end=this.project(b,copy.offset,copy.scale);
+      const core=line.kind==='core',alpha=clamp(strength*g.brightness*opacity*(core?1:.85));
+      c.strokeStyle=`rgba(255,255,255,${alpha})`;c.lineCap='butt';
+      c.lineWidth=core?.12+((a.thickness+b.thickness)/2)*(a.e+b.e)/2:line.width;
+      if(highlight)c.lineWidth+=1.05;
+      c.beginPath();c.moveTo(start.x,start.y);c.lineTo(end.x,end.y);c.stroke();
+    };
+    if(!highlightOnly)for(let i=1;i<pts.length;i++)draw(i);
+    for(const event of this.events){
+      const u=presentProgress(now-event.start,copy.time,g.total,g.echoLayout.duration,event.held);
+      if(u===null)continue;
+      for(let i=Math.max(1,Math.floor((u-PRESENT_WINDOW_HALF_WIDTH)*(pts.length-1)));i<pts.length&&pts[i].u<=u+PRESENT_WINDOW_HALF_WIDTH;i++)draw(i,true);
     }
   }
   drawNoise(g) {

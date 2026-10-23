@@ -23,26 +23,29 @@ export function noiseDistribution(response, sampleRate = 48000) {
 // RMS levels are measured in the model before master gain/compression, not at the ear.
 export const NOISE_REFERENCE_RMS = BASE.volume * .52 / Math.sqrt(2);
 export const MAX_NOISE_GRAINS = 64000;
-export function buildNoiseTexture(params, {length,total,contour,response,sampleRate = 48000,grain = 0}) {
+export function buildNoiseTexture(params, {length,total,contour,response,sampleRate = 48000,grain = 0,samples=null}) {
   const empty = {particles:[],batches:[],amplitude:0,rms:0,levelDb:-Infinity};
   if (params.noise <= 0) return empty;
   const distribution = noiseDistribution(response,sampleRate);
   const sourceRms = params.noise * .65 / Math.sqrt(3) * distribution.transmission;
   const rms = sourceRms * params.volume * .52;
-  const peakStrength = ridgeStrength(rms / NOISE_REFERENCE_RMS);
+  const slices=samples?.map(s=>{const distribution=noiseDistribution(s.response,sampleRate);const rms=params.noise*.65/Math.sqrt(3)*distribution.transmission*s.params.volume*.52;return {distribution,rms,e:s.e};});
+  const peakStrength = ridgeStrength(Math.max(rms,...(slices?.map(s=>s.rms)||[])) / NOISE_REFERENCE_RMS);
   const particles=[], batches=new Map();
   if (!distribution.power || peakStrength<=0) return {...empty,amplitude:sourceRms*Math.sqrt(2),rms,levelDb:ridgeDecibels(rms)};
   const bins=distribution.bins;
   for(let i=0;i<MAX_NOISE_GRAINS;i++) {
-    const u=random(i,57), e=envelopeAt(contour,u*total);
+    const u=random(i,57),slice=slices?.[Math.min(slices.length-1,Math.round(u*(slices.length-1)))];
+    const e=slice?slice.e:envelopeAt(contour,u*total),localRms=slice?.rms??rms;
+    const localDistribution=slice?.distribution||distribution,localBins=localDistribution.bins;
     // Convert relative RMS dB back to power for spatial coverage. Exposure is
     // fixed, so a 6 dB level increase gives about four times as many grains.
-    const density=Math.min(1,8*(rms*e / NOISE_REFERENCE_RMS)**2);
+    const density=Math.min(1,8*(localRms*e / NOISE_REFERENCE_RMS)**2);
     if(random(i,99)>=density) continue;
-    const target=random(i,89)*distribution.power;
-    let low=0,high=bins.length-1;
-    while(low<high){const mid=(low+high)>>1;if(bins[mid].cumulative<target)low=mid+1;else high=mid;}
-    const bin=bins[low],frequency=bin.low+(bin.high-bin.low)*random(i,90);
+    const target=random(i,89)*localDistribution.power;
+    let low=0,high=localBins.length-1;
+    while(low<high){const mid=(low+high)>>1;if(localBins[mid].cumulative<target)low=mid+1;else high=mid;}
+    const bin=localBins[low],frequency=bin.low+(bin.high-bin.low)*random(i,90);
     const position=Math.max(0,Math.min(1,Math.log(frequency/20)/Math.log(sampleRate/40)));
     const angle=random(i,63)*Math.PI*2;
     // Bandwidth stays broad through a sharp attack; amplitude changes the number
@@ -52,7 +55,7 @@ export function buildNoiseTexture(params, {length,total,contour,response,sampleR
     const alpha=(.3+Math.floor(random(i,70)*4)*.2)*(.45+.55*peakStrength ** .35);
     const pt={x:(u-.5)*length,y:Math.cos(angle)*radius,z:Math.sin(angle)*radius*.8,
       u,frequency,kind:'noise',shade,alpha,size:(.7+random(i,76)*.9)*(.85+.3*grain),
-      levelDb:ridgeDecibels(rms*e)};
+      levelDb:ridgeDecibels(localRms*e)};
     particles.push(pt);
     const key=`${shade}:${alpha}`;
     if(!batches.has(key))batches.set(key,{shade,alpha,particles:[]});
@@ -65,9 +68,10 @@ function sourceProfiles(lines,particles) {
   const count=lines[0]?.points.length || 121;
   const profiles=Array.from({length:count},()=>({y:0,z:0,positiveY:0,positiveZ:0,negativeY:0,negativeZ:0,positivePower:0,negativePower:0}));
   for(const line of lines) {
-    if((line.spectralLevel??0)<.002)continue;
-    const power=Number.isFinite(line.levelDb)?10**(line.levelDb/10):0;
+    if((line.spectralLevel??0)<.002&&!line.points.some(p=>(p.spectralLevel??0)>=.002))continue;
     line.points.forEach((pt,i)=>{
+      if((pt.spectralLevel??line.spectralLevel??0)<.002)return;
+      const db=pt.levelDb??line.levelDb,power=Number.isFinite(db)?10**(db/10):0;
       const profile=profiles[i];if(!profile)return;
       profile.y=Math.max(profile.y,Math.abs(pt.y));profile.z=Math.max(profile.z,Math.abs(pt.z));
       for(const sign of line.side?[line.side]:[-1,1]){
@@ -103,7 +107,7 @@ function oscillatorPeak(params, coefficients) {
   if(wavePeaks.size>8)wavePeaks.delete(wavePeaks.keys().next().value);
   return peak;
 }
-export function buildReverbGlow(params,{length,total,contour,response,noiseAmplitude=0,sampleRate=48000,spread=0,extent=0,lines=[],particles=[]}) {
+export function buildReverbGlow(params,{length,total,contour,response,noiseAmplitude=0,sampleRate=48000,spread=0,extent=0,lines=[],particles=[],samples=null}) {
   if (params.reverbMix <= 0) return [];
   const {imag:coefficients} = wavetableCoefficients(params);
   let tonalPower = 0;
@@ -114,6 +118,15 @@ export function buildReverbGlow(params,{length,total,contour,response,noiseAmpli
   const sourcePower = (tonalPower + noiseAmplitude ** 2) / 2 * (params.volume*.52)**2;
   const impulse = reverbImpulse(params.reverbDecay,sampleRate);
   const tail = impulse.duration, glow = [], duration = total + tail;
+  // Reuse the exact modulation time samples for the wet source energy too.
+  const toneNormalization=1/oscillatorPeak(params,coefficients)**2;
+  const powers=samples?.map(s=>{
+    const {imag}=wavetableCoefficients(s.params);let tonal=0;
+    for(let h=1;h<imag.length;h++)tonal+=(imag[h]*s.response(s.params.pitch*h)*(1-params.noise))**2;
+    const noise=noiseDistribution(s.response,sampleRate).transmission*params.noise*.65/Math.sqrt(3);
+    const normalizedTone=tonal*toneNormalization;
+    return {e:s.e,power:(normalizedTone/2+noise**2)*(s.params.volume*.52)**2};
+  });
   const profiles=sourceProfiles(lines,particles);
   const profileAt=time=>profiles[Math.max(0,Math.min(profiles.length-1,Math.round(time/total*(profiles.length-1))))];
   // Include envelope corners so short transients are not lost between display samples.
@@ -124,8 +137,9 @@ export function buildReverbGlow(params,{length,total,contour,response,noiseAmpli
     for(const bin of impulse.bins) {
       if(bin.time>time) break;
       const at = time-bin.time;
-      const e = at<=total ? envelopeAt(contour,at) : 0;
-      const contribution=e*e*bin.power;power+=contribution;
+      const local=powers?.[Math.max(0,Math.min(powers.length-1,Math.round(at/total*(powers.length-1))))];
+      const e = at<=total ? (local?local.e:envelopeAt(contour,at)) : 0;
+      const contribution=e*e*bin.power*(local?local.power/Math.max(1e-30,sourcePower):1);power+=contribution;
       if(contribution>0){
         const profile=profileAt(at);
         widthY+=profile.y**2*contribution;widthZ+=profile.z**2*contribution;
