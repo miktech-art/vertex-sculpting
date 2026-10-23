@@ -87,9 +87,12 @@
             aria-label="Sound envelope and playback"
           >
             <div class="section-caption">
-              <span>CONTOUR <span class="caption-muted">/ ADSR</span></span
+              <span>ADSR</span
               ><span id="duration-label">0.86 s</span>
             </div>
+            <div class="adsr-layout">
+              <div id="envelope-selectors" class="envelope-selectors" aria-label="Envelopes"></div>
+              <div class="adsr-graph">
             <canvas
               id="envelope-canvas"
               aria-label="Interactive ADSR envelope. Drag A for attack, D for decay and sustain, S for hold and sustain, R for release."
@@ -99,6 +102,12 @@
               <span>0.00</span
               ><span id="envelope-segments">DRAG A · D · S · R</span
               ><span id="timeline-end">1.20 s</span>
+            </div>
+              </div>
+              <div class="adsr-controls-block">
+                <div id="envelope-routing" class="envelope-routing"></div>
+                <div id="adsr-controls"></div>
+              </div>
             </div>
           </section>
           <section class="preset-strip" aria-label="Sound library">
@@ -157,8 +166,6 @@
                 data-group="source"
               >
                 Source</button
-              ><button role="tab" aria-selected="false" data-group="contour">
-                Contour</button
               ><button role="tab" aria-selected="false" data-group="space">
                 Space
               </button>

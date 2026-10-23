@@ -501,6 +501,21 @@ export function validateDocument(input) {
       throw new Error(`Invalid ${p.label.toLowerCase()} value.`);
     params[p.id] = v;
   }
+  if(input.params.envelopes!==undefined){
+    if(!Array.isArray(input.params.envelopes)||input.params.envelopes.length>8)throw new Error('Invalid envelope list.');
+    params.envelopes=input.params.envelopes.map(env=>{
+      if(!env||!['pitch','wavePosition','cutoff'].includes(env.target))throw new Error('Invalid envelope destination.');
+      const limit={pitch:48,wavePosition:1,cutoff:8}[env.target];
+      if(!Number.isFinite(env.amount)||Math.abs(env.amount)>limit)throw new Error('Invalid envelope depth.');
+      const result={target:env.target,amount:env.amount};
+      for(const id of ['attack','decay','sustain','hold','release']){
+        const p=PARAM_BY_ID[id],value=env[id];
+        if(!Number.isFinite(value)||value<p.min||value>p.max)throw new Error('Invalid envelope stage.');
+        result[id]=value;
+      }
+      return result;
+    });
+  }
   if (!Number.isInteger(params.waveTable)) throw new Error("Invalid wavetable selection.");
   if (params.cutoffLow > params.cutoff)
     throw new Error("Low cutoff must not exceed high cutoff.");

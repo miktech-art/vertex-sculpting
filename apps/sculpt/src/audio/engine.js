@@ -1,3 +1,4 @@
+import {scheduleModulation} from "./modulation.js";
 import { reverbImpulse } from "./reverb.js";
 import { wavetableCoefficients } from '../oscillator/wavetable.js';
 import { delayFeedback } from "../delay.js";
@@ -87,7 +88,7 @@ export class NativeAudioEngine {
   async trigger(params, { held = false } = {}) {
     await this.init();
     const c = this.context,
-      p = { ...params },
+      p = structuredClone(params),
       start = c.currentTime + 0.015;
     const v = {
       start,
@@ -165,6 +166,7 @@ export class NativeAudioEngine {
       gain.setValueAtTime(p.sustain, start + p.attack + p.decay + p.hold);
       gain.linearRampToValueAtTime(0, start + duration(p));
     }
+    scheduleModulation(this,v,start);
     this.voices.add(v);
     this.refreshLifetime(v);
     return v;
@@ -322,8 +324,8 @@ export class NativeAudioEngine {
     for (const v of only ? [only] : this.voices) {
       if (v.stopping) continue;
       const old = { ...v.params },
-        changed = (id) => old[id] !== params[id];
-      if (!Object.keys(old).some(changed)) continue;
+        changed = (id) => id === "envelopes" ? JSON.stringify(old[id]) !== JSON.stringify(params[id]) : old[id] !== params[id];
+      if (![...new Set([...Object.keys(old),...Object.keys(params)])].some(changed)) continue;
       const sourceAlive = v.held || now < v.start + v.duration;
       const envelopeChanged = [
         "attack",
@@ -338,7 +340,8 @@ export class NativeAudioEngine {
           releaseAt: v.releaseAt,
           releaseLevel: v.releaseLevel,
         };
-      Object.assign(v.params, params);
+      Object.assign(v.params, structuredClone(params));
+      if(!params.envelopes)delete v.params.envelopes;
       if (!sourceAlive)
         for (const id of ["attack", "decay", "sustain", "hold", "release"])
           v.params[id] = old[id];
@@ -400,6 +403,7 @@ export class NativeAudioEngine {
       }
       if (envelopeChanged && sourceAlive)
         this.reshapeEnvelope(v, now, oldEnvelope, oldState);
+      if(sourceAlive)scheduleModulation(this,v,now);
       this.refreshLifetime(v, { bridge: envelopeChanged && sourceAlive });
     }
   }
@@ -470,6 +474,7 @@ export class NativeAudioEngine {
     v.held = false;
     v.released = true;
     this.reshapeEnvelope(v, now, v.params, oldState);
+    scheduleModulation(this,v,now);
     this.refreshLifetime(v, { bridge: true });
   }
   disposeVoice(v) {

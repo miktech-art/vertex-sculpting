@@ -23,14 +23,15 @@ import { SculptureRenderer } from "./visual/sculpture.js";
 import { MappingEditor } from "./ui/mapping.js";
 import { ContourView } from "./ui/contour.js";
 
+let selectedEnvelope = 0;
+const envelopeKnobs = new Map();
 const $ = (selector) => document.querySelector(selector);
 const store = new Store(),
   audio = new NativeAudioEngine(),
   renderer = new SculptureRenderer($("#sculpture")),
   miniRenderer = new SculptureRenderer($("#mini-sculpture")),
   contour = new ContourView($("#envelope-canvas"), {
-    onEdit: (changes) =>
-      store.edit((doc) => Object.assign(doc.params, changes), "parameter"),
+    onEdit: (changes) => editSelectedEnvelope(changes),
     onCommit: () => {
       store.commit();
     },
@@ -72,16 +73,68 @@ function toast(message, action) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), action ? 9000 : 3600);
 }
+const envelopeStages=['attack','decay','sustain','hold','release'];
+function selectedParams(params=store.document.params){
+  return selectedEnvelope>0?{...params,...params.envelopes?.[selectedEnvelope-1]}:params;
+}
+function editSelectedEnvelope(changes){
+  store.edit(doc=>{
+    if(selectedEnvelope>0&&doc.params.envelopes?.[selectedEnvelope-1])Object.assign(doc.params.envelopes[selectedEnvelope-1],changes);
+    else Object.assign(doc.params,changes);
+  },'parameter');
+}
+function renderEnvelopeSelectors(){
+  const params=store.document.params,envs=params.envelopes||[];
+  if(selectedEnvelope>envs.length)selectedEnvelope=0;
+  const container=$('#envelope-selectors');container.replaceChildren();
+  for(let i=0;i<=envs.length;i++){
+    const b=document.createElement('button');b.className='envelope-selector';
+    b.classList.toggle('selected',i===selectedEnvelope);b.setAttribute('aria-pressed',i===selectedEnvelope);
+    b.setAttribute('aria-label',i===0?'Amplitude envelope':`Envelope ${i+1}`);
+    b.title=i===0?'Amplitude':`Envelope ${i+1}: ${envs[i-1].target}`;
+    b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});container.append(b);
+  }
+  const add=document.createElement('button');add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8;
+  add.addEventListener('click',()=>{
+    selectedEnvelope=envs.length+1;
+    store.edit(doc=>{doc.params.envelopes=[...(doc.params.envelopes||[]),{target:'pitch',amount:12,attack:.01,decay:.2,sustain:0,hold:.3,release:.15}];},'envelopes');
+    store.commit();
+  });container.append(add);
+  const route=$('#envelope-routing');route.replaceChildren();
+  if(!selectedEnvelope){route.textContent='Amplitude';return;}
+  const env=envs[selectedEnvelope-1], select=document.createElement('select');select.setAttribute('aria-label','Envelope destination');
+  for(const [value,label] of [['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff']]){
+    const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);
+  }
+  select.value=env.target;select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
+  const limit={pitch:48,wavePosition:1,cutoff:8}[env.target];
+  const depth=new Knob({id:'envelope-depth',label:'Depth',min:-limit,max:limit,value:env.amount,
+    format:v=>env.target==='wavePosition'?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
+    onInput:value=>editSelectedEnvelope({amount:value}),onCommit:()=>store.commit()});
+  route.append(select,depth.element);
+}
+function makeEnvelopeControls(){
+  for(const p of PARAMETERS.filter(p=>p.group==='contour')){
+    const knob=parameterKnob(p);$('#adsr-controls').append(knob.element);envelopeKnobs.set(p.id,knob);
+  }
+}
+function updateDirtyCards(){
+  for(const card of document.querySelectorAll('[data-sound-key]')){
+    const key=card.dataset.soundKey,draft=key===store.activeSoundKey?{document:store.document,initial:store.initial}:store.drafts.get(key);
+    const dirty=!!draft&&(JSON.stringify(draft.document.params)!==JSON.stringify(draft.initial.params)||JSON.stringify(draft.document.routes)!==JSON.stringify(draft.initial.routes));
+    card.classList.toggle('unsaved',dirty);
+  }
+}
 function parameterKnob(p) {
   return new Knob({ id: `param-${p.id}`, label: p.label, min: p.min, max: p.max,
-    unit: p.unit, value: store.document.params[p.id], format: value => formatValue(p.id, value),
+    unit: p.unit, value: selectedParams()[p.id], format: value => formatValue(p.id, value),
     normalize: value => normalize(p.id, value), denormalize: n => denormalize(p.id, n),
     constrain: value => {
       value = Math.max(p.min, Math.min(p.max, value));
       return ["cutoff", "cutoffLow"].includes(p.id) ? constrainCutoff(store.document.params, p.id, value) : value;
     },
-    reset: () => store.initial.params[p.id],
-    onInput: value => { store.edit(doc => { doc.params[p.id] = value; }, "parameter"); $("#parameter-note").textContent = p.description; },
+    reset: () => selectedParams(store.initial.params)[p.id],
+    onInput: value => { p.group==='contour'&&envelopeStages.includes(p.id)?editSelectedEnvelope({[p.id]:value}):store.edit(doc => { doc.params[p.id] = value; }, 'parameter'); $("#parameter-note").textContent = p.description; },
     onCommit: () => store.commit(),
   });
 }
@@ -93,6 +146,7 @@ function makeControls() {
 }
 function syncControls() {
   for (const [id, knob] of inputs) knob.setValue(store.document.params[id]);
+  for(const [id,knob] of envelopeKnobs)knob.setValue(selectedParams()[id]);
   positionKnob.setValue(store.document.params.wavePosition);
   tableSelect.setValue(store.document.params.waveTable);
   wavetable.update(store.document.params);
@@ -104,6 +158,7 @@ function renderPresets() {
     const button = document.createElement("button");
     button.className = "preset-card";
     button.dataset.preset = preset.id;
+    button.dataset.soundKey=`factory:${preset.id}`;
     button.title = `Load ${preset.name}`;
     button.setAttribute("aria-label", `Load ${preset.name}`);
     const name=document.createElement('span');name.textContent=preset.name;
@@ -138,7 +193,7 @@ function renderHeader() {
 function renderReadouts(p) {
   $("#note-label").textContent = noteName(p.pitch);
   $("#pitch-label").textContent = formatValue("pitch", p.pitch);
-  const d = duration(p);
+  const d = duration(selectedParams(p));
   $("#duration-label").textContent = `${d.toFixed(2)} s`;
 }
 function sync(doc, kind) {
@@ -147,17 +202,21 @@ function sync(doc, kind) {
   miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
+  if(["load","envelopes","undo","redo"].includes(kind))renderEnvelopeSelectors();
   syncControls();
   renderHeader();
   if (["save", "load", "library"].includes(kind)) renderSavedCards();
   if (kind === "library" && $("#library-dialog").open) renderLibrary();
-  contour.setParams(compare ? store.initial.params : doc.params);
+  contour.setParams(selectedParams(compare ? store.initial.params : doc.params));
+  updateDirtyCards();
   mapping.update();
   if (kind === "load" || kind === "routes") mapping.renderDetails();
   if (looping && activeEvent) scheduleNext();
 }
 store.subscribe(sync);
 makeControls();
+makeEnvelopeControls();
+renderEnvelopeSelectors();
 renderPresets();
 sync(store.document, "load");
 
@@ -311,7 +370,7 @@ function beginCompare() {
   renderer.setCompare(store.initial);
   miniRenderer.setCompare(store.initial);
   renderReadouts(store.initial.params);
-  contour.setParams(store.initial.params);
+  contour.setParams(selectedParams(store.initial.params));
   play();
 }
 function endCompare() {
@@ -327,7 +386,7 @@ function endCompare() {
   renderer.setCompare(null);
   miniRenderer.setCompare(null);
   renderReadouts(store.document.params);
-  contour.setParams(store.document.params);
+  contour.setParams(selectedParams());
   if (looping || compareWasPlaying) play();
 }
 $("#compare-button").addEventListener("pointerdown", (e) => {
@@ -427,6 +486,7 @@ function renderSavedCards() {
   for (const doc of store.saved) {
     const button = document.createElement("button");
     button.className = "preset-card saved-card";
+    button.dataset.soundKey=`saved:${doc.libraryId}`;
     button.classList.toggle("active", store.activeSavedId === doc.libraryId);
     button.setAttribute("aria-pressed", store.activeSavedId === doc.libraryId);
     button.setAttribute("aria-label", `Load ${doc.name}`);

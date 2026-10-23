@@ -17,6 +17,9 @@ class Param {
   setTargetAtTime(value, time) {
     this.events.push({ type: "target", value, time });
   }
+  setValueCurveAtTime(values,time,duration) {
+    this.events.push({type:'curve',values:Array.from(values),time,duration});
+  }
   cancelAndHoldAtTime(time) {
     this.events.push({ type: "hold", time });
   }
@@ -417,4 +420,27 @@ test("the full reverb return is available at startup and during live edits", asy
   engine.update({...voice.params,reverbMix:1});
   assert.equal(voice.reverb.wet.gain.events.at(-1).value,1);
   engine.disposeVoice(voice);
+});
+
+test('extra envelopes automate pitch, filter and wavetable on the audio clock and update a running voice',async()=>{
+  const engine=new NativeAudioEngine();
+  const envelope={attack:.01,decay:.2,sustain:0,hold:.3,release:.15,amount:12,target:'pitch'};
+  const voice=await engine.trigger({...BASE,envelopes:[envelope]});
+  const pitch=voice.tones[0].osc.frequency.events.find(e=>e.type==='curve');
+  assert.ok(Math.max(...pitch.values)>BASE.pitch*1.8);
+  engine.update({...voice.params,envelopes:[{...envelope,target:'cutoff',amount:-3}]});
+  const cutoff=voice.filters.high.frequency.events.at(-1);
+  assert.equal(cutoff.type,'curve');assert.ok(Math.min(...cutoff.values)<BASE.cutoff/4);
+  engine.update({...voice.params,envelopes:[{...envelope,target:'wavePosition',amount:-.6}]});
+  assert.equal(voice.tones.length,64);
+  assert.ok(voice.tones.some(t=>t.gain.gain.events.at(-1).values.some(v=>v>0)));
+  engine.update({...voice.params,envelopes:[]});
+  assert.ok(voice.tones.filter(t=>t.frame>0).every(t=>t.gain.gain.events.at(-1).values.every(v=>v===0)));
+  engine.disposeVoice(voice);
+});
+test('adding an envelope to a playing legacy patch schedules it without restarting the note',async()=>{
+  const engine=new NativeAudioEngine(),voice=await engine.trigger(BASE);
+  engine.update({...BASE,envelopes:[{attack:.01,decay:.2,sustain:0,hold:.3,release:.15,amount:12,target:'pitch'}]});
+  assert.equal(voice.tones[0].osc.frequency.events.at(-1).type,'curve');
+  assert.equal(engine.voices.size,1);engine.disposeVoice(voice);
 });
