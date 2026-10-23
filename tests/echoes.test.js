@@ -83,7 +83,7 @@ test("present highlighting continues through echo tails after the original note 
 });
 test("renderer draws each translated copy once and preserves scale through delay edits", () => {
   const params = {
-    ...PRESETS[0].params,
+    ...PRESETS.find(p => p.id === 'synth').params,
     delayMix: 0.4,
     delayTime: 0.3,
     feedback: 0.5,
@@ -119,7 +119,7 @@ test("time tick spacing stays positive and readable across short and long sounds
 test("viewing scale remains fixed on a delay edit until Fit time is requested", () => {
   const doc = {
     params: {
-      ...PRESETS[0].params,
+      ...PRESETS.find(p => p.id === 'synth').params,
       delayMix: 0.4,
       delayTime: 0.3,
       feedback: 0.5,
@@ -151,7 +151,7 @@ test("viewing scale remains fixed on a delay edit until Fit time is requested", 
 
 test("transverse spacing grows with the sound body and Fit time frames the full stack", () => {
   const params = {
-    ...PRESETS[0].params,
+    ...PRESETS.find(p => p.id === 'synth').params,
     delayMix: 0.5,
     feedback: 0.6,
     delayTime: 0.2,
@@ -173,7 +173,7 @@ test("transverse spacing grows with the sound body and Fit time frames the full 
 });
 
 test("the seconds axis is drawn even when delay is zero", () => {
-  const params = { ...PRESETS[0].params, delayMix: 0 };
+  const params = { ...PRESETS.find(p => p.id === 'synth').params, delayMix: 0 };
   const geometry = buildGeometry(params, resolveMappings(params, DEFAULT_ROUTES));
   const labels = [];
   const renderer = Object.assign(Object.create(SculptureRenderer.prototype), {

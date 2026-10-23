@@ -45,9 +45,9 @@ dist/                    Generated output, ignored by Git
 
 The upper-right oscillator displays a stack of wavetable frames in black and white; the bright line is the active waveform. Choose **Basic shapes**, **Hollow**, or **Formant**, then turn **Position** to morph between frames. Basic shapes travels from saw through square and triangle to sine. Table and position are saved with each sound and used in native WAV export. Older presets default to the original saw spectrum.
 
-All numeric parameter and connection controls use minimal knobs: drag up/down, hold Shift for fine changes, double-click the dial to reset, or click the value to type. Arrow keys adjust focused knobs (Shift for fine steps); Home/End select limits. Typed values accept units such as Hz, kHz, ms, s, and %. Filter cutoff knobs stop at one another. The ADSR graph retains direct handle editing.
+All numeric parameter and connection controls use minimal knobs: drag up/down with the pointer hidden (40% faster sensitivity), hold Shift for fine changes, double-click the dial to reset, or click the value to type. Arrow keys adjust focused knobs (Shift for fine steps); Home/End select limits. Typed values accept units such as Hz, kHz, ms, s, and %. Filter cutoff knobs stop at one another. The ADSR graph retains direct handle editing.
 
-The factory saw starts with harmonics and a short ADSR envelope. Detune, noise, drive, tremolo, delay, and reverb start off. Source, Contour, and Space provide live parameter editing; Connections controls visual mappings.
+Four factory sounds—kick, bass, hi-hat, and synth—always appear at the left of the sound bar. Each starts with its own source, filter, and envelope settings. Your saved sounds and current session remain independent. Hold Space to loop and release to stop; L and the Loop button still toggle continuous looping. Source, Contour, and Space provide live parameter editing; Connections controls visual mappings.
 
 Use the bottom shelf to save, rename, delete, restore, and switch sounds. **Import preset**, below My sounds, creates and selects a separate saved card. Export JSON for portable backups and WAV for rendered audio.
 

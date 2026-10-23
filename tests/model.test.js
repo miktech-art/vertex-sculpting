@@ -27,9 +27,8 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
 });
 
-test("the only bundled sound is saw", () => {
-  assert.equal(PRESETS.length, 1);
-  assert.equal(PRESETS[0].name, "saw");
+test("four factory sounds always ship in the requested order", () => {
+  assert.deepEqual(PRESETS.map(p => p.name), ["kick", "bass", "hi-hat", "synth"]);
 });
 
 test("all factory sounds round-trip through the public preset format", () => {
@@ -160,8 +159,8 @@ test("session undo, redo and load retain independent documents", () => {
   assert.equal(store.initial.params.pitch, PRESETS[0].params.pitch);
   store.undo();
   store.undo();
-  assert.equal(store.document.name, "saw");
-  assert.equal(store.initial.name, "saw");
+  assert.equal(store.document.name, "kick");
+  assert.equal(store.initial.name, "kick");
   store.redo();
   assert.equal(store.document.name, "loaded sine");
   assert.equal(store.initial.name, "loaded sine");
@@ -179,7 +178,7 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
     JSON.stringify({ document: legacy, saved: [legacy] }),
   );
   const first = new Store();
-  assert.equal(first.document.name, "saw");
+  assert.equal(first.document.name, "kick");
   assert.equal(first.document.params.harmonics, PRESETS[0].params.harmonics);
   assert.equal(first.saved.length, 0);
   assert.deepEqual(first.document.routes, DEFAULT_ROUTES);
@@ -196,7 +195,7 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
   storage.clear();
 });
 
-test("the saw update replaces the active sine and preserves saved sounds and connection edits", () => {
+test("the factory update replaces the active sine and preserves saved sounds and connection edits", () => {
   storage.clear();
   const previous = makeDocument();
   previous.name = "sine";
@@ -212,7 +211,7 @@ test("the saw update replaces the active sine and preserves saved sounds and con
     }),
   );
   const store = new Store();
-  assert.equal(store.document.name, "saw");
+  assert.equal(store.document.name, "kick");
   assert.equal(store.document.params.harmonics, PRESETS[0].params.harmonics);
   assert.equal(store.saved.length, 1);
   assert.equal(store.saved[0].name, "sine");

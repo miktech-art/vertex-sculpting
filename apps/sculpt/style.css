@@ -1692,10 +1692,9 @@ dialog input:not([type]) {
 .knob-label { grid-column: 2; align-self: end; color: #9b9b9b; font-size: 10px; line-height: 1.4; }
 .knob-dial { grid-column: 1; grid-row: 1 / 3; width: 38px; height: 38px; cursor: ns-resize; touch-action: none; border-radius: 50%; }
 .knob-dial svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.knob-dial circle { fill: none; stroke: #454545; stroke-width: 1; }
-.knob-pointer { transform: rotate(var(--angle)); transform-origin: 20px 20px; }
-.knob-pointer path { fill: none; stroke: #eeeeee; stroke-width: 1.5; stroke-linecap: round; }
-.knob-dial:hover circle, .knob-dial:focus-visible circle { stroke: #aaaaaa; }
+.knob-dial path { fill: none; stroke: #cccccc; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.knob-dial:hover path, .knob-dial:focus-visible path { stroke: #ffffff; }
+.knob-dragging, .knob-dragging * { cursor: none !important; }
 .knob-value { grid-column: 2; align-self: start; min-width: 0; width: 100%; padding: 1px 0; border: none; border-radius: 0; background: transparent; color: #e5e5e5; font: 10px var(--mono); line-height: 1.5; outline-offset: 2px; }
 .knob-value:focus { background: #202020; }
 #connection-details .knob-control { padding: 10px 0; grid-template-columns: 44px minmax(0, 1fr); }

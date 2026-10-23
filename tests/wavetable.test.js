@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FRAME_COUNT, harmonicAmplitude, wavetableCoefficients, waveform } from '../apps/sculpt/src/oscillator/wavetable.js';
-import { BASE, makeDocument, validateDocument, DEFAULT_ROUTES, resolveMappings } from '../apps/sculpt/src/model.js';
+import { BASE, PRESETS, makeDocument, validateDocument, DEFAULT_ROUTES, resolveMappings } from '../apps/sculpt/src/model.js';
 import { buildGeometry } from '../apps/sculpt/src/visual/sculpture.js';
 test('legacy presets gain oscillator defaults without changing their original spectrum', () => {
   const old=makeDocument(); delete old.params.waveTable; delete old.params.wavePosition;
@@ -19,7 +19,7 @@ test('wavetable frames interpolate continuously and all tables produce finite bo
   }
 });
 test('table and position survive preset round trips and drive the sculpture spectrum', () => {
-  const doc=makeDocument(); doc.params.waveTable=2; doc.params.wavePosition=.77;
+  const doc=makeDocument(PRESETS.find(p => p.id === 'synth')); doc.params.waveTable=2; doc.params.wavePosition=.77;
   assert.deepEqual(validateDocument(JSON.parse(JSON.stringify(doc))).params,doc.params);
   const at=position=>{const p={...doc.params,wavePosition:position};return buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));};
   assert.notDeepEqual(at(0).lines.map(x=>x.alpha),at(1).lines.map(x=>x.alpha));

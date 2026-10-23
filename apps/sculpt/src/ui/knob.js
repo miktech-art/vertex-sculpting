@@ -1,5 +1,11 @@
 const clamp = n => Math.max(0, Math.min(1, n));
-export function dragKnob(n, deltaY, fine = false) { return clamp(n - deltaY / (fine ? 1800 : 180)); }
+export function dragKnob(n, deltaY, fine = false) { return clamp(n - deltaY * 1.4 / (fine ? 1800 : 180)); }
+// One continuous stroke: bottom-left arc, then inward from its moving tip.
+export function knobPath(value) {
+  const n = clamp(value), angle = (-135 + n * 270) * Math.PI / 180;
+  const point = r => `${20 + r * Math.sin(angle)} ${20 - r * Math.cos(angle)}`;
+  return `M${20 - 15 / Math.sqrt(2)} ${20 + 15 / Math.sqrt(2)}${n > 0 ? ` A15 15 0 ${n > 2 / 3 ? 1 : 0} 1 ${point(15)}` : ''} L${point(4)}`;
+}
 export function parseKnobValue(text, unit = '') {
   const match = String(text).trim().match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(khz|hz|ms|s|%|ct|db|×)?$/i);
   if (!match) return NaN;
@@ -21,7 +27,7 @@ export class Knob {
     this.dial.setAttribute('aria-valuemin', min); this.dial.setAttribute('aria-valuemax', max);
     this.dial.setAttribute('aria-orientation', 'vertical');
     this.dial.title = 'Drag up or down · Shift: fine · Double-click: reset';
-    this.dial.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15"/><g class="knob-pointer"><path d="M20 8v8"/></g></svg>';
+    // The path is rendered in setValue.
     this.editor = document.createElement('input'); this.editor.type = 'text'; this.editor.inputMode = 'decimal';
     this.editor.className = 'knob-value'; this.editor.setAttribute('aria-label', `${label} value`);
     this.editor.title = 'Click to type a value · Enter: apply · Escape: cancel';
@@ -29,6 +35,7 @@ export class Knob {
     this.dial.addEventListener('pointerdown', e => {
       if (e.button !== 0) return; e.preventDefault(); this.drag = { y: e.clientY, changed: false, id: e.pointerId };
       this.dial.focus({ preventScroll: true }); this.dial.setPointerCapture(e.pointerId);
+      document.documentElement.classList.add('knob-dragging');
     });
     this.dial.addEventListener('pointermove', e => {
       if (!this.drag || e.pointerId !== this.drag.id) return;
@@ -36,8 +43,10 @@ export class Knob {
       this.drag.y = e.clientY;
       const before = this.value; this.edit(this.denormalize(n)); this.drag.changed ||= this.value !== before;
     });
-    const end = () => { if (!this.drag) return; const changed = this.drag.changed; this.drag = null; if (changed) this.onCommit(); };
+    const end = () => { if (!this.drag) return; const changed = this.drag.changed; this.drag = null; document.documentElement.classList.remove('knob-dragging'); if (changed) this.onCommit(); };
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) this.dial.addEventListener(type, end);
+    this.dial.addEventListener('blur', end);
+    document.defaultView?.addEventListener('blur', end);
     this.dial.addEventListener('dblclick', e => { e.preventDefault(); this.edit(this.reset()); this.onCommit(); });
     this.dial.addEventListener('keydown', e => {
       const delta = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[e.key];
@@ -62,7 +71,7 @@ export class Knob {
   edit(value) { this.setValue(this.constrain(value)); this.onInput?.(this.value); }
   setValue(value) {
     this.value = value;
-    this.dial.style.setProperty('--angle', `${-135 + clamp(this.normalize(value)) * 270}deg`);
+    this.dial.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><path d="${knobPath(this.normalize(value))}"/></svg>`;
     this.dial.setAttribute('aria-valuenow', value); this.dial.setAttribute('aria-valuetext', this.format(value));
     if (!this.editing) this.editor.value = this.format(value);
   }

@@ -166,9 +166,9 @@ test("effects only create feedback loops when delay is enabled", async () => {
     engine.disposeVoice(event);
   }
 });
-test("the default saw has a broad harmonic spectrum without layered effects", async () => {
+test("the factory synth has a broad harmonic spectrum without layered effects", async () => {
   const engine = new NativeAudioEngine(),
-    voice = await engine.trigger(PRESETS[0].params);
+    voice = await engine.trigger(PRESETS.find(p=>p.id==='synth').params);
   const oscillator = voice.pitchedSources[0];
   assert.equal(oscillator.wave.imag.length, 97);
   assert.ok(oscillator.wave.imag[64] > 0);
@@ -387,7 +387,7 @@ test("editing effects during a loop tail neither restarts ended envelopes nor ke
 });
 
 test('wavetable changes update active oscillators without replacing their voices or pitch', async () => {
-  const engine = new NativeAudioEngine(), voice = await engine.trigger({...PRESETS[0].params});
+  const engine = new NativeAudioEngine(), voice = await engine.trigger({...PRESETS.find(p=>p.id==='synth').params});
   const sources=[...voice.pitchedSources], original=sources[0].wave.imag.slice();
   engine.update({...voice.params,waveTable:2,wavePosition:.6});
   assert.deepEqual(voice.pitchedSources,sources);

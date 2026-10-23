@@ -558,22 +558,16 @@ export function validateDocument(input) {
     routes,
   };
 }
+// Factory sounds are always available separately from the user's saved library.
 export const PRESETS = [
-  {
-    id: "saw",
-    name: "saw",
-    params: {
-      ...BASE,
-      pitch: 146.83,
-      volume: 0.3,
-      harmonics: 0.86,
-      attack: 0.01,
-      decay: 0.2,
-      sustain: 0.7,
-      hold: 0.65,
-      release: 0.2,
-    },
-  },
+  { id: 'kick', name: 'kick', params: { ...BASE, pitch: 55, volume: .5, wavePosition: 1,
+    cutoff: 850, attack: .005, decay: .18, sustain: 0, hold: .1, release: .06 } },
+  { id: 'bass', name: 'bass', params: { ...BASE, pitch: 73.42, volume: .32, harmonics: .75,
+    cutoff: 950, resonance: .8, attack: .01, decay: .18, sustain: .65, hold: .65, release: .15 } },
+  { id: 'hi-hat', name: 'hi-hat', params: { ...BASE, volume: .22, noise: 1,
+    cutoffLow: 6500, cutoff: 16000, attack: .005, decay: .045, sustain: 0, hold: .1, release: .025 } },
+  { id: 'synth', name: 'synth', params: { ...BASE, pitch: 220, volume: .3, harmonics: .86,
+    attack: .01, decay: .2, sustain: .7, hold: .65, release: .2 } },
 ];
 export function makeDocument(preset = PRESETS[0]) {
   return {

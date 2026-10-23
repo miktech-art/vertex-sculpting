@@ -1,4 +1,4 @@
-import { installPlayOnceShortcut } from "./ui/play-once.js";
+import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
 import { WavetableView } from "./ui/wavetable.js";
 import { WAVETABLES } from "./oscillator/wavetable.js";
@@ -97,7 +97,10 @@ function syncControls() {
   wavetable.update(store.document.params);
 }
 const thumbnailPaths = {
-  saw: "M4 16 Q30 1 60 7 T116 16 M4 16 Q30 31 60 25 T116 16 M4 16 Q60 5 116 16 M4 16 Q60 27 116 16 M4 16H116",
+  kick: "M4 16 Q12 1 24 16 Q36 27 48 16 Q58 10 70 16 Q80 19 92 16 H116",
+  bass: "M4 16 Q18 2 32 16 T60 16 T88 16 T116 16",
+  'hi-hat': "M4 16 L12 6 18 25 24 9 30 22 36 11 42 20 48 13 54 19 60 14 66 18 72 15 78 17 86 16 H116",
+  synth: "M4 16 Q30 1 60 7 T116 16 M4 16 Q30 31 60 25 T116 16 M4 16 Q60 5 116 16 M4 16 Q60 27 116 16 M4 16H116",
 };
 function renderPresets() {
   const cards = $("#preset-cards");
@@ -652,10 +655,10 @@ $("#wav-button").addEventListener("click", async () => {
   }
 });
 
-installPlayOnceShortcut(document, () => {
-  setLoop(false);
+installHoldLoopShortcut(document, () => {
+  setLoop(true);
   play();
-}, () => !!document.querySelector("dialog[open]"));
+}, stop, () => !!document.querySelector("dialog[open]"));
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(
