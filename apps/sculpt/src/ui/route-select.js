@@ -1,3 +1,4 @@
+import {positionMenu} from "./menu-position.js";
 // A downward-opening menu shared with wavetable/waveform controls.
 export function routeSelect(root,{label,options,value,onChange}) {
   const wrap=document.createElement('div');wrap.className='wavetable-select route-select';
@@ -8,11 +9,11 @@ export function routeSelect(root,{label,options,value,onChange}) {
   for(const [id,title] of options){
     const option=document.createElement('button');option.textContent=title;option.setAttribute('role','option');option.setAttribute('aria-selected',id===value);
     option.addEventListener('click',()=>{close();onChange(id);});
-    option.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();button.focus();}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const items=[...menu.children],i=items.indexOf(option);items[(i+(e.key==='ArrowDown'?1:items.length-1))%items.length].focus();}});
+    option.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();button.focus({preventScroll:true});}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const items=[...menu.children],i=items.indexOf(option);items[(i+(e.key==='ArrowDown'?1:items.length-1))%items.length].focus({preventScroll:true});}});
     menu.append(option);
   }
-  button.addEventListener('click',()=>{menu.hidden=!menu.hidden;button.setAttribute('aria-expanded',!menu.hidden);if(!menu.hidden)menu.querySelector('[aria-selected="true"]')?.focus();});
+  button.addEventListener('click',()=>{menu.hidden=!menu.hidden;button.setAttribute('aria-expanded',!menu.hidden);if(!menu.hidden){positionMenu(menu,button);menu.querySelector('[aria-selected="true"]')?.focus({preventScroll:true});}});
   wrap.addEventListener('focusout',e=>{if(!wrap.contains(e.relatedTarget))close();});
-  wrap.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();close();button.focus();}});
+  wrap.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();close();button.focus({preventScroll:true});}});
   wrap.append(button,menu);root.append(wrap);return wrap;
 }

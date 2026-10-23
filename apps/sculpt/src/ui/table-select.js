@@ -1,3 +1,4 @@
+import {positionMenu} from "./menu-position.js";
 import { WAVETABLES } from '../oscillator/wavetable.js';
 
 // A monochrome menu, independent of the operating system's select styling.
@@ -21,7 +22,7 @@ export class TableSelect {
         const step = { ArrowDown: 1, ArrowUp: -1, Home: -index, End: this.labels.length - 1 - index }[event.key];
         if (step !== undefined) {
           event.preventDefault(); event.stopPropagation();
-          this.options[(index + step + this.labels.length) % this.labels.length].focus();
+          this.options[(index + step + this.labels.length) % this.labels.length].focus({preventScroll:true});
         }
       });
       this.menu.append(option); return option;
@@ -37,8 +38,8 @@ export class TableSelect {
     root.addEventListener('focusout', event => { if (!root.contains(event.relatedTarget)) this.close(); });
     this.close(); this.setValue(0);
   }
-  open() { this.isOpen = true; this.menu.hidden = false; this.button.setAttribute('aria-expanded', 'true'); this.options[this.value].focus(); }
-  close(focus = false) { this.isOpen = false; this.menu.hidden = true; this.button.setAttribute('aria-expanded', 'false'); if (focus) this.button.focus(); }
+  open() { this.isOpen = true; this.menu.hidden = false; this.button.setAttribute('aria-expanded', 'true'); positionMenu(this.menu,this.button); this.options[this.value].focus({preventScroll:true}); }
+  close(focus = false) { this.isOpen = false; this.menu.hidden = true; this.button.setAttribute('aria-expanded', 'false'); if (focus) this.button.focus({preventScroll:true}); }
   setValue(value) {
     this.value = Math.max(0, Math.min(this.labels.length - 1, Math.round(value)));
     this.button.textContent = this.labels[this.value];
