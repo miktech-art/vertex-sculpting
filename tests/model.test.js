@@ -62,7 +62,7 @@ test("parameter normalization preserves physical units across every range", () =
   for (const p of PARAMETERS)
     for (const n of [0, 0.13, 0.5, 0.91, 1])
       assert.ok(
-        Math.abs(normalize(p.id, denormalize(p.id, n)) - n) < 1e-9,
+        Math.abs(normalize(p.id, denormalize(p.id, n)) - n) < (p.integer ? .5/(p.max-p.min)+1e-9 : 1e-9),
         p.id,
       );
 });

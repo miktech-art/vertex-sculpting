@@ -1672,7 +1672,7 @@ dialog input:not([type]) {
 .wavetable-options button[aria-selected="true"] { color: #eee; }
 .wavetable-options button[aria-selected="true"]::after { content: none; }
 #wavetable-canvas { display: block; width: 100%; height: 132px; cursor: default; touch-action: none; }
-#wavetable-position .knob-control { padding: 0; width: 135px; margin-left: auto; }
+#wavetable-position .knob-control { padding: 9px 0; width: 100%; margin: 0; }
 .control-tabs { margin-top: 15px; gap: 24px; }
 @media (max-width: 760px) {
   .wavetable-panel { margin-top: 10px; }
@@ -1830,3 +1830,15 @@ dialog input:not([type]) {
  .stage-header { padding-top: 48px; }
  .stage-header > .sound-edit-actions { top: 12px; }
 }
+
+/* Double the playback hit areas and symbols without adding a frame. */
+.sculpture-transport #play-button { width: 48px; height: 48px; }
+.sculpture-transport #play-button svg { width: 28px; height: 28px; }
+.sculpture-transport #stop-button { width: 40px; height: 48px; }
+.sculpture-transport #stop-button svg { width: 22px; height: 22px; }
+.stage > .sculpture-transport { height: 48px; min-height: 48px; }
+.oscillator-controls { display: grid; grid-template-columns: 64px 64px minmax(80px,1fr); align-items: center; gap: 4px; }
+.oscillator-controls .knob-control { min-width: 0; }
+#unison-display { min-width: 0; }
+#unison-display svg { display: block; width: 100%; height: 64px; }
+#unison-display path { fill: none; stroke: #ddd; stroke-width: .8; vector-effect: non-scaling-stroke; }

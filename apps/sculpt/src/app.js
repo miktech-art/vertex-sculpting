@@ -1,3 +1,4 @@
+import {renderUnison} from "./ui/unison.js";
 import {instanceActions} from "./ui/instance-selector.js";
 import {routeSelect} from "./ui/route-select.js";
 import {LfoPanel} from "./ui/lfo.js";
@@ -70,6 +71,8 @@ const tableSelect = new TableSelect($("#wavetable-select"), value => {
 });
 const positionKnob = parameterKnob(PARAMETERS.find(p => p.id === "wavePosition"));
 $("#wavetable-position").append(positionKnob.element);
+const unisonKnob=parameterKnob(PARAMETERS.find(p=>p.id==='unison'));
+$('#unison-control').append(unisonKnob.element);
 function reportError(message) {
   $('#parameter-note').textContent=message;
 }
@@ -137,10 +140,11 @@ function updateDirtyCards(){
 }
 function parameterKnob(p) {
   return new Knob({ id: `param-${p.id}`, label: p.label, min: p.min, max: p.max,
-    unit: p.unit, value: selectedParams()[p.id], format: value => formatValue(p.id, value),
+    unit: p.unit, step: p.integer?1:0, value: selectedParams()[p.id], format: value => formatValue(p.id, value),
     normalize: value => normalize(p.id, value), denormalize: n => denormalize(p.id, n),
     constrain: value => {
       value = Math.max(p.min, Math.min(p.max, value));
+      if(p.integer)value=Math.round(value);
       return ["cutoff", "cutoffLow"].includes(p.id) ? constrainCutoff(store.document.params, p.id, value) : value;
     },
     reset: () => selectedParams(store.initial.params)[p.id],
@@ -158,6 +162,8 @@ function syncControls() {
   for (const [id, knob] of inputs) knob.setValue(store.document.params[id]);
   for(const [id,knob] of envelopeKnobs)knob.setValue(selectedParams()[id]);
   positionKnob.setValue(store.document.params.wavePosition);
+  unisonKnob.setValue(store.document.params.unison);
+  renderUnison($('#unison-display'),store.document.params);
   tableSelect.setValue(store.document.params.waveTable);
   wavetable.update(store.document.params);
 }

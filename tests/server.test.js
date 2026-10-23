@@ -15,7 +15,9 @@ test('local server serves Sculpt and rejects private or escaping paths', async t
   await writeFile(join(temp, 'secret.txt'), 'outside');
   await mkdir(join(sculpt, 'assets'), { recursive: true });
   await writeFile(join(sculpt, 'assets', 'index.html'), 'asset index');
-  const server = createStaticServer({ root: sculpt });
+  await writeFile(join(sculpt,'entry.html'),'<script type="module" src="./entry.js"></script>');
+  await writeFile(join(sculpt,'entry.js'),"import {x} from './vendor/module.js'; import './side.js';");
+  const server = createStaticServer({ root: sculpt, assetVersion:'test-build' });
   t.after(async () => {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
@@ -35,6 +37,12 @@ test('local server serves Sculpt and rejects private or escaping paths', async t
     assert.equal(await (await fetch(`${url}/assets/`)).text(), 'asset index');
     const module = await fetch(`${url}/vendor/module.js`);
     assert.equal(module.headers.get('content-type'), 'text/javascript; charset=utf-8');
+  });
+  await t.test('development versions entry assets and their complete import graph without clearing sound storage',async()=>{
+    const html=await fetch(`${url}/entry.html`),entry=await fetch(`${url}/entry.js?v=test-build`);
+    assert.ok((await html.text()).includes('./entry.js?v=test-build'));
+    const source=await entry.text();assert.ok(source.includes('./vendor/module.js?v=test-build'));assert.ok(source.includes('./side.js?v=test-build'));
+    assert.equal(html.headers.get('clear-site-data'),null);assert.equal(entry.headers.get('cache-control'),'no-store');
   });
   await t.test('HEAD has headers without a response body', async () => {
     const response = await fetch(url, { method: 'HEAD' });

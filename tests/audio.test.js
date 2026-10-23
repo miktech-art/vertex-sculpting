@@ -483,3 +483,45 @@ test('the primary EG can be bypassed and restored on a held voice without restar
   engine.release(voice);assert.equal(voice.envelope.gain.events.at(-1).value,0);
   assert.equal(engine.voices.size,1);engine.disposeVoice(voice);
 });
+
+test('unison allocates exactly 1–8 detuned and panned oscillators with a fixed total source gain',async()=>{
+  for(let unison=1;unison<=8;unison++){
+    const engine=new NativeAudioEngine(),voice=await engine.trigger({...BASE,unison,detune:40,width:1});
+    assert.equal(voice.tones.length,unison);
+    assert.ok(Math.abs(voice.tones.reduce((sum,t)=>sum+t.gain.gain.value,0)-1)<1e-12);
+    assert.equal(voice.tones[0].osc.detune.value,unison===1?0:-20);
+    assert.equal(voice.tones.at(-1).pan.pan.value,unison===1?0:.85);
+    engine.disposeVoice(voice);
+  }
+});
+test('live unison resizing keeps existing voices and envelope timing, retires extras, and can rescue them',async()=>{
+  const engine=new NativeAudioEngine(),voice=await engine.trigger({...BASE,unison:2},{held:true});
+  const initial=voice.tones.map(t=>t.osc),start=voice.start;
+  engine.context.currentTime=start+.2;
+  engine.update({...voice.params,unison:8});
+  assert.equal(voice.tones.length,8);assert.ok(initial.every(osc=>voice.pitchedSources.includes(osc)&&!osc.stopCalls));
+  assert.equal(voice.start,start);assert.equal(engine.voices.size,1);
+  engine.update({...voice.params,unison:1});
+  assert.equal(voice.unisonRetirements.size,7);
+  assert.ok(voice.tones.filter(t=>t.voiceIndex>0).every(t=>t.gain.gain.events.at(-1).value===0));
+  engine.update({...voice.params,unison:8});assert.equal(voice.unisonRetirements.size,0);
+  assert.equal(voice.tones.length,8);assert.ok(initial.every(osc=>!osc.stopCalls));
+  engine.update({...voice.params,unison:1});
+  await new Promise(resolve=>setTimeout(resolve,150));
+  assert.equal(voice.tones.length,1);assert.equal(voice.pitchedSources.length,1);assert.equal(voice.sources.length,1);
+  engine.disposeVoice(voice);
+});
+test('eight-voice wavetable modulation keeps per-voice gains normalized during live count and noise edits',async()=>{
+  const engine=new NativeAudioEngine(),lfo={shape:0,target:'wavePosition',rate:1,amount:1,phase:0,delay:0,fade:0,offset:0};
+  const voice=await engine.trigger({...BASE,unison:8,lfos:[lfo]},{held:true});
+  assert.equal(voice.tones.length,256);
+  for(const index of [0,5,100]){
+    const total=voice.tones.reduce((sum,t)=>sum+t.gain.gain.events.at(-1).values[index],0);
+    assert.ok(Math.abs(total-1)<1e-6);
+  }
+  engine.context.currentTime=voice.start+.2;engine.update({...voice.params,unison:3,noise:.4});
+  const active=voice.tones.filter(t=>t.voiceIndex<3);
+  assert.equal(active.length,96);assert.ok(Math.abs(active.reduce((sum,t)=>sum+t.gain.gain.events.at(-1).values[100],0)-.6)<1e-6);
+  engine.update({...voice.params,unison:8});assert.equal(voice.tones.length,256);
+  engine.disposeVoice(voice);
+});

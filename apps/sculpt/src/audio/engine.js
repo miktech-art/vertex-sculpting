@@ -1,3 +1,4 @@
+import {unisonCount,unisonVoices} from "../oscillator/unison.js";
 import {scheduleModulation} from "./modulation.js";
 import { reverbImpulse } from "./reverb.js";
 import { wavetableCoefficients } from '../oscillator/wavetable.js';
@@ -137,23 +138,7 @@ export class NativeAudioEngine {
     v.output.gain.value = 0.52;
     v.level.gain.value = p.volume;
     v.amp.gain.value = 1 - p.motion / 2;
-    const wave = this.wave(p.harmonics, p.wavePosition, p.waveTable);
-    for (let i = 0; i < 2; i++) {
-      const sign = i ? 1 : -1,
-        osc = own(c.createOscillator()),
-        gain = own(c.createGain()),
-        pan = own(c.createStereoPanner());
-      osc.setPeriodicWave(wave);
-      osc.frequency.value = p.pitch;
-      osc.detune.value = (sign * p.detune) / 2;
-      gain.gain.value = (1 - p.noise) * 0.5;
-      pan.pan.value = sign * p.width * 0.85;
-      osc.connect(gain).connect(pan).connect(v.input);
-      osc.start(start);
-      v.sources.push(osc);
-      v.pitchedSources.push(osc);
-      v.tones.push({ osc, gain, pan, sign });
-    }
+    this.ensureUnison(v,start,true);
     if (p.noise > 0) this.ensureNoise(v, start);
     if (p.motion > 0) this.ensureMotion(v, start);
     if (p.delayMix > 0) this.ensureDelay(v, true);
@@ -175,6 +160,45 @@ export class NativeAudioEngine {
     this.voices.add(v);
     this.refreshLifetime(v);
     return v;
+  }
+  createTone(v,voiceIndex,sign,start,frame=0,initial=false) {
+    const p=v.params,osc=v.own(this.context.createOscillator()),gain=v.own(this.context.createGain()),pan=v.own(this.context.createStereoPanner());
+    osc.setPeriodicWave(this.wave(p.harmonics,v.waveModActive?frame/31:p.wavePosition,p.waveTable));
+    osc.frequency.value=p.pitch;osc.detune.value=sign*p.detune/2;
+    gain.gain.value=initial?(1-p.noise)/unisonCount(p):0;pan.pan.value=sign*p.width*.85;
+    osc.connect(gain).connect(pan).connect(v.input);osc.start(start);
+    const tone={osc,gain,pan,sign,voiceIndex,frame};
+    v.sources.push(osc);v.pitchedSources.push(osc);v.tones.push(tone);return tone;
+  }
+  ensureUnison(v,now,initial=false) {
+    const voices=unisonVoices(v.params),count=voices.length;
+    v.unisonRetirements??=new Map();
+    for(const voice of voices){
+      const task=v.unisonRetirements.get(voice.index);
+      if(task){clearTimeout(task);v.tasks.delete(task);v.unisonRetirements.delete(voice.index);}
+      if(!v.tones.some(tone=>tone.voiceIndex===voice.index)){
+        for(let frame=0;frame<(v.waveBank?32:1);frame++)this.createTone(v,voice.index,voice.position,now,frame,initial);
+      }
+    }
+    for(const tone of v.tones){
+      const voice=voices[tone.voiceIndex];
+      if(!initial){
+        if(tone.gain.gain.cancelAndHoldAtTime)tone.gain.gain.cancelAndHoldAtTime(now);else tone.gain.gain.cancelScheduledValues(now);
+        tone.gain.gain.setTargetAtTime(voice&&(!v.waveBank||tone.frame===0)?(1-v.params.noise)/count:0,now,RAMP);
+      }
+      if(voice){tone.sign=voice.position;tone.osc.detune.setTargetAtTime(voice.cents,now,RAMP);tone.pan.pan.setTargetAtTime(voice.pan,now,RAMP);}
+    }
+    for(const index of new Set(v.tones.filter(tone=>tone.voiceIndex>=count).map(tone=>tone.voiceIndex))){
+      if(v.unisonRetirements.has(index))continue;
+      const task=this.defer(v,()=>{
+        v.unisonRetirements.delete(index);
+        const retired=v.tones.filter(tone=>tone.voiceIndex===index),nodes=new Set(retired.flatMap(tone=>[tone.osc,tone.gain,tone.pan]));
+        for(const tone of retired){tone.osc.stop();tone.osc.disconnect();tone.gain.disconnect();tone.pan.disconnect();}
+        v.tones=v.tones.filter(tone=>tone.voiceIndex!==index);v.sources=v.sources.filter(node=>!nodes.has(node));
+        v.pitchedSources=v.pitchedSources.filter(node=>!nodes.has(node));v.nodes=v.nodes.filter(node=>!nodes.has(node));
+      },120);
+      v.unisonRetirements.set(index,task);
+    }
   }
   makeDrive(v, amount) {
     // WaveShaper.curve cannot be reassigned portably. Crossfade replacement nodes.
@@ -354,6 +378,7 @@ export class NativeAudioEngine {
       if (!sourceAlive)
         for (const id of ["attack", "decay", "sustain", "hold", "release"])
           v.params[id] = old[id];
+      if (changed("unison") && sourceAlive)this.ensureUnison(v,now);
       if (changed("pitch"))
         for (const osc of v.pitchedSources)
           osc.frequency.setTargetAtTime(params.pitch, now, 0.03);
@@ -362,6 +387,7 @@ export class NativeAudioEngine {
         for (const osc of v.pitchedSources) osc.setPeriodicWave(wave);
       }
       for (const tone of v.tones) {
+        if(tone.voiceIndex>=unisonCount(params))continue;
         if (changed("detune"))
           tone.osc.detune.setTargetAtTime(
             (tone.sign * params.detune) / 2,
@@ -375,7 +401,7 @@ export class NativeAudioEngine {
             RAMP,
           );
         if (changed("noise"))
-          tone.gain.gain.setTargetAtTime((1 - params.noise) * 0.5, now, RAMP);
+          tone.gain.gain.setTargetAtTime((1 - params.noise)/unisonCount(params), now, RAMP);
       }
       if (changed("volume"))
         v.level.gain.setTargetAtTime(params.volume, now, RAMP);

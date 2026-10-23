@@ -12,7 +12,7 @@ const types = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-export function createStaticServer({ root = resolve(projectRoot, 'dist') } = {}) {
+export function createStaticServer({ root = resolve(projectRoot, 'dist'), assetVersion = null } = {}) {
   return createServer(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { Allow: 'GET, HEAD' }).end();
@@ -38,7 +38,16 @@ export function createStaticServer({ root = resolve(projectRoot, 'dist') } = {})
         }
         file = resolve(file, 'index.html');
       }
-      const body = await readFile(file);
+      let body = await readFile(file);
+      if(assetVersion && ['.html','.js'].includes(extname(file))){
+        // Version the complete local module graph, including imports, so an old
+        // browser cache cannot mix scripts from different development sessions.
+        const version=encodeURIComponent(assetVersion);
+        let source=body.toString();
+        if(extname(file)==='.html')source=source.replace(/((?:src|href)=["'])(\.\/[^"'?]+\.(?:js|css))(["'])/g,`$1$2?v=${version}$3`);
+        else source=source.replace(/((?:from\s*|import\s*)["'])(\.{1,2}\/[^"'?]+\.js)(["'])/g,`$1$2?v=${version}$3`);
+        body=Buffer.from(source);
+      }
       res.writeHead(200, {
         'Content-Type': types[extname(file)] || 'application/octet-stream',
         'Content-Length': body.length,

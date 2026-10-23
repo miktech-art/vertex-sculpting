@@ -1,3 +1,4 @@
+import {unisonCount} from "../oscillator/unison.js";
 import {lfoWave,MOD_LIMITS,modulationEnvelopes,activeLfos} from "../lfo.js";
 import {duration,clamp} from '../model.js';
 import {voiceEnvelopeAt} from './live-envelope.js';
@@ -63,23 +64,19 @@ export function scheduleModulation(engine,v,now) {
     param.setValueCurveAtTime(Float32Array.from(values),start,seconds);
   };
   const waveMod=envs.some(e=>e.target==='wavePosition')||lfos.some(l=>l.target==='wavePosition');
+  v.waveModActive=waveMod;
   if(waveMod&&!v.waveBank){
     v.waveBank=true;
-    for(const tone of [...v.tones]){
-      tone.frame=0;
-      for(let frame=1;frame<32;frame++){
-        const osc=v.own(engine.context.createOscillator()),gain=v.own(engine.context.createGain()),pan=v.own(engine.context.createStereoPanner());
-        osc.detune.value=tone.sign*p.detune/2;pan.pan.value=tone.sign*p.width*.85;
-        gain.gain.value=0;osc.connect(gain).connect(pan).connect(v.input);osc.start(start);
-        v.sources.push(osc);v.pitchedSources.push(osc);v.tones.push({osc,gain,pan,sign:tone.sign,frame});
-      }
+    for(const tone of [...v.tones].filter(tone=>tone.voiceIndex<unisonCount(p))){
+      for(let frame=1;frame<32;frame++)engine.createTone(v,tone.voiceIndex,tone.sign,start,frame);
     }
   }
   for(const tone of v.tones){
+    if(tone.voiceIndex>=unisonCount(p))continue;
     automate(tone.osc.frequency,samples.map(s=>s.pitch));
     if(v.waveBank){
       tone.osc.setPeriodicWave(engine.wave(p.harmonics,waveMod?tone.frame/31:p.wavePosition,p.waveTable));
-      automate(tone.gain.gain,samples.map(s=>(1-p.noise)*.5*(waveMod?Math.max(0,1-Math.abs(s.wavePosition*31-tone.frame)):tone.frame===0?1:0)));
+      automate(tone.gain.gain,samples.map(s=>(1-p.noise)/unisonCount(p)*(waveMod?Math.max(0,1-Math.abs(s.wavePosition*31-tone.frame)):tone.frame===0?1:0)));
     }
   }
   automate(v.filters.high.frequency,samples.map(s=>s.cutoff));

@@ -48,3 +48,16 @@ test('knob is one joined arc and radial indicator with a fixed bottom-left start
   }
   assert.ok(knobPath(.8).includes('A15 15 0 1 1'));
 });
+
+test('integer voice dials accumulate small pointer moves and step one voice with the keyboard',()=>{
+  const original=globalThis.document;globalThis.document={createElement:()=>new Element(),documentElement:{classList:{add(){},remove(){}}}};
+  try{
+    const knob=new Knob({id:'voices',label:'Unison',min:1,max:8,value:2,step:1,constrain:v=>Math.max(1,Math.min(8,Math.round(v))),format:String});
+    knob.dial.fire('pointerdown');
+    for(let y=99;y>=80;y--)knob.dial.fire('pointermove',{clientY:y});
+    knob.dial.fire('pointerup');assert.equal(knob.value,3);
+    knob.dial.fire('keydown',{key:'ArrowUp'});assert.equal(knob.value,4);
+    knob.dial.fire('keydown',{key:'ArrowDown',shiftKey:true});assert.equal(knob.value,3);
+    knob.dial.fire('keydown',{key:'End'});assert.equal(knob.value,8);
+  }finally{globalThis.document=original;}
+});

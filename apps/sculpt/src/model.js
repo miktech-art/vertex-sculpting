@@ -45,7 +45,7 @@ export const PARAMETERS = [
     max: 40,
     value: 0,
     unit: "ct",
-    description: "Separates a pair of voices in pitch.",
+    description: "Sets the pitch separation between the outer unison voices.",
   },
   {
     id: "noise",
@@ -108,7 +108,7 @@ export const PARAMETERS = [
     max: 1,
     value: 0,
     unit: "%",
-    description: "Spreads the paired voices across the stereo field.",
+    description: "Spreads the unison voices across the stereo field.",
   },
   {
     id: "attack",
@@ -234,6 +234,7 @@ export const PARAMETERS = [
     unit: "s",
     description: "Duration of the reverberant decay.",
   },
+  { id: "unison", label: "Unison", group: "oscillator", min: 1, max: 8, value: 2, integer: true, unit: "", description: "Layers 1–8 oscillator voices. Detune and Stereo width set their spread." },
   { id: "wavePosition", label: "Position", group: "oscillator", min: 0, max: 1, value: 2 / 3, unit: "%", description: "Morph continuously through the selected wavetable." },
   { id: "waveTable", label: "Wavetable", group: "oscillator", min: 0, max: 2, value: 0, unit: "", description: "Choose Basic shapes, Hollow, or Formant." },
 ];
@@ -420,12 +421,14 @@ export function normalize(id, value) {
 }
 export function denormalize(id, n) {
   const p = PARAM_BY_ID[id];
-  return p.scale === "log"
+  const value=p.scale === "log"
     ? p.min * (p.max / p.min) ** clamp(n)
     : p.min + (p.max - p.min) * clamp(n);
+  return p.integer?Math.round(value):value;
 }
 export function formatValue(id, value) {
   const p = PARAM_BY_ID[id];
+  if (p.integer) return String(Math.round(value));
   if (id === "waveTable") return WAVETABLES[Math.round(value)];
   if (id === "rate") return `${value.toFixed(1)} Hz`;
   if (p.unit === "%") return `${Math.round(value * 100)}%`;
@@ -498,8 +501,8 @@ export function validateDocument(input) {
   const params = {};
   for (const p of PARAMETERS) {
     const v = p.id === "cutoffLow" && legacyFilter ? 20 :
-      ["wavePosition", "waveTable"].includes(p.id) && !Object.hasOwn(input.params, p.id) ? p.value : input.params[p.id];
-    if (typeof v !== "number" || !Number.isFinite(v) || v < p.min || v > p.max)
+      ["wavePosition", "waveTable", "unison"].includes(p.id) && !Object.hasOwn(input.params, p.id) ? p.value : input.params[p.id];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < p.min || v > p.max || (p.integer && !Number.isInteger(v)))
       throw new Error(`Invalid ${p.label.toLowerCase()} value.`);
     params[p.id] = v;
   }

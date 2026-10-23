@@ -17,9 +17,9 @@ export function parseKnobValue(text, unit = '') {
 }
 export class Knob {
   constructor({ id, label, min = 0, max = 1, value = min, unit = '', format = v => v.toFixed(2),
-    normalize = v => (v - min) / (max - min), denormalize = n => min + n * (max - min),
+    normalize = v => (v - min) / (max - min), denormalize = n => min + n * (max - min), step = 0,
     constrain = v => Math.max(min, Math.min(max, v)), onInput, onCommit = () => {}, reset = () => value }) {
-    Object.assign(this, { min, max, unit, format, normalize, denormalize, constrain, onInput, onCommit, reset });
+    Object.assign(this, { min, max, unit, format, normalize, denormalize, step, constrain, onInput, onCommit, reset });
     this.element = document.createElement('div'); this.element.className = 'knob-control';
     const title = document.createElement('label'); title.textContent = label; title.htmlFor = id; title.className = 'knob-label';
     this.dial = document.createElement('div'); this.dial.id = id; this.dial.className = 'knob-dial'; this.dial.tabIndex = 0;
@@ -33,13 +33,14 @@ export class Knob {
     this.editor.title = 'Click to type a value · Enter: apply · Escape: cancel';
     this.element.append(title, this.dial, this.editor);
     this.dial.addEventListener('pointerdown', e => {
-      if (e.button !== 0) return; e.preventDefault(); this.drag = { y: e.clientY, changed: false, id: e.pointerId };
+      if (e.button !== 0) return; e.preventDefault(); this.drag = { y: e.clientY, n: this.normalize(this.value), changed: false, id: e.pointerId };
       this.dial.focus({ preventScroll: true }); this.dial.setPointerCapture(e.pointerId);
       document.documentElement.classList.add('knob-dragging');
     });
     this.dial.addEventListener('pointermove', e => {
       if (!this.drag || e.pointerId !== this.drag.id) return;
-      const n = dragKnob(this.normalize(this.value), e.clientY - this.drag.y, e.shiftKey);
+      const n = dragKnob(this.step ? this.drag.n : this.normalize(this.value), e.clientY - this.drag.y, e.shiftKey);
+      this.drag.n = n;
       this.drag.y = e.clientY;
       const before = this.value; this.edit(this.denormalize(n)); this.drag.changed ||= this.value !== before;
     });
@@ -52,7 +53,7 @@ export class Knob {
       const delta = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[e.key];
       if (delta === undefined && !['Home', 'End'].includes(e.key)) return;
       e.preventDefault(); e.stopPropagation();
-      this.edit(this.denormalize(e.key === 'Home' ? 0 : e.key === 'End' ? 1 : clamp(this.normalize(this.value) + delta * (e.shiftKey ? 0.001 : 0.01)))); this.onCommit();
+      this.edit(this.denormalize(e.key === 'Home' ? 0 : e.key === 'End' ? 1 : clamp(this.normalize(this.value) + delta * (this.step ? this.step/(this.max-this.min) : (e.shiftKey ? 0.001 : 0.01))))); this.onCommit();
     });
     this.editor.addEventListener('focus', () => { this.editing = true; this.entryUnit = this.format(this.value).match(/(kHz|Hz|ms|s|%|ct|st|oct|dB|×)$/i)?.[1] || ''; this.editor.select(); });
     this.editor.addEventListener('blur', () => {
