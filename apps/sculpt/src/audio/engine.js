@@ -1,3 +1,4 @@
+import { reverbImpulse } from "./reverb.js";
 import { wavetableCoefficients } from '../oscillator/wavetable.js';
 import { delayFeedback } from "../delay.js";
 import { filterSettings } from "../spectral/filter.js";
@@ -59,14 +60,8 @@ export class NativeAudioEngine {
     if (this.impulses.has(key)) return this.impulses.get(key);
     const n = Math.ceil(c.sampleRate * Number(key)),
       buffer = c.createBuffer(2, n, c.sampleRate);
-    let seed = 43;
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buffer.getChannelData(ch);
-      for (let i = 0; i < n; i++) {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        data[i] = ((seed / 4294967296) * 2 - 1) * (1 - i / n) ** 2.8 * 0.7;
-      }
-    }
+    const {channels} = reverbImpulse(seconds,c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) buffer.getChannelData(ch).set(channels[ch]);
     this.impulses.set(key, buffer);
     if (this.impulses.size > 20)
       this.impulses.delete(this.impulses.keys().next().value);

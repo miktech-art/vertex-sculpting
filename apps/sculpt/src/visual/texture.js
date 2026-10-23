@@ -1,5 +1,6 @@
+import { reverbImpulse } from "../audio/reverb.js";
 import { BASE, envelopeAt } from '../model.js';
-import { wavetablePartial } from '../oscillator/wavetable.js';
+import { wavetableCoefficients } from '../oscillator/wavetable.js';
 import { ridgeDecibels, ridgeStrength } from '../spectral/ridges.js';
 
 // Repeatable visual samples; the audio itself uses a continuous white-noise buffer.
@@ -86,23 +87,45 @@ function sourceProfiles(lines,particles) {
   }
   return profiles;
 }
-export function buildReverbGlow(params,{length,total,contour,response,noiseAmplitude=0,spread=0,extent=0,lines=[],particles=[]}) {
+// Estimate PeriodicWave peak normalization with a dense cycle. Cache it since
+// filter/envelope/reverb edits do not change the oscillator's normalization.
+const wavePeaks = new Map();
+function oscillatorPeak(params, coefficients) {
+  const key=JSON.stringify([params.harmonics,params.wavePosition,params.waveTable]);
+  if(wavePeaks.has(key)) return wavePeaks.get(key);
+  let peak=0;
+  for(let i=0;i<2048;i++){
+    let value=0;
+    for(let h=1;h<coefficients.length;h++) value+=coefficients[h]*Math.sin(2*Math.PI*i/2048*h);
+    peak=Math.max(peak,Math.abs(value));
+  }
+  peak=Math.max(1e-12,peak);wavePeaks.set(key,peak);
+  if(wavePeaks.size>8)wavePeaks.delete(wavePeaks.keys().next().value);
+  return peak;
+}
+export function buildReverbGlow(params,{length,total,contour,response,noiseAmplitude=0,sampleRate=48000,spread=0,extent=0,lines=[],particles=[]}) {
   if (params.reverbMix <= 0) return [];
+  const {imag:coefficients} = wavetableCoefficients(params);
   let tonalPower = 0;
-  for(let h=1;h<=96;h++) tonalPower += (wavetablePartial(h,params)*response(params.pitch*h)*(1-params.noise)) ** 2;
-  const sourceAmplitude = Math.sqrt(tonalPower + noiseAmplitude ** 2);
-  const tail = params.reverbDecay, glow = [], duration = total + tail;
+  for(let h=1;h<coefficients.length;h++) tonalPower += (coefficients[h]*response(params.pitch*h)*(1-params.noise)) ** 2;
+  if(tonalPower>0) tonalPower /= oscillatorPeak(params,coefficients)**2;
+  // Mean-square source level, before the master compressor. The oscillator
+  // normalization is estimated above; nonlinear drive/detune are not modeled.
+  const sourcePower = (tonalPower + noiseAmplitude ** 2) / 2 * (params.volume*.52)**2;
+  const impulse = reverbImpulse(params.reverbDecay,sampleRate);
+  const tail = impulse.duration, glow = [], duration = total + tail;
   const profiles=sourceProfiles(lines,particles);
   const profileAt=time=>profiles[Math.max(0,Math.min(profiles.length-1,Math.round(time/total*(profiles.length-1))))];
-  const weights = Array.from({length:48},(_,j)=>(1-j/47) ** 5.6);
-  const norm = weights.reduce((a,b)=>a+b,0);
-  for(let i=0;i<48;i++) {
-    const time = i / 47 * duration;
+  // Include envelope corners so short transients are not lost between display samples.
+  const times = [...new Set([...Array.from({length:96},(_,i)=>i/95*duration),
+    contour.attack,contour.attack+contour.decay,total-contour.release,total])].sort((a,b)=>a-b);
+  for(const time of times) {
     let power=0, widthY=0,widthZ=0,posY=0,posZ=0,negY=0,negZ=0;
-    for(let j=0;j<48;j++) {
-      const at = time-j/47*tail;
-      const e = at>=0 && at<=total ? envelopeAt(contour,at) : 0;
-      const contribution=e*e*weights[j];power+=contribution;
+    for(const bin of impulse.bins) {
+      if(bin.time>time) break;
+      const at = time-bin.time;
+      const e = at<=total ? envelopeAt(contour,at) : 0;
+      const contribution=e*e*bin.power;power+=contribution;
       if(contribution>0){
         const profile=profileAt(at);
         widthY+=profile.y**2*contribution;widthZ+=profile.z**2*contribution;
@@ -110,23 +133,25 @@ export function buildReverbGlow(params,{length,total,contour,response,noiseAmpli
         negY+=profile.negativeY*contribution;negZ+=profile.negativeZ*contribution;
       }
     }
-    const dry = time<=total ? envelopeAt(contour,time) : 0;
-    const wet = Math.sqrt(power/norm)*params.reverbMix*sourceAmplitude;
-    // A display masking cue: keep the wet field subdued under the dry sound.
-    const alpha = .09 * ridgeStrength(wet) * (1-.65*dry);
-    if(alpha < .0001) continue;
+    const wetPower = power*params.reverbMix**2*sourcePower;
+    // Fixed exposure in linear power: no log boost or invented dry-sound mask.
+    const relativePower = wetPower / NOISE_REFERENCE_RMS**2;
+    const alpha = .12 * relativePower;
+    if(alpha < .000001) continue;
+    const levelDb = wetPower>0 ? 10*Math.log10(wetPower) : -Infinity;
     const current=time<=total?profileAt(time):{y:0,z:0};
     const y=Math.max(current.y,power?Math.sqrt(widthY/power):0);
     const z=Math.max(current.z,power?Math.sqrt(widthZ/power):0);
     const padding=16+12*spread+8*extent*time/duration;
-    const radiusX=Math.max(9,length/total*duration/47*1.8);
+    // A blur is part of the time support too: its leading edge must be causal.
+    const radiusX=Math.min(length/total*time,Math.max(3,length/total*duration/95*1.8));
     // An enclosing soft shell always reaches beyond the visible harmonics.
-    glow.push({x:(time/total-.5)*length,y:0,z:0,time,kind:'shell',alpha:alpha*.9,
+    glow.push({x:(time/total-.5)*length,y:0,z:0,time,levelDb,kind:'shell',alpha:alpha*.9,
       radiusX,radiusY:y*1.5+padding,radiusZ:z*1.5+padding});
     if(power>0 && tonalPower>0){
       for(const side of [-1,1]){
         glow.push({x:(time/total-.5)*length,y:(side>0?posY:negY)/power,z:(side>0?posZ:negZ)/power,
-          time,kind:'spectral',alpha:alpha*.35,radiusX,radiusY:padding*.8,radiusZ:padding*.8});
+          time,levelDb,kind:'spectral',alpha:alpha*.35,radiusX,radiusY:padding*.8,radiusZ:padding*.8});
       }
     }
   }

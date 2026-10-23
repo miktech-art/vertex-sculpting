@@ -407,3 +407,14 @@ test('live sine-to-triangle sweep updates oscillator coefficients throughout the
   engine.update({...voice.params,wavePosition:.34});assert.ok(osc.wave.imag[2]>0);
   engine.disposeVoice(voice);
 });
+
+test("the full reverb return is available at startup and during live edits", async () => {
+  const engine = new NativeAudioEngine();
+  const voice = await engine.trigger({...BASE,reverbMix:1});
+  assert.equal(voice.reverb.wet.gain.value,1);
+  engine.update({...voice.params,reverbMix:.65});
+  assert.equal(voice.reverb.wet.gain.events.at(-1).value,.65);
+  engine.update({...voice.params,reverbMix:1});
+  assert.equal(voice.reverb.wet.gain.events.at(-1).value,1);
+  engine.disposeVoice(voice);
+});

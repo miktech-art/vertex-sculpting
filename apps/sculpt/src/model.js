@@ -218,7 +218,7 @@ export const PARAMETERS = [
     label: "Reverb",
     group: "space",
     min: 0,
-    max: 0.65,
+    max: 1,
     value: 0,
     unit: "%",
     description: "Level of a diffuse reverberant space.",

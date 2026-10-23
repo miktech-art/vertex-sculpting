@@ -41,12 +41,12 @@ test('reverb generates a separate diffuse tail without adding dots or bending dr
   assert.ok(longer.glow.at(-1).time>wet.glow.at(-1).time);
   assert.ok(longer.echoLayout.length>wet.echoLayout.length);
 });
-test('reverb glow stays faint under a sustained dry sound and is more exposed just after it ends',()=>{
+test('reverb energy stays faint and decays after the source ends',()=>{
   const patch={...p,attack:.005,decay:.02,sustain:1,hold:1,release:.005,reverbMix:.5,reverbDecay:1};
   const g=geometry(patch),body=g.glow.filter(pt=>pt.time>.6&&pt.time<.9),tail=g.glow.filter(pt=>pt.time>g.total&&pt.time<g.total+.1);
   assert.ok(body.length&&tail.length);
-  assert.ok(Math.max(...tail.map(pt=>pt.alpha))>Math.max(...body.map(pt=>pt.alpha)));
-  assert.ok(g.glow.every(pt=>pt.alpha<.15));
+  assert.ok(Math.max(...tail.map(pt=>pt.alpha))<Math.max(...body.map(pt=>pt.alpha)));
+  assert.ok(g.glow.every(pt=>pt.alpha<.01 && Number.isFinite(pt.levelDb)));
 });
 test('fully noisy input also feeds the reverb glow',()=>{
   const g=geometry({...p,noise:1,reverbMix:.4});
@@ -98,4 +98,28 @@ test('an unclipped 6 dB noise increase produces approximately four times the gra
   const ratio=b.particles.length/a.particles.length;
   assert.ok(ratio>3.5&&ratio<4.5);
   assert.ok(Math.abs(b.noiseLevelDb-a.noiseLevelDb-6.0206)<.001);
+});
+
+test('tonal prominence follows the remaining source power at high noise blends',()=>{
+  const dry=geometry(p);
+  for(const noise of [.75,.9,.99,1]){
+    const g=geometry({...p,noise});
+    for(let i=0;i<g.lines.length;i++)assert.ok(Math.abs(g.lines[i].spectralLevel-dry.lines[i].spectralLevel*(1-noise)**2)<1e-12);
+  }
+});
+test('every reverb blur stays after the source onset, including sharp attacks and rotated-view time support',()=>{
+  for(const attack of [.005,.08,.5]){
+    const g=geometry({...p,attack,reverbMix:1,reverbDecay:4});
+    assert.ok(g.glow.length>0);
+    assert.ok(g.glow.every(pt=>pt.time>0 && pt.x-pt.radiusX>=-g.length/2-1e-10));
+  }
+});
+test('reverb visual exposure follows wet gain and source level in power, without logarithmic boosting',()=>{
+  const soft=geometry({...p,reverbMix:.25}),wet=geometry({...p,reverbMix:.5});
+  const quiet=geometry({...p,reverbMix:.5,volume:p.volume/2});
+  const at=(g,t)=>g.glow.find(pt=>pt.kind==='shell'&&pt.time===t);
+  const b=wet.glow.find(pt=>pt.kind==='shell'&&pt.time>.3),a=at(soft,b.time),q=at(quiet,b.time);
+  assert.ok(Math.abs(b.alpha/a.alpha-4)<1e-10);
+  assert.ok(Math.abs(b.alpha/q.alpha-4)<1e-10);
+  assert.ok(Math.abs(b.levelDb-a.levelDb-6.0206)<.001);
 });

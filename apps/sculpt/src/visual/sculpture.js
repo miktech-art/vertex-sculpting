@@ -73,7 +73,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     kind: "core",
     frequency: params.pitch,
     filterGain: response(params.pitch),
-    spectralLevel: ridgeStrength(response(params.pitch) * toneGain),
+    spectralLevel: ridgeStrength(response(params.pitch)) * toneGain ** 2,
     levelDb: ridgeDecibels(response(params.pitch) * toneGain),
   });
   for (let j = 0; j < bands.length; j++) {
@@ -81,7 +81,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
       position = Math.log(band.center) / Math.log(96),
       energy = bandAmplitude(band, params, response),
       spectralAmplitude = energy.source * energy.gain * toneGain,
-      spectralLevel = ridgeStrength(spectralAmplitude),
+      spectralLevel = ridgeStrength(energy.source * energy.gain) * toneGain ** 2,
       resonanceShape = crinkle(params.pitch * band.center);
     for (const sign of [-1, 1]) {
       const line = [];
@@ -132,7 +132,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
     noiseFields.set(noiseKey,noise);if(noiseFields.size>3)noiseFields.delete(noiseFields.keys().next().value);
   }
   const particles = noise.particles;
-  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,spread:m.halo,extent:m.haloTail,lines,particles});
+  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,sampleRate,spread:m.halo,extent:m.haloTail,lines,particles});
   const echoLayout = buildEchoLayout(total,length,{
     mix:denormalize("delayMix",m.echoes),delay:denormalize("delayTime",m.echoSpacing),
     feedback:denormalize("feedback",m.persistence),separation:Math.max(32,body*.7 + params.noise*24),
@@ -198,7 +198,8 @@ export class SculptureRenderer {
         yaw: this.yaw,
         pitch: this.pitch,
         pan: { ...this.pan },
-        panning: e.shiftKey,
+        // Primary mouse drag always rotates; other pointer/gesture controls stay intact.
+        panning: e.shiftKey && !(e.button === 0 && e.pointerType === "mouse"),
       };
       canvas.setPointerCapture(e.pointerId);
       canvas.classList.add("dragging");
