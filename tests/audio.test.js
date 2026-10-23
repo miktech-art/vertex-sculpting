@@ -444,3 +444,15 @@ test('adding an envelope to a playing legacy patch schedules it without restarti
   assert.equal(voice.tones[0].osc.frequency.events.at(-1).type,'curve');
   assert.equal(engine.voices.size,1);engine.disposeVoice(voice);
 });
+
+test('LFOs keep scheduling through held notes and stop refreshing after gate-off',async()=>{
+  const engine=new NativeAudioEngine();
+  const lfo={shape:0,target:'pitch',rate:2,amount:12,phase:0,delay:0,fade:0,offset:0};
+  const voice=await engine.trigger({...BASE,lfos:[lfo]},{held:true});
+  assert.ok(voice.modulationTask);assert.ok(voice.tasks.has(voice.modulationTask));
+  const curve=voice.tones[0].osc.frequency.events.at(-1);
+  assert.equal(curve.type,'curve');assert.ok(Math.max(...curve.values)>BASE.pitch*1.9);
+  engine.context.currentTime=voice.start+.6;engine.release(voice);
+  assert.equal(voice.modulationTask,null);assert.equal(voice.held,false);
+  engine.disposeVoice(voice);assert.equal(voice.tasks.size,0);
+});

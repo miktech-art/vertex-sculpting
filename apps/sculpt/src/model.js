@@ -1,3 +1,4 @@
+import {validateLfos,egTargetLimit} from "./lfo.js";
 import { WAVETABLES } from './oscillator/wavetable.js';
 import { delayEchoes } from "./delay.js";
 
@@ -504,8 +505,8 @@ export function validateDocument(input) {
   if(input.params.envelopes!==undefined){
     if(!Array.isArray(input.params.envelopes)||input.params.envelopes.length>8)throw new Error('Invalid envelope list.');
     params.envelopes=input.params.envelopes.map(env=>{
-      if(!env||!['pitch','wavePosition','cutoff'].includes(env.target))throw new Error('Invalid envelope destination.');
-      const limit={pitch:48,wavePosition:1,cutoff:8}[env.target];
+      if(!env||!(['pitch','wavePosition','cutoff'].includes(env.target)||/^lfo(?:Rate|Depth):[0-7]$/.test(env.target)))throw new Error('Invalid envelope destination.');
+      const limit=egTargetLimit(env.target);
       if(!Number.isFinite(env.amount)||Math.abs(env.amount)>limit)throw new Error('Invalid envelope depth.');
       const result={target:env.target,amount:env.amount};
       for(const id of ['attack','decay','sustain','hold','release']){
@@ -515,6 +516,10 @@ export function validateDocument(input) {
       }
       return result;
     });
+  }
+  if(input.params.lfos!==undefined)params.lfos=validateLfos(input.params.lfos);
+  for(const env of params.envelopes||[]){
+    if(env.target.startsWith('lfo')&&Number(env.target.split(':')[1])>=(params.lfos?.length??1))throw new Error('Envelope refers to a missing LFO.');
   }
   if (!Number.isInteger(params.waveTable)) throw new Error("Invalid wavetable selection.");
   if (params.cutoffLow > params.cutoff)

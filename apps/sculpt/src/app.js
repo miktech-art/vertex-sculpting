@@ -1,3 +1,5 @@
+import {LfoPanel} from "./ui/lfo.js";
+import {getLfos,egTargetLimit} from "./lfo.js";
 import { soundPreview } from "./ui/sound-preview.js";
 import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
@@ -39,6 +41,13 @@ const store = new Store(),
       $("#timeline-end").textContent = `${seconds.toFixed(2)} s`;
     },
   });
+const lfoPanel=new LfoPanel({
+  onEdit:(index,changes)=>store.edit(doc=>{
+    doc.params.lfos=structuredClone(getLfos(doc.params));Object.assign(doc.params.lfos[index],changes);
+  },'lfo-parameter'),
+  onAdd:lfo=>{store.edit(doc=>{doc.params.lfos=[...structuredClone(getLfos(doc.params)),lfo];},'lfos');store.commit();},
+  onCommit:()=>store.commit(),
+});
 const mapping = new MappingEditor(store);
 let mode = "sculpt",
   group = "source",
@@ -104,17 +113,17 @@ function renderEnvelopeSelectors(){
   const depthSlot=$('#envelope-depth-slot');depthSlot.replaceChildren();
   const env=envs[selectedEnvelope-1]||{target:'amplitude',amount:0};
   const select=document.createElement('select');select.setAttribute('aria-label','Envelope destination');
-  const destinations=selectedEnvelope?[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff']]:[['amplitude','Amplitude']];
+  const destinations=selectedEnvelope?[['pitch','Pitch'],['wavePosition','Wavetable position'],['cutoff','Filter cutoff'],...getLfos(params).flatMap((_,i)=>[[`lfoRate:${i}`,`LFO ${i+1} rate`],[`lfoDepth:${i}`,`LFO ${i+1} depth`]])]:[['amplitude','Amplitude']];
   for(const [value,label] of destinations){
     const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);
   }
   select.value=env.target;
   select.style.width=`${destinations.find(([value])=>value===env.target)[1].length*.62+.15}em`;
   const wrapper=document.createElement('div');wrapper.className='envelope-destination';wrapper.append(select);route.append(wrapper);
-  select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
-  const limit={pitch:48,wavePosition:1,cutoff:8,amplitude:1}[env.target];
+  select.addEventListener('change',()=>{editSelectedEnvelope({target:select.value,amount:select.value.startsWith('lfoRate:')?2:select.value.startsWith('lfoDepth:')?.25:{pitch:12,wavePosition:.5,cutoff:2}[select.value]});store.commit();renderEnvelopeSelectors();});
+  const limit=egTargetLimit(env.target);
   const depth=new Knob({id:'envelope-depth',label:'Depth',min:-limit,max:limit,value:env.amount,
-    format:v=>env.target==='amplitude'?'—':env.target==='wavePosition'?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
+    format:v=>env.target==='amplitude'?'—':(env.target==='wavePosition'||env.target.startsWith('lfoDepth:'))?`${(v*100).toFixed(0)}%`:`${v.toFixed(1)} ${env.target==='pitch'?'st':'oct'}`,
     onInput:value=>editSelectedEnvelope({amount:value}),onCommit:()=>store.commit()});
   if(!selectedEnvelope){depth.element.classList.add('inactive-depth');depth.editor.disabled=true;depth.dial.setAttribute('aria-disabled','true');depth.dial.tabIndex=-1;}
   depthSlot.append(depth.element);
@@ -209,7 +218,8 @@ function sync(doc, kind) {
   miniRenderer.setSampleRate(audio.context?.sampleRate ?? 48000);
   renderer.setDocument(doc, kind === "load");
   miniRenderer.setDocument(doc, kind === "load");
-  if(["load","envelopes","undo","redo"].includes(kind))renderEnvelopeSelectors();
+  if(["load","envelopes","lfos","undo","redo"].includes(kind))renderEnvelopeSelectors();
+  lfoPanel.setParams(compare?store.initial.params:doc.params);
   syncControls();
   renderHeader();
   if (["save", "load", "library"].includes(kind)) renderSavedCards();
@@ -691,7 +701,7 @@ $("#wav-button").addEventListener("click", async () => {
 installHoldLoopShortcut(document, () => {
   setLoop(true);
   play();
-}, stop, () => tableSelect.isOpen || !!document.querySelector("dialog[open]"));
+}, stop, () => tableSelect.isOpen || lfoPanel.shapes.isOpen || !!document.querySelector("dialog[open]"));
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(

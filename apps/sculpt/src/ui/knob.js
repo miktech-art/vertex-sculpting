@@ -7,7 +7,7 @@ export function knobPath(value) {
   return `M${20 - 15 / Math.sqrt(2)} ${20 + 15 / Math.sqrt(2)}${n > 0 ? ` A15 15 0 ${n > 2 / 3 ? 1 : 0} 1 ${point(15)}` : ''} L${point(4)}`;
 }
 export function parseKnobValue(text, unit = '') {
-  const match = String(text).trim().match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(khz|hz|ms|s|%|ct|db|×)?$/i);
+  const match = String(text).trim().match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(khz|hz|ms|s|%|ct|st|oct|db|×)?$/i);
   if (!match) return NaN;
   let value = Number(match[1]); const suffix = (match[2] || '').toLowerCase();
   if (suffix === 'khz') value *= 1000;
@@ -54,7 +54,7 @@ export class Knob {
       e.preventDefault(); e.stopPropagation();
       this.edit(this.denormalize(e.key === 'Home' ? 0 : e.key === 'End' ? 1 : clamp(this.normalize(this.value) + delta * (e.shiftKey ? 0.001 : 0.01)))); this.onCommit();
     });
-    this.editor.addEventListener('focus', () => { this.editing = true; this.entryUnit = this.format(this.value).match(/(kHz|Hz|ms|s|%|ct|dB|×)$/i)?.[1] || ''; this.editor.select(); });
+    this.editor.addEventListener('focus', () => { this.editing = true; this.entryUnit = this.format(this.value).match(/(kHz|Hz|ms|s|%|ct|st|oct|dB|×)$/i)?.[1] || ''; this.editor.select(); });
     this.editor.addEventListener('blur', () => {
       const raw = this.editor.value.trim();
       const value = parseKnobValue(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw) ? raw + this.entryUnit : raw, this.unit); this.editing = false;

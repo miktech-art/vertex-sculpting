@@ -324,7 +324,7 @@ export class NativeAudioEngine {
     for (const v of only ? [only] : this.voices) {
       if (v.stopping) continue;
       const old = { ...v.params },
-        changed = (id) => id === "envelopes" ? JSON.stringify(old[id]) !== JSON.stringify(params[id]) : old[id] !== params[id];
+        changed = (id) => ["envelopes","lfos"].includes(id) ? JSON.stringify(old[id]) !== JSON.stringify(params[id]) : old[id] !== params[id];
       if (![...new Set([...Object.keys(old),...Object.keys(params)])].some(changed)) continue;
       const sourceAlive = v.held || now < v.start + v.duration;
       const envelopeChanged = [
@@ -342,6 +342,7 @@ export class NativeAudioEngine {
         };
       Object.assign(v.params, structuredClone(params));
       if(!params.envelopes)delete v.params.envelopes;
+      if(!params.lfos)delete v.params.lfos;
       if (!sourceAlive)
         for (const id of ["attack", "decay", "sustain", "hold", "release"])
           v.params[id] = old[id];
