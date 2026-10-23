@@ -271,7 +271,7 @@ export const TARGETS = [
   {
     id: "grain",
     label: "Grain",
-    description: "Density of the broadband noise particle field.",
+    description: "Noise grain size; density follows the audio level.",
   },
   {
     id: "twist",

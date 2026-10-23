@@ -19,6 +19,8 @@ import {
 
 const TAU = Math.PI * 2;
 const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
+// Keep the most recent immutable noise fields shared by the main and mini views.
+const noiseFields = new Map();
 // Geometry is deterministic: identical sound + mapping always gives the same object.
 export function buildGeometry(params, m, sampleRate = 48000) {
   const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
@@ -115,15 +117,22 @@ export function buildGeometry(params, m, sampleRate = 48000) {
         levelDb: ridgeDecibels(spectralAmplitude),
         width: 0.5 + 0.35 * (m.edge + resonanceShape),
         kind: "filament",
+        side:sign,
         frequency: params.pitch * band.center,
         partials: band.partials,
         filterGain: energy.gain,
       });
     }
   }
-  const noise = buildNoiseTexture(params,{length,total,contour,response,sampleRate,grain:m.grain});
+  const grain=Math.round(m.grain*8)/8;
+  const noiseKey=JSON.stringify([params.noise,params.volume,params.cutoffLow,params.cutoff,params.resonance,sampleRate,length,total,contour,grain]);
+  let noise=noiseFields.get(noiseKey);
+  if(!noise){
+    noise=buildNoiseTexture(params,{length,total,contour,response,sampleRate,grain});
+    noiseFields.set(noiseKey,noise);if(noiseFields.size>3)noiseFields.delete(noiseFields.keys().next().value);
+  }
   const particles = noise.particles;
-  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,spread:m.halo,extent:m.haloTail});
+  const glow = buildReverbGlow(params,{length,total,contour,response,noiseAmplitude:noise.amplitude,spread:m.halo,extent:m.haloTail,lines,particles});
   const echoLayout = buildEchoLayout(total,length,{
     mix:denormalize("delayMix",m.echoes),delay:denormalize("delayTime",m.echoSpacing),
     feedback:denormalize("feedback",m.persistence),separation:Math.max(32,body*.7 + params.noise*24),
@@ -146,6 +155,8 @@ export function buildGeometry(params, m, sampleRate = 48000) {
   return {
     lines,
     particles,
+    noiseBatches:noise.batches,
+    noiseLevelDb:noise.levelDb,
     glow,
     bounds: { minY, maxY },
     length,
@@ -160,6 +171,7 @@ export function buildGeometry(params, m, sampleRate = 48000) {
 export class SculptureRenderer {
   constructor(canvas) {
     this.canvas = canvas;
+    this.createNoiseCanvas = () => document.createElement("canvas");
     this.ctx = canvas.getContext("2d");
     this.yaw = 0;
     this.pitch = 0;
@@ -365,6 +377,7 @@ export class SculptureRenderer {
     // Draw every static copy once; the present slice then intersects each copy.
     for (const copy of [...g.echoLayout.copies].reverse())
       this.drawObject(g, copy, now);
+    if(g.particles.length)this.drawNoise(g);
     this.drawTimeAxis(g);
   }
   drawTimeAxis(g) {
@@ -490,27 +503,51 @@ export class SculptureRenderer {
         }
       }
     }
-    {
-      for (const pt of g.particles) {
-        const v = this.project(pt, offset, scale);
-        c.fillStyle = `rgba(229,229,229,${pt.alpha * opacity * g.brightness})`;
-        c.fillRect(v.x, v.y, pt.size, pt.size);
+  }
+  drawNoise(g) {
+    const {width,height}=this.size;
+    const key=JSON.stringify([width,height,this.yaw,this.pitch,this.zoom,this.pan,g.echoLayout.copies]);
+    const render=c=>{
+      for(const copy of [...g.echoLayout.copies].reverse()){
+        const opacity=copy.gain ** .7;
+        for(const batch of g.noiseBatches){
+          c.fillStyle=`rgba(${batch.shade},${batch.shade},${batch.shade},${clamp(batch.alpha*opacity)})`;
+          for(const pt of batch.particles){const v=this.project(pt,copy.offset,copy.scale);c.fillRect(v.x,v.y,pt.size,pt.size);}
+        }
       }
+    };
+    this.noiseCanvas ||= this.createNoiseCanvas?.();
+    if(!this.noiseCanvas){render(this.ctx);return;}
+    if(this.noiseParticles!==g.particles || this.noiseCacheKey!==key){
+      this.noiseCanvas.width=Math.ceil(width);this.noiseCanvas.height=Math.ceil(height);
+      render(this.noiseCanvas.getContext('2d'));
+      this.noiseCacheKey=key;this.noiseParticles=g.particles;
     }
+    this.ctx.save();this.ctx.globalAlpha=clamp(g.brightness);this.ctx.imageSmoothingEnabled=false;
+    this.ctx.drawImage(this.noiseCanvas,0,0,width,height);this.ctx.restore();
   }
   drawHalo(g,copy,opacity) {
     const c=this.ctx;
     c.save();
     for(const halo of g.glow) {
       const center=this.project(halo,copy.offset,copy.scale);
-      const edge=this.project({...halo,y:halo.radius},copy.offset,copy.scale);
-      const radius=Math.max(1,Math.hypot(edge.x-center.x,edge.y-center.y));
+      const vectors=[['x',halo.radiusX],['y',halo.radiusY],['z',halo.radiusZ]].map(([axis,radius])=>{
+        const edges=[-1,1].map(sign=>this.project({...halo,[axis]:halo[axis]+sign*radius},copy.offset,copy.scale));
+        const edge=edges.reduce((a,b)=>Math.hypot(a.x-center.x,a.y-center.y)>Math.hypot(b.x-center.x,b.y-center.y)?a:b);
+        return {x:edge.x-center.x,y:edge.y-center.y};
+      });
+      const a=vectors.reduce((sum,v)=>sum+v.x*v.x,0),b=vectors.reduce((sum,v)=>sum+v.x*v.y,0),d=vectors.reduce((sum,v)=>sum+v.y*v.y,0);
+      const disc=Math.sqrt((a-d)**2+4*b*b),angle=.5*Math.atan2(2*b,a-d);
+      const major=Math.max(1,Math.sqrt((a+d+disc)/2)),minor=Math.max(1,Math.sqrt(Math.max(0,(a+d-disc)/2)));
       const alpha=halo.alpha*opacity*g.brightness;
-      const gradient=c.createRadialGradient(center.x,center.y,0,center.x,center.y,radius);
+      c.save();c.translate(center.x,center.y);c.rotate(angle);c.scale(major,minor);
+      const gradient=c.createRadialGradient(0,0,0,0,0,1);
       gradient.addColorStop(0,`rgba(255,255,255,${alpha})`);
-      gradient.addColorStop(.45,`rgba(255,255,255,${alpha*.35})`);
+      gradient.addColorStop(.25,`rgba(255,255,255,${alpha*.82})`);
+      gradient.addColorStop(.5,`rgba(255,255,255,${alpha*.43})`);
+      gradient.addColorStop(.75,`rgba(255,255,255,${alpha*.13})`);
       gradient.addColorStop(1,'rgba(255,255,255,0)');
-      c.fillStyle=gradient;c.fillRect(center.x-radius,center.y-radius,radius*2,radius*2);
+      c.fillStyle=gradient;c.fillRect(-1,-1,2,2);c.restore();
     }
     c.restore();
   }
