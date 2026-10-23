@@ -135,41 +135,40 @@
               <button id="reset-view" class="icon-button" aria-label="Reset sculpture view" title="Reset view">⌖</button>
             </div>
           </section>
-<div class="modulation-strip">          <section
-            class="timeline-section eg-panel"
-            aria-label="Envelope generator"
-          >
-            <div class="section-caption">
-              <span class="generator-heading">EG<button id="envelope-power" class="modulation-power" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v6M4.5 3.5a5.5 5.5 0 1 0 7 0"/></svg></button></span><div id="envelope-routing" class="envelope-routing"></div
-              ><span id="duration-label">0.86 s</span>
-            </div>
-            <div class="adsr-layout">
-              <div id="envelope-selectors" class="envelope-selectors" aria-label="Envelopes"></div>
-              <div class="adsr-graph">
-            <canvas
-              id="envelope-canvas"
-              aria-label="Interactive ADSR envelope. Drag A for attack, D for decay and sustain, S for hold and sustain, R for release."
-              tabindex="0"
-            ></canvas>
-            <div class="timeline-labels">
-              <span>0.00</span
-              ><span id="envelope-segments" hidden></span
-              ><span id="timeline-end">1.20 s</span>
-            </div>
+          <div class="modulation-strip">
+            <section class="timeline-section eg-panel" aria-label="Envelope generator">
+              <div class="generator-instances">
+                <span class="generator-heading">EG</span>
+                <div id="envelope-selectors" class="envelope-selectors" aria-label="Envelopes"></div>
               </div>
-              <div class="adsr-controls-block">
-                <div id="adsr-controls"></div>
+              <div class="generator-content">
+                <div class="section-caption">
+                  <span></span><div id="envelope-routing" class="envelope-routing"></div>
+                  <div class="generator-heading-actions"><span id="duration-label">0.86 s</span><div id="envelope-actions" class="instance-actions"></div></div>
+                </div>
+                <div class="adsr-layout">
+                  <div class="adsr-graph">
+                    <canvas id="envelope-canvas" aria-label="Interactive ADSR envelope. Drag A for attack, D for decay and sustain, S for hold and sustain, R for release." tabindex="0"></canvas>
+                    <div class="timeline-labels"><span>0.00</span><span id="envelope-segments" hidden></span><span id="timeline-end">1.20 s</span></div>
+                  </div>
+                  <div class="adsr-controls-block"><div id="adsr-controls"></div></div>
+                </div>
               </div>
-            </div>
-          </section>
-          <section class="timeline-section lfo-panel" aria-label="LFO generator">
-            <div class="section-caption"><span class="generator-heading">LFO<button id="lfo-power" class="modulation-power" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v6M4.5 3.5a5.5 5.5 0 1 0 7 0"/></svg></button></span><div id="lfo-routing" class="envelope-routing"></div><span></span></div>
-            <div class="lfo-layout">
-              <div id="lfo-selectors" class="envelope-selectors" aria-label="LFO instances"></div>
-              <div class="lfo-graph"><div class="lfo-waveform-heading"><div id="lfo-shape" class="wavetable-select"></div></div><canvas id="lfo-canvas" aria-label="LFO waveform preview"></canvas><div class="timeline-labels"><span>0 s</span><span>2 s</span></div></div>
-              <div class="lfo-controls-block"><div id="lfo-controls"></div></div>
-            </div>
-          </section></div>
+            </section>
+            <section class="timeline-section lfo-panel" aria-label="LFO generator">
+              <div class="generator-instances">
+                <span class="generator-heading">LFO</span>
+                <div id="lfo-selectors" class="envelope-selectors" aria-label="LFO instances"></div>
+              </div>
+              <div class="generator-content">
+                <div class="section-caption"><span></span><div id="lfo-routing" class="envelope-routing"></div><div id="lfo-actions" class="instance-actions"></div></div>
+                <div class="lfo-layout">
+                  <div class="lfo-graph"><div class="lfo-waveform-heading"><div id="lfo-shape" class="wavetable-select"></div></div><canvas id="lfo-canvas" aria-label="LFO waveform preview"></canvas><div class="timeline-labels"><span>0 s</span><span>2 s</span></div></div>
+                  <div class="lfo-controls-block"><div id="lfo-controls"></div></div>
+                </div>
+              </div>
+            </section>
+          </div>
 
         </main>
         <main id="mapping-workspace" class="mapping-workspace" hidden>
@@ -222,7 +221,7 @@
             <div id="parameter-controls" class="parameter-controls"></div>
             <div class="inspector-note">
               <span>↳</span>
-              <p id="parameter-note">
+              <p id="parameter-note" aria-live="polite">
                 Parameters update the playing sound live.
               </p>
             </div>
@@ -263,7 +262,6 @@
       </div>
 
     </div>
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <dialog id="save-dialog">
       <form method="dialog" id="save-form">
         <p class="eyebrow">SAVE SOUND</p>

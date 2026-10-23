@@ -1018,31 +1018,6 @@ h1 {
   color: var(--quiet);
   margin: 17px 0;
 }
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 86px;
-  transform: translate(-50%, 8px);
-  background: #1f1f1f;
-  border: 1px solid #606060;
-  color: #e6e6e6;
-  padding: 13px 21px;
-  font-size: 13px;
-  border-radius: 4px;
-  box-shadow: 0 10px 30px #00000088;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
-  z-index: 20;
-  max-width: 90vw;
-  text-align: center;
-}
-.toast.visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
 dialog {
   background: #121212;
   border: 1px solid #4e4e4e;
@@ -1482,9 +1457,6 @@ dialog input:not([type]) {
   .route-control {
     max-width: 400px;
   }
-  .toast {
-    bottom: 77px;
-  }
   #connection-details {
     overflow: visible;
   }
@@ -1660,7 +1632,6 @@ dialog input:not([type]) {
 .delete-sound { color: #b5b5b5; }
 .sound-options-actions { gap: 18px; flex-wrap: wrap; }
 .sound-options-actions .delete-sound { margin-right: auto; }
-.toast-undo { margin-left: 16px; color: #f2f2f2; text-decoration: underline; font-size: 13px; padding: 5px; pointer-events: auto; }
 .deleted-sounds { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
 .deleted-sounds summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .deleted-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 0; font-size: 13px; }
@@ -1832,15 +1803,22 @@ dialog input:not([type]) {
 .sculpture-transport #loop-button { font-size: 10px; }
 .sculpture-transport .transport-divider { display: none; }
 
-.generator-heading { display: flex; align-items: center; gap: 7px; }
+.generator-heading { display: flex; align-items: center; justify-content: center; height: 24px; font: 10px var(--mono); color: var(--muted); letter-spacing: 1.3px; }
 .modulation-power { width: 22px; height: 22px; padding: 4px; border: 0; background: transparent; color: #666; }
 .modulation-power svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
 .modulation-power[aria-pressed="true"], .modulation-power:hover { color: #ddd; }
 
-.modulation-instance { display: flex; align-items: center; height: 20px; flex: none; }
-.modulation-strip .adsr-layout:has(.instance-delete), .lfo-layout:has(.instance-delete) { grid-template-columns: 44px minmax(80px,1fr) minmax(180px,48%); }
-.envelope-selectors:has(.instance-delete) { align-items: flex-start; }
-.envelope-selectors:has(.instance-delete) .envelope-add { margin-left: 5px; }
 .instance-delete { display: grid; place-items: center; width: 20px; height: 20px; padding: 4px; border: none; background: transparent; color: #666; }
 .instance-delete svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1; }
 .instance-delete:hover { color: #ddd; }
+
+/* Keep the generator name and its selectors in one column, outside the instance. */
+.modulation-strip .timeline-section { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 12px; height: auto; }
+.generator-instances { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.generator-instances .envelope-selectors { padding-top: 18px; }
+.generator-instances .envelope-add { margin: 2px 0; }
+.generator-content { min-width: 0; }
+.modulation-strip .adsr-layout, .modulation-strip .lfo-layout { grid-template-columns: minmax(80px,1fr) minmax(180px,48%); }
+.instance-actions, .generator-heading-actions { display: flex; align-items: center; gap: 4px; }
+.generator-heading-actions { gap: 12px; }
+.instance-actions .modulation-power, .instance-actions .instance-delete { width: 22px; height: 24px; }

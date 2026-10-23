@@ -1,4 +1,4 @@
-import {instanceRow} from "./instance-selector.js";
+import {instanceActions} from "./instance-selector.js";
 import {routeSelect} from "./route-select.js";
 import {Knob} from './knob.js';
 import {TableSelect} from './table-select.js';
@@ -24,14 +24,14 @@ export class LfoPanel {
       const b=document.createElement('button');b.className='envelope-selector';b.classList.toggle('selected',i===this.selected);b.classList.toggle('enabled',this.lfos[i].enabled!==false);
       b.setAttribute('aria-label',`LFO ${i+1}`);b.setAttribute('aria-pressed',i===this.selected);
       b.addEventListener('click',()=>{this.selected=i;this.setParams(this.params);});
-      container.append(instanceRow(b,`Delete LFO ${i+1}`,this.lfos.length>1?()=>{
-        this.selected=selectionAfterRemoval(this.selected,i,this.lfos.length);this.key=null;this.onRemove(i);
-      }:null));
+      container.append(b);
     }
     const free=availableDestinations(lfoDestinations,this.lfos,-1).filter(([target])=>target!=='none');
-    const power=document.querySelector('#lfo-power'),enabled=lfo.enabled!==false;
-    power.setAttribute('aria-label',`Turn ${enabled?'off':'on'} LFO ${this.selected+1}`);power.setAttribute('aria-pressed',enabled);
-    power.onclick=()=>{this.onEdit(this.selected,{enabled:!enabled});this.onCommit();};
+    instanceActions(document.querySelector('#lfo-actions'),{kind:'LFO',index:this.selected,enabled:lfo.enabled!==false,
+      onToggle:()=>{this.onEdit(this.selected,{enabled:lfo.enabled===false});this.onCommit();},
+      onRemove:this.lfos.length>1?()=>{
+        const index=this.selected;this.selected=selectionAfterRemoval(index,index,this.lfos.length);this.key=null;this.onRemove(index);
+      }:null});
     const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.setAttribute('aria-label','Add LFO');add.disabled=this.lfos.length>=8||!free.length;
     add.addEventListener('click',()=>{this.selected=this.lfos.length;const target=free[0]?.[0];if(target)this.onAdd({...defaultLfo(),target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5,none:0}[target]});});container.append(add);
     const route=document.querySelector('#lfo-routing');route.replaceChildren();

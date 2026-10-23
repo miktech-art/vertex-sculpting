@@ -1,4 +1,4 @@
-import {instanceRow} from "./ui/instance-selector.js";
+import {instanceActions} from "./ui/instance-selector.js";
 import {routeSelect} from "./ui/route-select.js";
 import {LfoPanel} from "./ui/lfo.js";
 import {getLfos,egTargetLimit,egDestinations,envelopeInstances,availableDestinations,removeEnvelope,removeLfo,selectionAfterRemoval} from "./lfo.js";
@@ -61,7 +61,6 @@ let mode = "sculpt",
   compareWasPlaying = false,
   playingPromise = false,
   playbackTicket = 0,
-  toastTimer = null,
   frameTime = 0;
 const inputs = new Map();
 const wavetable = new WavetableView($("#wavetable-canvas"), value => {
@@ -72,18 +71,8 @@ const tableSelect = new TableSelect($("#wavetable-select"), value => {
 });
 const positionKnob = parameterKnob(PARAMETERS.find(p => p.id === "wavePosition"));
 $("#wavetable-position").append(positionKnob.element);
-function toast(message, action) {
-  $("#toast").textContent = message;
-  if (action) {
-    const button = document.createElement("button");
-    button.textContent = "Undo";
-    button.className = "toast-undo";
-    button.addEventListener("click", action, { once: true });
-    $("#toast").append(button);
-  }
-  $("#toast").classList.add("visible");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), action ? 9000 : 3600);
+function reportError(message) {
+  $('#parameter-note').textContent=message;
 }
 const envelopeStages=['attack','decay','sustain','hold','release'];
 function selectedParams(params=store.document.params){
@@ -106,10 +95,7 @@ function renderEnvelopeSelectors(){
     b.setAttribute('aria-label',i===0?'Envelope 1':`Envelope ${i+1}`);
     b.title=i===0?`Envelope 1: ${params.envelopeTarget||'amplitude'}`:`Envelope ${i+1}: ${envs[i-1].target}`;
     b.addEventListener('click',()=>{selectedEnvelope=i;renderEnvelopeSelectors();syncControls();renderReadouts(store.document.params);contour.setParams(selectedParams());});
-    container.append(instanceRow(b,`Delete EG ${i+1}`,envs.length?()=>{
-      selectedEnvelope=selectionAfterRemoval(selectedEnvelope,i,envs.length+1);
-      store.edit(doc=>removeEnvelope(doc.params,i),'envelopes');store.commit();
-    }:null));
+    container.append(b);
   }
   const add=document.createElement('button');add.className='envelope-add';add.textContent='+';add.title='Add envelope';add.setAttribute('aria-label','Add envelope');add.disabled=envs.length>=8||!free.length;
   add.addEventListener('click',()=>{
@@ -121,9 +107,12 @@ function renderEnvelopeSelectors(){
   const route=$('#envelope-routing');route.replaceChildren();
   const depthSlot=$('#envelope-depth-slot');depthSlot.replaceChildren();
   const env=envs[selectedEnvelope-1]||{target:params.envelopeTarget||'amplitude',amount:params.envelopeAmount??0};
-  const power=$('#envelope-power'),enabled=instances[selectedEnvelope].enabled!==false;
-  power.setAttribute('aria-label',`Turn ${enabled?'off':'on'} EG ${selectedEnvelope+1}`);power.setAttribute('aria-pressed',enabled);
-  power.onclick=()=>{editSelectedEnvelope({enabled:!enabled});store.commit();};
+  instanceActions($('#envelope-actions'),{kind:'EG',index:selectedEnvelope,enabled:instances[selectedEnvelope].enabled!==false,
+    onToggle:()=>{editSelectedEnvelope({enabled:instances[selectedEnvelope].enabled===false});store.commit();},
+    onRemove:envs.length?()=>{
+      const index=selectedEnvelope;selectedEnvelope=selectionAfterRemoval(index,index,envs.length+1);
+      store.edit(doc=>removeEnvelope(doc.params,index),'envelopes');store.commit();
+    }:null});
   routeSelect(route,{label:'Envelope destination',options:availableDestinations(destinations,instances,selectedEnvelope),value:env.target,onChange:target=>{
     editSelectedEnvelope({target,amount:target.startsWith('lfoRate:')?2:target.startsWith('lfoDepth:')?.25:({amplitude:1,pitch:12,wavePosition:.5,cutoff:2,none:0}[target]??0)});store.commit();renderEnvelopeSelectors();
   }});
@@ -193,7 +182,6 @@ function loadPreset(preset) {
   stop();
   mapping.selected = null;
   store.load(makeDocument(preset), null, `factory:${preset.id}`);
-  toast(`${preset.name} loaded`);
 }
 function renderHeader() {
   const doc = store.document;
@@ -263,7 +251,7 @@ async function play() {
     $("#audio-status").textContent = "AUDIO RUNNING";
     if (looping) scheduleNext();
   } catch (e) {
-    toast(e.message || "Audio could not start. Try pressing Play again.");
+    reportError(e.message || "Audio could not start. Try pressing Play again.");
     $("#audio-status").textContent = "AUDIO UNAVAILABLE";
   } finally {
     playingPromise = false;
@@ -369,14 +357,12 @@ $("#reset-sound").addEventListener("click", () => {
   store.transaction(() => {
     store.document = structuredClone(store.initial);
   }, "load");
-  toast("Sound restored to its loaded state");
 });
 $("#reset-mappings").addEventListener("click", () => {
   mapping.selected = null;
   store.transaction((doc) => {
     doc.routes = structuredClone(DEFAULT_ROUTES);
   }, "routes");
-  toast("Default connections restored");
 });
 function beginCompare() {
   if (compare) return;
@@ -451,9 +437,9 @@ for (const dialog of document.querySelectorAll("dialog"))
     }
   });
 function switchSound(action) {
-  if (!store.persist()) { toast("Could not keep your edits in this browser. Export JSON before switching."); return; }
+  if (!store.persist()) { reportError("Could not keep your edits in this browser. Export JSON before switching."); return; }
   action();
-  if (!store.persist()) toast("Could not keep this workspace in browser storage. Export JSON to keep your work.");
+  if (!store.persist()) reportError("Could not keep this workspace in browser storage. Export JSON to keep your work.");
 }
 function openSaveDialog() {
   stop();
@@ -467,14 +453,13 @@ function openSaveDialog() {
 }
 $("#save-button").addEventListener("click", () => {
   if(!store.activeSavedId){openSaveDialog();return;}
-  try {store.save(store.document.name);toast('Saved');}
-  catch(error){toast(error.message);}
+  try {store.save(store.document.name);}
+  catch(error){reportError(error.message);}
 });
 $("#new-sound-button").addEventListener("click", () => switchSound(() => {
   stop();
   mapping.selected = null;
   store.load(makeDocument({ name: "Untitled", params: BASE }), null, "new");
-  toast("New sound workspace — edits are remembered automatically");
 }));
 $("#save-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -492,7 +477,6 @@ $("#save-form").addEventListener("submit", (e) => {
     return;
   }
   $("#save-dialog").close();
-  toast(`“${name}” saved in this browser`);
 });
 $("#save-name").addEventListener("input", () => $("#save-name").setCustomValidity(""));
 function loadSavedSound(doc) {
@@ -500,7 +484,6 @@ function loadSavedSound(doc) {
     stop();
     mapping.selected = null;
     store.load(doc, doc.libraryId);
-    toast(`${doc.name} loaded`);
   });
 }
 function renderSavedCards() {
@@ -549,7 +532,6 @@ $("#sound-options-form").addEventListener("submit", (event) => {
   try {
     store.renameSaved(managedSoundId, $("#sound-options-name").value);
     $("#sound-options-dialog").close();
-    toast("Sound renamed");
   } catch (error) {
     $("#sound-options-error").textContent = error.message;
     $("#sound-options-error").hidden = false;
@@ -557,16 +539,14 @@ $("#sound-options-form").addEventListener("submit", (event) => {
 });
 function restoreSound(id) {
   try {
-    const doc = store.restoreSaved(id);
-    toast(`“${doc.name}” restored`);
-  } catch (error) { toast(error.message); }
+    store.restoreSaved(id);
+  } catch (error) { reportError(error.message); }
 }
 function deleteSound(id) {
   try {
-    const doc = store.deleteSaved(id);
-    toast(`“${doc.name}” moved to Recently deleted`, () => restoreSound(id));
+    store.deleteSaved(id);
     return true;
-  } catch (error) { toast(error.message); return false; }
+  } catch (error) { reportError(error.message); return false; }
 }
 $("#delete-sound-button").addEventListener("click", () => {
   if (deleteSound(managedSoundId)) $("#sound-options-dialog").close();
@@ -656,7 +636,6 @@ function downloadJSON(doc = store.document) {
     new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }),
     `${filename(doc.name)}.soundsculpt.json`,
   );
-  toast("Sound and connections exported");
 }
 $("#export-button").addEventListener("click", () => downloadJSON());
 $("#import-button").addEventListener("click", () => $("#import-file").click());
@@ -672,13 +651,12 @@ $("#import-file").addEventListener("change", async (e) => {
         store.importSaved(doc);
         stop();
         mapping.selected = null;
-        toast(`${doc.name} imported and saved`);
       } catch (error) {
-        toast(error.message);
+        reportError(error.message);
       }
     });
   } catch (error) {
-    toast(
+    reportError(
       error instanceof SyntaxError
         ? "This file does not contain valid JSON."
         : error.message,
@@ -695,9 +673,8 @@ $("#wav-button").addEventListener("click", async () => {
   try {
     const buffer = await audio.render(doc.params);
     download(encodeWav(buffer), `${filename(doc.name)}.wav`);
-    toast("Stereo WAV rendered with effects");
   } catch (e) {
-    toast(`Could not render audio: ${e.message}`);
+    reportError(`Could not render audio: ${e.message}`);
   } finally {
     button.disabled = false;
     button.textContent = "WAV ↓";
