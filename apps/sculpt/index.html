@@ -63,6 +63,11 @@
                 >
               </h1>
             </div>
+            <div class="sound-edit-actions" role="group" aria-label="Sound actions">
+              <button id="save-button" class="text-button">Save</button>
+              <button id="save-as-new-button" class="text-button">Save as new</button>
+              <button id="new-sound-button" class="text-button">New</button>
+            </div>
             <div class="stage-actions">
               <button id="compare-button" class="text-button" title="Hold to see and hear the saved version">
                 Hold to compare <span>↔</span>
@@ -72,10 +77,6 @@
                 <div class="history-actions" aria-label="Sound history">
                   <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
                   <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
-                </div>
-                <div class="sound-edit-actions">
-                  <button id="save-button" class="text-button">Save</button>
-                  <button id="new-sound-button" class="text-button">New</button>
                 </div>
               </div>
             </div>
@@ -268,9 +269,6 @@
         <h2>Save sound</h2>
         <label for="save-name">Sound name</label
         ><input id="save-name" maxlength="60" required autocomplete="off" />
-        <label id="save-copy-option" class="save-copy-option" hidden>
-          <input id="save-copy" type="checkbox" /> Save as a new sound
-        </label>
         <p id="save-error" class="save-error" role="alert" hidden></p>
         <p class="dialog-description">
           Sound settings and connections are saved together in this browser.
@@ -283,7 +281,7 @@
             data-close-dialog="save-dialog"
           >
             Cancel</button
-          ><button type="submit" class="solid-button">Save sound ↗</button>
+          ><button id="save-submit" type="submit" class="solid-button">Save</button>
         </div>
       </form>
     </dialog>

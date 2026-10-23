@@ -9,7 +9,6 @@ import { WavetableView } from "./ui/wavetable.js";
 import { TableSelect } from "./ui/table-select.js";
 import { constrainCutoff } from "./ui/filter-range.js";
 import {
-  BASE,
   PARAMETERS,
   PRESETS,
   DEFAULT_ROUTES,
@@ -441,12 +440,14 @@ function switchSound(action) {
   action();
   if (!store.persist()) reportError("Could not keep this workspace in browser storage. Export JSON to keep your work.");
 }
-function openSaveDialog() {
+let saveAsNew = false;
+function openSaveDialog(asNew = false) {
+  saveAsNew = asNew;
   stop();
   $("#save-name").setCustomValidity("");
-  $("#save-name").value = store.document.name;
-  $("#save-copy-option").hidden = !store.activeSavedId;
-  $("#save-copy").checked = false;
+  $("#save-name").value = asNew ? `${store.document.name.slice(0,55)} copy` : store.document.name;
+  $("#save-dialog h2").textContent = asNew ? "Save as new" : "Save sound";
+  $("#save-submit").textContent = asNew ? "Save as new" : "Save";
   $("#save-error").hidden = true;
   $("#save-dialog").showModal();
   $("#save-name").select();
@@ -456,10 +457,12 @@ $("#save-button").addEventListener("click", () => {
   try {store.save(store.document.name);}
   catch(error){reportError(error.message);}
 });
+$("#save-as-new-button").addEventListener("click", () => openSaveDialog(true));
 $("#new-sound-button").addEventListener("click", () => switchSound(() => {
   stop();
   mapping.selected = null;
-  store.load(makeDocument({ name: "Untitled", params: BASE }), null, "new");
+  try {store.createSound();}
+  catch(error){reportError(error.message);}
 }));
 $("#save-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -470,7 +473,7 @@ $("#save-form").addEventListener("submit", (e) => {
     return;
   }
   try {
-    store.save(name, { asNew: $("#save-copy").checked });
+    store.save(name, { asNew: saveAsNew });
   } catch (error) {
     $("#save-error").textContent = error.message;
     $("#save-error").hidden = false;

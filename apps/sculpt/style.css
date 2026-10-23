@@ -1822,3 +1822,11 @@ dialog input:not([type]) {
 .instance-actions, .generator-heading-actions { display: flex; align-items: center; gap: 4px; }
 .generator-heading-actions { gap: 12px; }
 .instance-actions .modulation-power, .instance-actions .instance-delete { width: 22px; height: 24px; }
+
+/* Sound actions stay centered above the sculpture, beside title and history. */
+.stage-header { position: relative; }
+.stage-header > .sound-edit-actions { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); gap: 20px; white-space: nowrap; }
+@media(max-width:760px) {
+ .stage-header { padding-top: 48px; }
+ .stage-header > .sound-edit-actions { top: 12px; }
+}

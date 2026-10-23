@@ -275,3 +275,31 @@ test('failed copy save restores its sound identity and cached edits', () => {
   assert.equal(store.activeSoundKey,'factory:kick');factory(store,'bass');factory(store,'kick');
   assert.equal(store.document.params.pitch,86);assert.equal(store.saved.length,0);
 });
+
+test('New creates an immediate library instance with clean defaults and preserves the source draft', () => {
+  const store=fresh(),source=store.save('Original');
+  store.edit(d=>d.params.noise=.42);store.commit();
+  const created=store.createSound();
+  assert.equal(store.saved.length,2);assert.equal(created.name,'Untitled');
+  assert.notEqual(created.libraryId,source.libraryId);assert.equal(store.activeSavedId,created.libraryId);
+  assert.deepEqual(store.document.params,BASE);assert.equal(store.hasUnsavedChanges,false);
+  store.edit(d=>d.params.noise=.65);store.commit();store.persist();
+  assert.equal(store.saved[0].params.noise,BASE.noise);
+  const reload=fresh();assert.equal(reload.activeSavedId,created.libraryId);assert.equal(reload.document.params.noise,.65);
+  reload.load(source,source.libraryId);assert.equal(reload.document.params.noise,.42);
+  reload.load(created,created.libraryId);assert.equal(reload.document.params.noise,.65);
+});
+test('consecutive New actions create uniquely named independent sounds and Save updates just the active one', () => {
+  const store=fresh(),first=store.createSound(),second=store.createSound();
+  assert.equal(first.name,'Untitled');assert.equal(second.name,'Untitled 2');
+  assert.notEqual(first.libraryId,second.libraryId);
+  store.edit(d=>d.params.pitch=330);store.commit();store.save(second.name);
+  assert.equal(store.saved.length,2);assert.equal(store.saved[0].params.pitch,330);
+  assert.equal(store.saved[1].params.pitch,BASE.pitch);
+});
+test('failed New preserves the active sound and library', () => {
+  const store=fresh(),source=store.save('Original');store.edit(d=>d.params.noise=.42);store.commit();
+  blocked=true;assert.throws(()=>store.createSound(),/Could not update sounds/);blocked=false;
+  assert.equal(store.saved.length,1);assert.equal(store.activeSavedId,source.libraryId);
+  assert.equal(store.document.params.noise,.42);assert.equal(store.document.name,'Original');
+});

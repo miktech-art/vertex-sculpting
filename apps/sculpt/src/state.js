@@ -1,4 +1,4 @@
-import { makeDocument, validateDocument, PRESETS } from "./model.js";
+import { BASE, makeDocument, validateDocument, PRESETS } from "./model.js";
 const KEY = "sound-form:session:v1";
 const REVISION = 5;
 export class Store {
@@ -184,6 +184,12 @@ export class Store {
         snapshot.initial.name = nextName;
       }
     }
+  }
+  createSound() {
+    const names = new Set(this.saved.map(doc => doc.name));
+    let name = "Untitled", suffix = 2;
+    while (names.has(name)) name = `Untitled ${suffix++}`;
+    return this.importSaved(makeDocument({ name, params: BASE }));
   }
   importSaved(input) {
     const document = validateDocument(input);
