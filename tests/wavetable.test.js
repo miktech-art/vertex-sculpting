@@ -6,7 +6,7 @@ import { buildGeometry } from '../apps/sculpt/src/visual/sculpture.js';
 test('legacy presets gain oscillator defaults without changing their original spectrum', () => {
   const old=makeDocument(); delete old.params.waveTable; delete old.params.wavePosition;
   const doc=validateDocument(old), {imag}=wavetableCoefficients(doc.params);
-  assert.equal(doc.params.waveTable,0); assert.equal(doc.params.wavePosition,0);
+  assert.equal(doc.params.waveTable,0); assert.equal(doc.params.wavePosition,2 / 3);
   for (let h=1;h<97;h++) assert.ok(Math.abs(imag[h]-harmonicAmplitude(h,doc.params.harmonics))<1e-7);
 });
 test('wavetable frames interpolate continuously and all tables produce finite bounded previews', () => {
@@ -26,7 +26,18 @@ test('table and position survive preset round trips and drive the sculpture spec
   for(const value of [-1,3,NaN,.5]) assert.throws(()=>validateDocument({...doc,params:{...doc.params,waveTable:value}}));
 });
 
-test('the end of Basic shapes is a pure sine regardless of harmonic brightness', () => {
-  const {imag}=wavetableCoefficients({...BASE,harmonics:1,waveTable:0,wavePosition:1});
-  assert.equal(imag[1],1); assert.ok(imag.slice(2).every(x=>x===0));
+test('Basic shapes runs sine, triangle, saw, square at exact thirds with unchanged display density', () => {
+  assert.equal(FRAME_COUNT, 32);
+  const at = position => wavetableCoefficients({...BASE,harmonics:1,waveTable:0,wavePosition:position}).imag;
+  const sine=at(0), triangle=at(1 / 3), saw=at(2 / 3), square=at(1);
+  assert.equal(sine[1],1); assert.ok(sine.slice(2).every(x=>x===0));
+  for(let h=2;h<97;h++) {
+    assert.ok(Math.abs(triangle[h]-(h%2 ? (h%4===1 ? 1 : -1)*harmonicAmplitude(h,1)/h : 0))<1e-7);
+    assert.ok(Math.abs(saw[h]-harmonicAmplitude(h,1))<1e-7);
+    assert.ok(Math.abs(square[h]-(h%2 ? harmonicAmplitude(h,1) : 0))<1e-7);
+  }
+  for(const n of [1 / 3, 2 / 3]) {
+    const before=at(n-1e-7), after=at(n+1e-7);
+    for(let h=1;h<97;h++) assert.ok(Math.abs(before[h]-after[h])<1e-6);
+  }
 });

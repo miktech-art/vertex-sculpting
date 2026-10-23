@@ -233,7 +233,7 @@ export const PARAMETERS = [
     unit: "s",
     description: "Duration of the reverberant decay.",
   },
-  { id: "wavePosition", label: "Position", group: "oscillator", min: 0, max: 1, value: 0, unit: "%", description: "Morph continuously through the selected wavetable." },
+  { id: "wavePosition", label: "Position", group: "oscillator", min: 0, max: 1, value: 2 / 3, unit: "%", description: "Morph continuously through the selected wavetable." },
   { id: "waveTable", label: "Wavetable", group: "oscillator", min: 0, max: 2, value: 0, unit: "", description: "Choose Basic shapes, Hollow, or Formant." },
 ];
 export const PARAM_BY_ID = Object.fromEntries(PARAMETERS.map((p) => [p.id, p]));
@@ -560,7 +560,7 @@ export function validateDocument(input) {
 }
 // Factory sounds are always available separately from the user's saved library.
 export const PRESETS = [
-  { id: 'kick', name: 'kick', params: { ...BASE, pitch: 55, volume: .5, wavePosition: 1,
+  { id: 'kick', name: 'kick', params: { ...BASE, pitch: 55, volume: .5, wavePosition: 0,
     cutoff: 850, attack: .005, decay: .18, sustain: 0, hold: .1, release: .06 } },
   { id: 'bass', name: 'bass', params: { ...BASE, pitch: 73.42, volume: .32, harmonics: .75,
     cutoff: 950, resonance: .8, attack: .01, decay: .18, sustain: .65, hold: .65, release: .15 } },

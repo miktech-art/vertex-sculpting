@@ -43,7 +43,7 @@ dist/                    Generated output, ignored by Git
 
 ## Sounds and controls
 
-The upper-right oscillator displays a stack of wavetable frames in black and white; the bright line is the active waveform. Choose **Basic shapes**, **Hollow**, or **Formant**, then turn **Position** to morph between frames. Basic shapes travels from saw through square and triangle to sine. Table and position are saved with each sound and used in native WAV export. Older presets default to the original saw spectrum.
+The upper-right oscillator displays a stack of wavetable frames in black and white; the bright line is the active waveform. Choose **Basic shapes**, **Hollow**, or **Formant**, then turn **Position** to morph between frames. Basic shapes travels from sine through triangle and saw to square, with the same 32 displayed frames. The table menu uses the app’s monochrome styling. Table and position are saved with each sound and used in native WAV export. Presets without oscillator settings default to the saw position.
 
 All numeric parameter and connection controls use minimal knobs: drag up/down with the pointer hidden (40% faster sensitivity), hold Shift for fine changes, double-click the dial to reset, or click the value to type. Arrow keys adjust focused knobs (Shift for fine steps); Home/End select limits. Typed values accept units such as Hz, kHz, ms, s, and %. Filter cutoff knobs stop at one another. The ADSR graph retains direct handle editing.
 

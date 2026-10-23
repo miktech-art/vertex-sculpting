@@ -1,7 +1,7 @@
 import { installHoldLoopShortcut } from "./ui/hold-loop.js";
 import { Knob } from "./ui/knob.js";
 import { WavetableView } from "./ui/wavetable.js";
-import { WAVETABLES } from "./oscillator/wavetable.js";
+import { TableSelect } from "./ui/table-select.js";
 import { constrainCutoff } from "./ui/filter-range.js";
 import {
   BASE,
@@ -53,9 +53,9 @@ const inputs = new Map();
 const wavetable = new WavetableView($("#wavetable-canvas"), value => {
   store.edit(doc => { doc.params.wavePosition = value; }, "parameter");
 }, () => store.commit());
-const tableSelect = $("#wavetable-select");
-WAVETABLES.forEach((label, i) => tableSelect.add(new Option(label, String(i))));
-tableSelect.addEventListener("change", () => store.transaction(doc => { doc.params.waveTable = Number(tableSelect.value); }, "parameter"));
+const tableSelect = new TableSelect($("#wavetable-select"), value => {
+  store.transaction(doc => { doc.params.waveTable = value; }, "parameter");
+});
 const positionKnob = parameterKnob(PARAMETERS.find(p => p.id === "wavePosition"));
 $("#wavetable-position").append(positionKnob.element);
 function toast(message, action) {
@@ -93,7 +93,7 @@ function makeControls() {
 function syncControls() {
   for (const [id, knob] of inputs) knob.setValue(store.document.params[id]);
   positionKnob.setValue(store.document.params.wavePosition);
-  tableSelect.value = String(store.document.params.waveTable);
+  tableSelect.setValue(store.document.params.waveTable);
   wavetable.update(store.document.params);
 }
 const thumbnailPaths = {
@@ -658,7 +658,7 @@ $("#wav-button").addEventListener("click", async () => {
 installHoldLoopShortcut(document, () => {
   setLoop(true);
   play();
-}, stop, () => !!document.querySelector("dialog[open]"));
+}, stop, () => tableSelect.isOpen || !!document.querySelector("dialog[open]"));
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(

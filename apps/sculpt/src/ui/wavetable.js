@@ -33,7 +33,7 @@ export class WavetableView {
       c.strokeStyle = active ? '#ffffff' : `rgba(255,255,255,${0.10 + t * 0.12})`; c.lineWidth = active ? 1.3 : 0.65; c.stroke();
     };
     for (let i = FRAME_COUNT - 1; i >= 0; i--) trace(this.frames[i], i / (FRAME_COUNT - 1), false);
-    const position = this.params.wavePosition ?? 0;
+    const position = this.params.wavePosition ?? 2 / 3;
     trace(waveform(this.params), position, true);
     this.canvas.setAttribute('aria-label', `${WAVETABLES[Math.round(this.params.waveTable ?? 0)]} wavetable, position ${Math.round(position * 100)} percent`);
   }

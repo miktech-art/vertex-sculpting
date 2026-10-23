@@ -13,15 +13,18 @@ function framePartial(h, frame, table, harmonics) {
     const center = 2 + t * 18;
     return amplitude * (0.12 + 2.8 * Math.exp(-0.5 * ((h - center) / (1.2 + t * 2)) ** 2));
   }
-  // Saw → square → triangle → sine. Frame zero is the original oscillator.
-  const shapes = [1, h % 2 ? 1 : 0, h % 2 ? (h % 4 === 1 ? 1 : -1) / h : 0, 0];
+  // Sine → triangle → saw → square. Keep the same 32-frame display density.
+  const shapes = [0, h % 2 ? (h % 4 === 1 ? 1 : -1) / h : 0, 1, h % 2 ? 1 : 0];
   const x = t * 3, i = Math.min(2, Math.floor(x)), mix = x - i;
   return amplitude * (shapes[i] * (1 - mix) + shapes[i + 1] * mix);
 }
 export function wavetablePartial(h, params) {
-  const position = clamp(params.wavePosition ?? 0) * (FRAME_COUNT - 1);
+  const position = clamp(params.wavePosition ?? 2 / 3) * (FRAME_COUNT - 1);
   const frame = Math.floor(position), mix = position - frame;
   const table = Math.max(0, Math.min(2, Math.round(params.waveTable ?? 0)));
+  // Evaluate Basic shapes directly so its three segment boundaries remain exact,
+  // even though the display's 32 traces do not divide evenly into thirds.
+  if (table === 0) return framePartial(h, position, table, params.harmonics);
   return framePartial(h, frame, table, params.harmonics) * (1 - mix) +
     framePartial(h, Math.min(FRAME_COUNT - 1, frame + 1), table, params.harmonics) * mix;
 }

@@ -1691,8 +1691,15 @@ dialog input:not([type]) {
 #connection-details .knob-control { padding: 10px 0; grid-template-columns: 44px minmax(0, 1fr); }
 .wavetable-panel { flex: none; border-bottom: 1px solid var(--line); padding-bottom: 11px; margin-bottom: 17px; }
 .wavetable-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.wavetable-heading select { background: transparent; border: 0; color: #bcbcbc; font: 10px var(--mono); padding: 4px 0; max-width: 150px; }
-.wavetable-heading option { color: #eeeeee; background: #151515; }
+.wavetable-select { position: relative; }
+.wavetable-trigger { display: flex; align-items: center; gap: 10px; color: #bcbcbc; font: 10px var(--mono); padding: 5px 0 5px 8px; }
+.wavetable-trigger::after { content: ''; width: 5px; height: 5px; border-right: 1px solid #888; border-bottom: 1px solid #888; transform: rotate(45deg); margin: -3px 2px 0 0; }
+.wavetable-options { position: absolute; right: 0; top: calc(100% + 7px); z-index: 20; min-width: 154px; padding: 5px; background: #151515; border: 1px solid var(--line); border-radius: 3px; }
+.wavetable-options[hidden] { display: none; }
+.wavetable-options button { display: flex; justify-content: space-between; gap: 20px; width: 100%; padding: 9px 10px; color: #aaa; text-align: left; font: 10px var(--mono); border-radius: 2px; }
+.wavetable-options button:hover, .wavetable-options button:focus { background: #242424; color: #eee; }
+.wavetable-options button[aria-selected="true"] { color: #eee; }
+.wavetable-options button[aria-selected="true"]::after { content: '✓'; color: #aaa; }
 #wavetable-canvas { display: block; width: 100%; height: 132px; cursor: default; touch-action: none; }
 #wavetable-position .knob-control { padding: 0; width: 135px; margin-left: auto; }
 .control-tabs { margin-top: 15px; gap: 24px; }
