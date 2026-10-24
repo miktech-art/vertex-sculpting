@@ -43,7 +43,6 @@
 
           <section class="preset-strip" aria-label="Sound library">
             <div id="sound-cards" class="sound-cards" aria-label="Choose a sound">
-              <div id="preset-cards" class="preset-cards"></div>
               <div id="saved-cards" class="preset-cards" aria-label="Saved sounds"></div>
             </div>
             <div class="sound-library-actions">
@@ -73,7 +72,7 @@
                 Hold to compare <span>↔</span>
               </button>
               <div class="history-stack">
-                <button id="reset-sound" class="text-button" title="Restore the saved version or factory settings">Reset</button>
+                <button id="reset-sound" class="text-button" title="Restore the saved version">Reset</button>
                 <div class="history-actions" aria-label="Sound history">
                   <button id="undo-button" class="text-button" aria-label="Undo" title="Undo (⌘Z)">↶ Undo</button>
                   <button id="redo-button" class="text-button" aria-label="Redo" title="Redo (⌘⇧Z)">↷ Redo</button>
@@ -282,20 +281,6 @@
           >
             Cancel</button
           ><button id="save-submit" type="submit" class="solid-button">Save</button>
-        </div>
-      </form>
-    </dialog>
-    <dialog id="sound-options-dialog" aria-labelledby="sound-options-title">
-      <form id="sound-options-form">
-        <h2 id="sound-options-title">Manage sound</h2>
-        <label for="sound-options-name">Sound name</label>
-        <input id="sound-options-name" maxlength="60" required autocomplete="off" />
-        <p id="sound-options-error" class="save-error" role="alert" hidden></p>
-        <p class="dialog-description">Rename changes only the name. Deleted sounds can be restored from My sounds → Recently deleted.</p>
-        <div class="dialog-actions sound-options-actions">
-          <button type="button" id="delete-sound-button" class="text-button delete-sound">Delete sound</button>
-          <button type="button" class="text-button" data-close-dialog="sound-options-dialog">Cancel</button>
-          <button type="submit" class="solid-button">Rename</button>
         </div>
       </form>
     </dialog>

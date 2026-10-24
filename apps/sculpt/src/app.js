@@ -1,3 +1,4 @@
+import {soundCard,closeSoundMenu} from './ui/sound-card.js';
 import {installComputerKeyboard} from "./ui/computer-keyboard.js";
 import {renderUnison} from "./ui/unison.js";
 import {instanceActions} from "./ui/instance-selector.js";
@@ -12,7 +13,6 @@ import { TableSelect } from "./ui/table-select.js";
 import { constrainCutoff } from "./ui/filter-range.js";
 import {
   PARAMETERS,
-  PRESETS,
   DEFAULT_ROUTES,
   makeDocument,
   validateDocument,
@@ -170,28 +170,6 @@ function syncControls() {
   tableSelect.setValue(store.document.params.waveTable);
   wavetable.update(store.document.params);
 }
-function renderPresets() {
-  const cards = $("#preset-cards");
-  cards.replaceChildren();
-  PRESETS.forEach((preset, i) => {
-    const saved=store.factoryDocument(preset);
-    const button = document.createElement("button");
-    button.className = "preset-card";
-    button.dataset.preset = preset.id;
-    button.dataset.soundKey=`factory:${preset.id}`;
-    button.title = `Load ${saved.name}`;
-    button.setAttribute("aria-label", `Load ${saved.name}`);
-    const name=document.createElement('span');name.textContent=saved.name;
-    button.append(soundPreview(saved),name);
-    button.addEventListener("click", () => switchSound(() => loadPreset(preset)));
-    cards.append(button);
-  });
-}
-function loadPreset(preset) {
-  stop();
-  mapping.selected = null;
-  store.load(makeDocument(preset), null, `factory:${preset.id}`);
-}
 function renderHeader() {
   const doc = store.document;
   $("#preset-title").firstChild.textContent = doc.name;
@@ -199,9 +177,8 @@ function renderHeader() {
     JSON.stringify(doc.params) === JSON.stringify(store.initial.params) &&
     JSON.stringify(doc.routes) === JSON.stringify(store.initial.routes);
   for (const card of document.querySelectorAll(".preset-card")) {
-    const active = store.activeSoundKey === `factory:${card.dataset.preset}`;
-    card.classList.toggle("active", active);
-    card.setAttribute("aria-pressed", active);
+    const active = store.activeSoundKey === card.dataset.soundKey;
+    card.classList.toggle("active", active);card.setAttribute("aria-pressed",active);
   }
   renderReadouts(compare ? store.initial.params : doc.params);
   $("#route-count").textContent = doc.routes.length;
@@ -224,8 +201,14 @@ function sync(doc, kind) {
   if(["load","envelopes","lfos","undo","redo"].includes(kind))renderEnvelopeSelectors();
   lfoPanel.setParams(compare?store.initial.params:doc.params);
   syncControls();
-  if(kind==='save')renderPresets();
   renderHeader();
+  if(kind==='rename')for(const item of document.querySelectorAll('.saved-card-item')){
+    const saved=store.saved.find(s=>s.libraryId===item.dataset.libraryId);if(!saved)continue;
+    const input=item.querySelector('.sound-card-name');if(input.readOnly)input.value=saved.name;
+    input.setAttribute('aria-label',`Rename ${saved.name}`);
+    item.querySelector('.preset-card').setAttribute('aria-label',`Load ${saved.name}`);
+    item.querySelector('.sound-menu-button').setAttribute('aria-label',`Manage ${saved.name}`);
+  }
   if (["save", "load", "library"].includes(kind)) renderSavedCards();
   if (kind === "library" && $("#library-dialog").open) renderLibrary();
   contour.setParams(selectedParams(compare ? store.initial.params : doc.params));
@@ -238,7 +221,6 @@ store.subscribe(sync);
 makeControls();
 makeEnvelopeControls();
 renderEnvelopeSelectors();
-renderPresets();
 sync(store.document, "load");
 
 async function play() {
@@ -465,7 +447,7 @@ function openSaveDialog(asNew = false) {
   $("#save-name").select();
 }
 $("#save-button").addEventListener("click", () => {
-  if(!store.activeSavedId&&!store.activeSoundKey.startsWith('factory:')){openSaveDialog();return;}
+  if(!store.activeSavedId){openSaveDialog();return;}
   try {store.save(store.document.name);}
   catch(error){reportError(error.message);}
 });
@@ -495,6 +477,7 @@ $("#save-form").addEventListener("submit", (e) => {
 });
 $("#save-name").addEventListener("input", () => $("#save-name").setCustomValidity(""));
 function loadSavedSound(doc) {
+  closeSoundMenu();
   switchSound(() => {
     stop();
     mapping.selected = null;
@@ -502,56 +485,19 @@ function loadSavedSound(doc) {
   });
 }
 function renderSavedCards() {
-  const cards = $("#saved-cards");
-  cards.replaceChildren();
-  for (const doc of store.saved) {
-    const button = document.createElement("button");
-    button.className = "preset-card saved-card";
-    button.dataset.soundKey=`saved:${doc.libraryId}`;
-    button.classList.toggle("active", store.activeSavedId === doc.libraryId);
-    button.setAttribute("aria-pressed", store.activeSavedId === doc.libraryId);
-    button.setAttribute("aria-label", `Load ${doc.name}`);
-    button.title = `Load ${doc.name}`;
-    const name = document.createElement("span");
-    name.textContent = doc.name;
-    button.append(soundPreview(doc), name);
-    button.addEventListener("click", () => loadSavedSound(doc));
-    const item = document.createElement("div");
-    item.className = "saved-card-item";
-    const manage = document.createElement("button");
-    manage.className = "sound-menu-button";
-    manage.textContent = "⋯";
-    manage.title = `Rename or delete ${doc.name}`;
-    manage.setAttribute("aria-label", `Manage ${doc.name}`);
-    manage.setAttribute("aria-haspopup", "dialog");
-    manage.addEventListener("click", () => openSoundOptions(doc.libraryId));
-    item.append(button, manage);
-    cards.append(item);
-  }
+  const cards = $("#saved-cards");cards.replaceChildren();
+  for(const doc of store.saved)cards.append(soundCard(doc,{
+    active:store.activeSavedId===doc.libraryId,preview:soundPreview(doc),
+    onLoad:()=>loadSavedSound(store.saved.find(s=>s.libraryId===doc.libraryId)||doc),onRename:name=>store.renameSaved(doc.libraryId,name),
+    onDuplicate:()=>{stop();store.duplicateSaved(doc.libraryId);},
+    onDelete:()=>deleteSound(doc.libraryId),onError:reportError,
+  }));
 }
-let managedSoundId = null;
-function openSoundOptions(id) {
-  const doc = store.saved.find((item) => item.libraryId === id);
-  if (!doc) return;
-  stop();
-  managedSoundId = id;
-  $("#sound-options-name").value = doc.name;
-  $("#sound-options-name").setCustomValidity("");
-  $("#sound-options-error").hidden = true;
-  $("#sound-options-dialog").showModal();
-  $("#sound-options-name").select();
+function editSoundName(id){
+  $("#library-dialog").close();
+  const item=[...document.querySelectorAll('.saved-card-item')].find(item=>item.dataset.libraryId===id);
+  item?.querySelector('.sound-card-name').focus();
 }
-$("#sound-options-name").addEventListener("input", () => $("#sound-options-name").setCustomValidity(""));
-$("#sound-options-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  try {
-    store.renameSaved(managedSoundId, $("#sound-options-name").value);
-    $("#sound-options-dialog").close();
-  } catch (error) {
-    $("#sound-options-error").textContent = error.message;
-    $("#sound-options-error").hidden = false;
-  }
-});
 function restoreSound(id) {
   try {
     store.restoreSaved(id);
@@ -563,16 +509,13 @@ function deleteSound(id) {
     return true;
   } catch (error) { reportError(error.message); return false; }
 }
-$("#delete-sound-button").addEventListener("click", () => {
-  if (deleteSound(managedSoundId)) $("#sound-options-dialog").close();
-});
 function renderLibrary() {
   const list = $("#library-list");
   list.replaceChildren();
   if (!store.saved.length) {
     const p = document.createElement("p");
     p.className = "library-empty";
-    p.textContent = "No saved sounds. Use Save sound to add one.";
+    p.textContent = "No sounds. Use New to add one.";
     list.append(p);
   }
   store.saved.forEach((doc) => {
@@ -594,7 +537,7 @@ function renderLibrary() {
     const rename = document.createElement("button");
     rename.textContent = "Rename";
     rename.setAttribute("aria-label", `Rename ${doc.name}`);
-    rename.addEventListener("click", () => openSoundOptions(doc.libraryId));
+    rename.addEventListener("click", () => editSoundName(doc.libraryId));
     const remove = document.createElement("button");
     remove.textContent = "Delete";
     remove.className = "delete-sound";
@@ -696,7 +639,7 @@ $("#wav-button").addEventListener("click", async () => {
   }
 });
 
-const keyboardBlocked=()=>tableSelect.isOpen||lfoPanel.shapes.isOpen||!!document.querySelector('.route-select [role="listbox"]:not([hidden])')||!!document.querySelector('dialog[open]');
+const keyboardBlocked=()=>tableSelect.isOpen||lfoPanel.shapes.isOpen||!!document.querySelector('.sound-card-menu')||!!document.querySelector('.route-select [role="listbox"]:not([hidden])')||!!document.querySelector('dialog[open]');
 keyboard=installComputerKeyboard(document,{
   isBlocked:keyboardBlocked,
   noteOn:async midiNote=>{

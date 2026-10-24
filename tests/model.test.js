@@ -180,7 +180,7 @@ test("the update clears legacy sounds and routes once, then preserves new edits"
   const first = new Store();
   assert.equal(first.document.name, "kick");
   assert.equal(first.document.params.harmonics, PRESETS[0].params.harmonics);
-  assert.equal(first.saved.length, 0);
+  assert.equal(first.saved.length, 4);
   assert.deepEqual(first.document.routes, DEFAULT_ROUTES);
   assert.equal(
     first.document.routes.find((r) => r.source === "pitch").invert,
@@ -213,8 +213,8 @@ test("the factory update replaces the active sine and preserves saved sounds and
   const store = new Store();
   assert.equal(store.document.name, "kick");
   assert.equal(store.document.params.harmonics, PRESETS[0].params.harmonics);
-  assert.equal(store.saved.length, 1);
-  assert.equal(store.saved[0].name, "sine");
+  assert.equal(store.saved.length, 5);
+  assert.equal(store.saved[4].name, "sine");
   assert.equal(store.document.routes[0].amount, 0.6);
   storage.clear();
 });

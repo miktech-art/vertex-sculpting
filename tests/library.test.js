@@ -9,7 +9,9 @@ globalThis.localStorage = {
   setItem: (key, value) => { if (blocked) throw new Error('quota'); data.set(key, value); },
 };
 const stores = [];
-function fresh() { const store = new Store(); stores.push(store); return store; }
+function fresh({defaults=false}={}) {
+  if(!defaults&&!data.has('sound-form:session:v1'))data.set('sound-form:session:v1',JSON.stringify({revision:6,document:makeDocument(),activeSoundKey:'new',saved:[]}));
+  const store = new Store(); stores.push(store); return store; }
 afterEach(() => { for (const store of stores) clearTimeout(store.persistTimer); stores.length = 0; data.clear(); blocked = false; });
 test('saved sounds are independent snapshots and survive reload with their selection', () => {
   const store = fresh();
@@ -75,10 +77,10 @@ test('storage failure rolls back a save and preserves edited work', () => {
 test('existing revision three libraries gain IDs without losing sounds', () => {
   data.set('sound-form:session:v1', JSON.stringify({ revision: 3, document: makeDocument(), saved: [makeDocument()] }));
   const store = fresh();
-  assert.equal(store.saved.length, 1);
-  assert.ok(store.saved[0].libraryId);
-  const id = store.saved[0].libraryId;
-  assert.equal(fresh().saved[0].libraryId, id);
+  assert.equal(store.saved.length, 5);
+  assert.ok(store.saved[4].libraryId);
+  const id = store.saved[4].libraryId;
+  assert.equal(fresh().saved[4].libraryId, id);
 });
 
 test('revision four visual-only sessions preserve their saved library when audio returns', () => {
@@ -91,15 +93,15 @@ test('revision four visual-only sessions preserve their saved library when audio
   data.set('sound-form:session:v1', JSON.stringify({ revision: 4, document: visual, initial: visual, saved: [{ ...visual, libraryId: 'existing-visual' }], activeSavedId: 'existing-visual' }));
   const store = fresh();
   assert.equal(store.document.name, 'Visual sound');
-  assert.equal(store.saved.length, 1);
-  assert.equal(store.saved[0].params.harmonics, 0.37);
-  assert.equal(store.saved[0].params.pitch, BASE.pitch);
+  assert.equal(store.saved.length, 5);
+  assert.equal(store.saved[4].params.harmonics, 0.37);
+  assert.equal(store.saved[4].params.pitch, BASE.pitch);
   assert.equal(store.activeSavedId, 'existing-visual');
   assert.equal(store.hasUnsavedChanges, false);
-  assert.ok(store.saved[0].routes.some(route => route.source === 'pitch'));
-  assert.ok(!store.saved[0].routes.some(route => route.source === 'notePitch'));
-  assert.equal(JSON.parse(data.get('sound-form:session:v1')).revision, 5);
-  assert.equal(fresh().saved[0].name, 'Visual sound');
+  assert.ok(store.saved[4].routes.some(route => route.source === 'pitch'));
+  assert.ok(!store.saved[4].routes.some(route => route.source === 'notePitch'));
+  assert.equal(JSON.parse(data.get('sound-form:session:v1')).revision, 6);
+  assert.equal(fresh().saved[4].name, 'Visual sound');
 });
 
 test('rename targets its ID and preserves unsaved edits, saved settings, and undo history', () => {
@@ -176,11 +178,11 @@ test('an invalid working session cannot erase valid saved or deleted sounds', ()
   const raw = JSON.stringify({revision: 5, document: invalid, initial: invalid, saved: [invalid, good], deleted: [{...good, libraryId: 'trash'}]});
   data.set('sound-form:session:v1', raw);
   const store = fresh();
-  assert.equal(store.saved.length, 1);
-  assert.equal(store.saved[0].name, 'Keep me');
+  assert.equal(store.saved.length, 5);
+  assert.equal(store.saved[4].name, 'Keep me');
   assert.equal(store.deleted.length, 1);
   assert.equal(data.get('sound-form:session:v1:recovery'), raw);
-  assert.equal(fresh().saved[0].name, 'Keep me');
+  assert.equal(fresh().saved[4].name, 'Keep me');
 });
 test('unreadable data is not overwritten when its recovery backup cannot be stored', () => {
   const raw = '{invalid JSON';
@@ -227,7 +229,9 @@ test('failed or malformed imports leave the current sound, library and undo hist
 
 function factory(store, id) {
   const preset = PRESETS.find(p => p.id === id);
-  store.load(makeDocument(preset), null, `factory:${id}`);
+  let doc=store.saved.find(doc=>doc.libraryId===`basic-${id}`);
+  if(!doc){doc={...makeDocument(preset),libraryId:`basic-${id}`};store.saved.push(doc);}
+  store.load(doc,doc.libraryId);
 }
 test('each factory sound keeps independent parameters and connections across switches and reload', () => {
   const store=fresh(); factory(store,'kick');
@@ -237,7 +241,7 @@ test('each factory sound keeps independent parameters and connections across swi
   assert.equal(reload.document.params.pitch,80);assert.equal(reload.document.routes[0].amount,.31);
   assert.equal(reload.initial.params.pitch,55);
   factory(reload,'bass');assert.equal(reload.document.params.pitch,110);
-  assert.equal(reload.saved.length,0);
+  assert.equal(reload.saved.length,2);
 });
 test('saved sound working edits survive switching without overwriting its named comparison baseline', () => {
   const store=fresh(), first=store.save('First', { asNew: true });
@@ -272,8 +276,8 @@ test('undoing a resumed edit is retained when switching away and back', () => {
 test('failed copy save restores its sound identity and cached edits', () => {
   const store=fresh();factory(store,'kick');store.edit(d=>d.params.pitch=86);store.commit();
   blocked=true;assert.throws(()=>store.save('Copy'),/Could not save/);blocked=false;
-  assert.equal(store.activeSoundKey,'factory:kick');factory(store,'bass');factory(store,'kick');
-  assert.equal(store.document.params.pitch,86);assert.equal(store.saved.length,0);
+  assert.equal(store.activeSoundKey,'saved:basic-kick');factory(store,'bass');factory(store,'kick');
+  assert.equal(store.document.params.pitch,86);assert.equal(store.saved.length,2);
 });
 
 test('New creates an immediate library instance with clean defaults and preserves the source draft', () => {
@@ -304,42 +308,46 @@ test('failed New preserves the active sound and library', () => {
   assert.equal(store.document.params.noise,.42);assert.equal(store.document.name,'Original');
 });
 
-test('Save replaces each basic sound in its fixed slot and survives reload without adding a library copy',()=>{
-  const store=fresh();
+test('the four starter sounds initialize once as ordinary editable library instances',()=>{
+  const store=fresh({defaults:true});assert.equal(store.saved.length,4);
+  assert.deepEqual(store.saved.map(s=>s.name),PRESETS.map(p=>p.name));
   for(const [index,preset] of PRESETS.entries()){
-    factory(store,preset.id);store.edit(d=>d.params.pitch=100+index);store.commit();
-    store.save(preset.name);
-    assert.equal(store.activeSoundKey,`factory:${preset.id}`);
-    assert.equal(store.activeSavedId,null);assert.equal(store.hasUnsavedChanges,false);
-    assert.equal(store.saved.length,0);
-    assert.equal(store.factoryDocument(preset).params.pitch,100+index);
+    factory(store,preset.id);store.edit(d=>d.params.pitch=100+index);store.commit();store.save(preset.name);
+    assert.equal(store.activeSavedId,`basic-${preset.id}`);assert.equal(store.hasUnsavedChanges,false);
   }
-  const reload=fresh();
+  const reload=fresh();assert.equal(reload.saved.length,4);
   for(const [index,preset] of PRESETS.entries()){
-    factory(reload,preset.id);
-    assert.equal(reload.document.params.pitch,100+index);
-    assert.equal(reload.initial.params.pitch,100+index);
-    assert.equal(reload.hasUnsavedChanges,false);
+    factory(reload,preset.id);assert.equal(reload.document.params.pitch,100+index);assert.equal(reload.initial.params.pitch,100+index);
   }
-  assert.equal(reload.saved.length,0);
+  reload.renameSaved('basic-kick','Thump');reload.deleteSaved('basic-bass');
+  const again=fresh();assert.deepEqual(again.saved.map(s=>s.name),['Thump','hi-hat','synth']);
+  again.restoreSaved('basic-bass');assert.equal(again.saved.length,4);
 });
-test('basic sound previews retain their saved snapshot until Save, and Save as new preserves that snapshot',()=>{
-  const store=fresh(),preset=PRESETS[0];factory(store,preset.id);
-  store.edit(d=>d.params.pitch=80);store.commit();store.save(preset.name);
-  store.edit(d=>d.params.pitch=90);store.commit();
-  assert.equal(store.factoryDocument(preset).params.pitch,80);
-  store.save('Kick copy',{asNew:true});
-  assert.equal(store.saved.length,1);assert.equal(store.saved[0].params.pitch,90);
-  assert.equal(store.factoryDocument(preset).params.pitch,80);
-  factory(store,preset.id);assert.equal(store.document.params.pitch,90);
-  assert.equal(store.initial.params.pitch,80);assert.equal(store.hasUnsavedChanges,true);
+test('old basic overrides, active selection and unsaved drafts migrate without being reset',()=>{
+  const saved=makeDocument(PRESETS[0]);saved.params.pitch=80;
+  const edited=structuredClone(saved);edited.params.pitch=90;
+  data.set('sound-form:session:v1',JSON.stringify({revision:5,document:edited,initial:saved,activeSoundKey:'factory:kick',factorySaved:{kick:saved},drafts:{'factory:kick':{document:edited,initial:saved}},saved:[]}));
+  const store=fresh();assert.equal(store.activeSavedId,'basic-kick');assert.equal(store.document.params.pitch,90);
+  assert.equal(store.saved[0].params.pitch,80);assert.equal(store.initial.params.pitch,80);assert.equal(store.hasUnsavedChanges,true);
+  factory(store,'bass');factory(store,'kick');assert.equal(store.document.params.pitch,90);
+  assert.equal(fresh().saved.length,4);
 });
-test('failed basic sound overwrite preserves its previous saved preview and the current unsaved edit',()=>{
-  const store=fresh(),preset=PRESETS[0];factory(store,preset.id);
-  store.edit(d=>d.params.pitch=80);store.commit();store.save(preset.name);
-  store.edit(d=>d.params.pitch=90);store.commit();
-  blocked=true;assert.throws(()=>store.save(preset.name),/Could not save/);blocked=false;
-  assert.equal(store.factoryDocument(preset).params.pitch,80);
-  assert.equal(store.document.params.pitch,90);assert.equal(store.hasUnsavedChanges,true);
-  assert.equal(store.activeSoundKey,'factory:kick');assert.equal(store.saved.length,0);
+test('duplicate copies working edits immediately to the right and assigns the next available suffix',()=>{
+  const store=fresh({defaults:true}),source=store.saved[1];store.load(source,source.libraryId);
+  store.edit(d=>d.params.noise=.42);store.commit();
+  const copy=store.duplicateSaved(source.libraryId);
+  assert.equal(store.saved[2].libraryId,copy.libraryId);assert.equal(copy.name,'bass (1)');
+  assert.equal(copy.params.noise,.42);assert.equal(store.activeSavedId,copy.libraryId);
+  assert.equal(store.saved[1].params.noise,source.params.noise);
+  const next=store.duplicateSaved(source.libraryId);assert.equal(next.name,'bass (2)');
+  const third=store.duplicateSaved(copy.libraryId);assert.equal(third.name,'bass (3)');
+  assert.equal(store.saved[store.saved.findIndex(s=>s.libraryId===copy.libraryId)+1].libraryId,third.libraryId);
+  store.edit(d=>d.params.noise=.1);store.commit();assert.equal(copy.params.noise,.42);
+  assert.deepEqual(fresh().saved.map(s=>s.name),store.saved.map(s=>s.name));
+});
+test('failed duplication leaves ordering, selection and unsaved work intact',()=>{
+  const store=fresh({defaults:true});store.edit(d=>d.params.pitch=80);store.commit();
+  const before=store.snapshot(),saved=structuredClone(store.saved);
+  blocked=true;assert.throws(()=>store.duplicateSaved(store.activeSavedId),/Could not update/);blocked=false;
+  assert.deepEqual(store.snapshot(),before);assert.deepEqual(store.saved,saved);
 });

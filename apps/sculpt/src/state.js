@@ -1,6 +1,6 @@
 import { BASE, makeDocument, validateDocument, PRESETS } from "./model.js";
 const KEY = "sound-form:session:v1";
-const REVISION = 5;
+const REVISION = 6;
 export class Store {
   constructor() {
     this.listeners = new Set();
@@ -9,7 +9,6 @@ export class Store {
     this.deleted = [];
     this.activeSavedId = null;
     this.drafts = new Map();
-    this.factorySaved = new Map();
     let initial, data, raw;
     let unreadable = false;
     try {
@@ -20,7 +19,7 @@ export class Store {
       try { return validateDocument(doc); }
       catch { unreadable = true; return null; }
     };
-    if ([2, 3, 4, REVISION].includes(data?.revision)) {
+    if ([2, 3, 4, 5, REVISION].includes(data?.revision)) {
       if (data.document) this.document = decode(data.document) || this.document;
       if (data.initial) initial = decode(data.initial);
       for (const collection of ["saved", "deleted"]) {
@@ -45,10 +44,19 @@ export class Store {
       const document = decode(draft?.document), baseline = decode(draft?.initial);
       if (document && baseline) this.drafts.set(key, { document, initial: baseline });
     }
-    for(const preset of PRESETS){
-      const rawSaved=data?.factorySaved?.[preset.id];
-      const saved=rawSaved?decode(rawSaved):null;
-      if(saved)this.factorySaved.set(preset.id,saved);
+    if(data?.revision!==REVISION){
+      // The four starter sounds become ordinary library instances exactly once.
+      // Keep saved factory overrides and unsaved per-sound drafts separately.
+      const basics=PRESETS.map(preset=>{
+        const key=`factory:${preset.id}`,libraryId=`basic-${preset.id}`;
+        const rawSaved=data?.factorySaved?.[preset.id];
+        const saved=(rawSaved&&decode(rawSaved))||makeDocument(preset);
+        const draft=this.drafts.get(key);
+        if(draft){this.drafts.set(`saved:${libraryId}`,draft);this.drafts.delete(key);}
+        if(this.activeSoundKey===key){this.activeSavedId=libraryId;this.activeSoundKey=`saved:${libraryId}`;}
+        return {...saved,libraryId};
+      });
+      this.saved=[...basics,...this.saved];
     }
     // Preserve unreadable input, including malformed cached workspaces.
     this.recoveryRaw = unreadable ? raw : null;
@@ -87,7 +95,6 @@ export class Store {
           activeSavedId: this.activeSavedId,
           activeSoundKey: this.activeSoundKey,
           drafts: Object.fromEntries(this.drafts),
-          factorySaved: Object.fromEntries(this.factorySaved),
         }),
       );
     } catch { return false; }
@@ -129,12 +136,8 @@ export class Store {
     this.commit();
     this.emit(kind);
   }
-  factoryDocument(preset){
-    return structuredClone(this.factorySaved.get(preset.id)||makeDocument(preset));
-  }
   load(document, savedId = null, soundKey = savedId ? `saved:${savedId}` : null) {
-    const preset=soundKey?.startsWith('factory:')&&PRESETS.find(p=>`factory:${p.id}`===soundKey);
-    const next = validateDocument(preset?this.factoryDocument(preset):document);
+    const next = validateDocument(document);
     this.begin();
     this.remember();
     const draft = soundKey && this.drafts.get(soundKey);
@@ -161,7 +164,7 @@ export class Store {
     this.checkpoint = null;
     this.emit("load");
   }
-  updateLibrary(fn) {
+  updateLibrary(fn, kind="library") {
     const previous = this.snapshot(), saved = this.saved, deleted = this.deleted, drafts = new Map(this.drafts);
     const result = fn();
     clearTimeout(this.persistTimer);
@@ -172,7 +175,7 @@ export class Store {
       this.restore(previous);
       throw new Error("Could not update sounds in this browser. Free up browser storage and try again.");
     }
-    this.emit("library");
+    this.emit(kind);
     return result;
   }
   renameSaved(id, name) {
@@ -187,7 +190,7 @@ export class Store {
         this.document = { ...this.document, name: nextName };
         this.initial = { ...this.initial, name: nextName };
       }
-    });
+    },"rename");
     // Parameter undo must not revive an old library name.
     for (const snapshot of [...this.undoStack, ...this.redoStack, this.checkpoint]) {
       if (snapshot?.activeSavedId === id) {
@@ -195,6 +198,23 @@ export class Store {
         snapshot.initial.name = nextName;
       }
     }
+  }
+  duplicateSaved(id){
+    const source=this.saved.find(doc=>doc.libraryId===id);
+    if(!source)throw new Error("This sound is no longer saved.");
+    this.remember();
+    const working=this.drafts.get(`saved:${id}`)?.document||source;
+    const base=source.name.replace(/ \(\d+\)$/,'').slice(0,54);
+    const names=new Set(this.saved.map(doc=>doc.name));
+    let suffix=1,name;
+    do{name=`${base} (${suffix++})`;}while(names.has(name));
+    const copy={...structuredClone(working),name,libraryId:crypto.randomUUID()};
+    this.updateLibrary(()=>{
+      const index=this.saved.findIndex(doc=>doc.libraryId===id);
+      this.saved=[...this.saved.slice(0,index+1),copy,...this.saved.slice(index+1)];
+    });
+    this.load(copy,copy.libraryId);
+    return copy;
   }
   createSound() {
     const names = new Set(this.saved.map(doc => doc.name));
@@ -247,26 +267,22 @@ export class Store {
   save(name, { asNew = false } = {}) {
     this.remember();
     const previous = this.snapshot(), previousSaved = this.saved, previousDrafts = new Map(this.drafts);
-    const factory = !asNew && PRESETS.find(p=>this.activeSoundKey===`factory:${p.id}`);
-    const previousFactorySaved=new Map(this.factorySaved);
     const existing = !asNew && this.saved.find((doc) => doc.libraryId === this.activeSavedId);
     const doc = structuredClone(this.document);
     doc.name = name.trim().slice(0, 60) || "Untitled";
-    const saved = factory ? structuredClone(doc) : { ...structuredClone(doc), libraryId: existing?.libraryId || crypto.randomUUID() };
-    if(factory)this.factorySaved.set(factory.id,saved);
-    else this.saved = existing
+    const saved = { ...structuredClone(doc), libraryId: existing?.libraryId || crypto.randomUUID() };
+    this.saved = existing
       ? this.saved.map((item) => item.libraryId === existing.libraryId ? saved : item)
       : [saved, ...this.saved];
     this.document = doc;
     this.initial = structuredClone(doc);
-    this.activeSavedId = factory ? null : saved.libraryId;
-    this.activeSoundKey = factory ? `factory:${factory.id}` : `saved:${saved.libraryId}`;
+    this.activeSavedId = saved.libraryId;
+    this.activeSoundKey = `saved:${saved.libraryId}`;
     if (previous.activeSoundKey === 'new' || previous.activeSoundKey.startsWith('draft:')) this.drafts.delete(previous.activeSoundKey);
     clearTimeout(this.persistTimer);
     if (!this.persist()) {
       this.restore(previous);
       this.saved = previousSaved;
-      this.factorySaved=previousFactorySaved;
       this.drafts = previousDrafts;
       throw new Error("Could not save in this browser. Free up browser storage or export JSON to keep this sound.");
     }

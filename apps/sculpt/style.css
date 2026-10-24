@@ -1842,3 +1842,15 @@ dialog input:not([type]) {
 #unison-display { min-width: 0; }
 #unison-display svg { display: block; width: 100%; height: 64px; }
 #unison-display path { fill: none; stroke: #ddd; stroke-width: .8; vector-effect: non-scaling-stroke; }
+
+/* Cards share one ordinary sound model, including the four starter sounds. */
+.saved-card-item .saved-card { padding: 8px 10px 26px; }
+.sound-card-name { position: absolute; left: 10px; bottom: 7px; width: calc(100% - 38px); height: 18px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); font: inherit; font-size: 11px; text-overflow: ellipsis; outline: none; }
+.sound-card-name:not([readonly]) { text-overflow: clip; }
+.sound-card-name::selection { background: #666; color: #fff; }
+.sound-menu-button { opacity: 0; pointer-events: none; }
+.saved-card-item:hover .sound-menu-button, .saved-card-item:focus-within .sound-menu-button { opacity: 1; pointer-events: auto; }
+.sound-card-menu { position: fixed; z-index: 100; width: 112px; padding: 4px; border: 1px solid #333; background: #080808; }
+.sound-card-menu button { display: block; width: 100%; text-align: left; font-size: 11px; padding: 7px 9px; color: #ccc; }
+.sound-card-menu button:hover, .sound-card-menu button:focus { background: #ffffff12; color: #fff; outline: none; }
+@media (hover: none) { .sound-menu-button { opacity: 1; pointer-events: auto; } }
