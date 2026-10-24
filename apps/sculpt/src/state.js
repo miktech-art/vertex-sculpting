@@ -9,6 +9,7 @@ export class Store {
     this.deleted = [];
     this.activeSavedId = null;
     this.drafts = new Map();
+    this.factorySaved = new Map();
     let initial, data, raw;
     let unreadable = false;
     try {
@@ -43,6 +44,11 @@ export class Store {
     for (const [key, draft] of Object.entries(data?.drafts || {})) {
       const document = decode(draft?.document), baseline = decode(draft?.initial);
       if (document && baseline) this.drafts.set(key, { document, initial: baseline });
+    }
+    for(const preset of PRESETS){
+      const rawSaved=data?.factorySaved?.[preset.id];
+      const saved=rawSaved?decode(rawSaved):null;
+      if(saved)this.factorySaved.set(preset.id,saved);
     }
     // Preserve unreadable input, including malformed cached workspaces.
     this.recoveryRaw = unreadable ? raw : null;
@@ -81,6 +87,7 @@ export class Store {
           activeSavedId: this.activeSavedId,
           activeSoundKey: this.activeSoundKey,
           drafts: Object.fromEntries(this.drafts),
+          factorySaved: Object.fromEntries(this.factorySaved),
         }),
       );
     } catch { return false; }
@@ -122,8 +129,12 @@ export class Store {
     this.commit();
     this.emit(kind);
   }
+  factoryDocument(preset){
+    return structuredClone(this.factorySaved.get(preset.id)||makeDocument(preset));
+  }
   load(document, savedId = null, soundKey = savedId ? `saved:${savedId}` : null) {
-    const next = validateDocument(document);
+    const preset=soundKey?.startsWith('factory:')&&PRESETS.find(p=>`factory:${p.id}`===soundKey);
+    const next = validateDocument(preset?this.factoryDocument(preset):document);
     this.begin();
     this.remember();
     const draft = soundKey && this.drafts.get(soundKey);
@@ -236,22 +247,26 @@ export class Store {
   save(name, { asNew = false } = {}) {
     this.remember();
     const previous = this.snapshot(), previousSaved = this.saved, previousDrafts = new Map(this.drafts);
+    const factory = !asNew && PRESETS.find(p=>this.activeSoundKey===`factory:${p.id}`);
+    const previousFactorySaved=new Map(this.factorySaved);
     const existing = !asNew && this.saved.find((doc) => doc.libraryId === this.activeSavedId);
     const doc = structuredClone(this.document);
     doc.name = name.trim().slice(0, 60) || "Untitled";
-    const saved = { ...structuredClone(doc), libraryId: existing?.libraryId || crypto.randomUUID() };
-    this.saved = existing
+    const saved = factory ? structuredClone(doc) : { ...structuredClone(doc), libraryId: existing?.libraryId || crypto.randomUUID() };
+    if(factory)this.factorySaved.set(factory.id,saved);
+    else this.saved = existing
       ? this.saved.map((item) => item.libraryId === existing.libraryId ? saved : item)
       : [saved, ...this.saved];
     this.document = doc;
     this.initial = structuredClone(doc);
-    this.activeSavedId = saved.libraryId;
-    this.activeSoundKey = `saved:${saved.libraryId}`;
+    this.activeSavedId = factory ? null : saved.libraryId;
+    this.activeSoundKey = factory ? `factory:${factory.id}` : `saved:${saved.libraryId}`;
     if (previous.activeSoundKey === 'new' || previous.activeSoundKey.startsWith('draft:')) this.drafts.delete(previous.activeSoundKey);
     clearTimeout(this.persistTimer);
     if (!this.persist()) {
       this.restore(previous);
       this.saved = previousSaved;
+      this.factorySaved=previousFactorySaved;
       this.drafts = previousDrafts;
       throw new Error("Could not save in this browser. Free up browser storage or export JSON to keep this sound.");
     }

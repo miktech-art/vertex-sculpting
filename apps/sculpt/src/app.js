@@ -174,14 +174,15 @@ function renderPresets() {
   const cards = $("#preset-cards");
   cards.replaceChildren();
   PRESETS.forEach((preset, i) => {
+    const saved=store.factoryDocument(preset);
     const button = document.createElement("button");
     button.className = "preset-card";
     button.dataset.preset = preset.id;
     button.dataset.soundKey=`factory:${preset.id}`;
-    button.title = `Load ${preset.name}`;
-    button.setAttribute("aria-label", `Load ${preset.name}`);
-    const name=document.createElement('span');name.textContent=preset.name;
-    button.append(soundPreview(makeDocument(preset)),name);
+    button.title = `Load ${saved.name}`;
+    button.setAttribute("aria-label", `Load ${saved.name}`);
+    const name=document.createElement('span');name.textContent=saved.name;
+    button.append(soundPreview(saved),name);
     button.addEventListener("click", () => switchSound(() => loadPreset(preset)));
     cards.append(button);
   });
@@ -223,6 +224,7 @@ function sync(doc, kind) {
   if(["load","envelopes","lfos","undo","redo"].includes(kind))renderEnvelopeSelectors();
   lfoPanel.setParams(compare?store.initial.params:doc.params);
   syncControls();
+  if(kind==='save')renderPresets();
   renderHeader();
   if (["save", "load", "library"].includes(kind)) renderSavedCards();
   if (kind === "library" && $("#library-dialog").open) renderLibrary();
@@ -463,7 +465,7 @@ function openSaveDialog(asNew = false) {
   $("#save-name").select();
 }
 $("#save-button").addEventListener("click", () => {
-  if(!store.activeSavedId){openSaveDialog();return;}
+  if(!store.activeSavedId&&!store.activeSoundKey.startsWith('factory:')){openSaveDialog();return;}
   try {store.save(store.document.name);}
   catch(error){reportError(error.message);}
 });

@@ -15,7 +15,7 @@ test('saved sounds are independent snapshots and survive reload with their selec
   const store = fresh();
   store.edit(d => { d.params.harmonics = 0.23; d.routes = d.routes.slice(0, 2); });
   store.commit();
-  const saved = store.save('First sound');
+  const saved = store.save('First sound', { asNew: true });
   store.edit(d => d.params.harmonics = 0.8); store.commit();
   assert.equal(saved.params.harmonics, 0.23);
   assert.equal(saved.routes.length, 2);
@@ -29,7 +29,7 @@ test('saved sounds are independent snapshots and survive reload with their selec
   assert.equal(reload.hasUnsavedChanges, true);
 });
 test('saving edits updates a selected sound, while Save as new keeps both', () => {
-  const store = fresh(); const first = store.save('First');
+  const store = fresh(); const first = store.save('First', { asNew: true });
   store.edit(d => d.params.harmonics = 0.4); store.commit();
   store.save('Updated');
   assert.equal(store.saved.length, 1);
@@ -40,7 +40,7 @@ test('saving edits updates a selected sound, while Save as new keeps both', () =
   assert.notEqual(store.saved[0].libraryId, first.libraryId);
 });
 test('new sounds start clean and can be undone without changing library snapshots', () => {
-  const store = fresh(); const first = store.save('First');
+  const store = fresh(); const first = store.save('First', { asNew: true });
   store.load(makeDocument({name: 'Untitled', params: BASE}));
   assert.equal(store.activeSavedId, null);
   assert.equal(store.saved.length, 1);
@@ -60,7 +60,7 @@ test('library never silently drops earlier sounds after forty saves', () => {
   assert.equal(reload.saved.at(-1).name, 'Sound 0');
 });
 test('storage failure rolls back a save and preserves edited work', () => {
-  const store = fresh(); store.save('First');
+  const store = fresh(); store.save('First', { asNew: true });
   store.edit(d => d.params.noise = 0.4); store.commit();
   blocked = true;
   assert.throws(() => store.save('Failed', { asNew: true }), /Could not save/);
@@ -103,7 +103,7 @@ test('revision four visual-only sessions preserve their saved library when audio
 });
 
 test('rename targets its ID and preserves unsaved edits, saved settings, and undo history', () => {
-  const store = fresh(); const first = store.save('Same name');
+  const store = fresh(); const first = store.save('Same name', { asNew: true });
   const second = store.save('Same name', { asNew: true });
   store.edit(doc => doc.params.noise = 0.42); store.commit();
   store.renameSaved(second.libraryId, '  Renamed  ');
@@ -121,7 +121,7 @@ test('rename targets its ID and preserves unsaved edits, saved settings, and und
   assert.throws(() => store.renameSaved(second.libraryId, '   '), /Enter a sound name/);
 });
 test('delete and restore preserve complete saved sounds across reload and keep the current edits', () => {
-  const store = fresh(); const first = store.save('First');
+  const store = fresh(); const first = store.save('First', { asNew: true });
   store.save('Second', { asNew: true });
   store.load(first, first.libraryId);
   store.edit(doc => doc.params.noise = 0.33); store.commit();
@@ -142,7 +142,7 @@ test('delete and restore preserve complete saved sounds across reload and keep t
   assert.equal(fresh().deleted.length, 0);
 });
 test('failed rename, delete, and restore leave stored sounds and working state intact', () => {
-  const store = fresh(); const saved = store.save('Original');
+  const store = fresh(); const saved = store.save('Original', { asNew: true });
   blocked = true;
   assert.throws(() => store.renameSaved(saved.libraryId, 'Failed'), /Could not update/);
   assert.equal(store.document.name, 'Original');
@@ -160,7 +160,7 @@ test('failed rename, delete, and restore leave stored sounds and working state i
   assert.equal(fresh().deleted[0].libraryId, saved.libraryId);
 });
 test('undo after deleting the active sound cannot target a deleted library entry', () => {
-  const store = fresh(); const saved = store.save('Deleted');
+  const store = fresh(); const saved = store.save('Deleted', { asNew: true });
   store.edit(doc => doc.params.noise = 0.2); store.commit();
   store.deleteSaved(saved.libraryId);
   store.undo();
@@ -194,7 +194,7 @@ test('unreadable data is not overwritten when its recovery backup cannot be stor
 });
 
 test('import creates a separate saved sound, persists it, and never replaces an existing selection', () => {
-  const store = fresh(), first = store.save('Existing');
+  const store = fresh(), first = store.save('Existing', { asNew: true });
   const incoming = makeDocument(); incoming.name = 'Imported'; incoming.params.noise = 0.42;
   incoming.libraryId = first.libraryId;
   const imported = store.importSaved(incoming);
@@ -211,7 +211,7 @@ test('import creates a separate saved sound, persists it, and never replaces an 
   assert.notEqual(duplicate.libraryId, imported.libraryId);
 });
 test('failed or malformed imports leave the current sound, library and undo history intact', () => {
-  const store = fresh(); store.save('Existing');
+  const store = fresh(); store.save('Existing', { asNew: true });
   store.edit(doc => { doc.params.noise = 0.17; }); store.commit();
   const snapshot = store.snapshot(), saved = structuredClone(store.saved), undo = structuredClone(store.undoStack);
   blocked = true;
@@ -240,7 +240,7 @@ test('each factory sound keeps independent parameters and connections across swi
   assert.equal(reload.saved.length,0);
 });
 test('saved sound working edits survive switching without overwriting its named comparison baseline', () => {
-  const store=fresh(), first=store.save('First');
+  const store=fresh(), first=store.save('First', { asNew: true });
   store.edit(d=>d.params.noise=.27);store.commit();factory(store,'bass');store.persist();
   const reload=fresh();reload.load(first,first.libraryId);
   assert.equal(reload.document.params.noise,.27);assert.equal(reload.initial.params.noise,first.params.noise);
@@ -250,7 +250,7 @@ test('saved sound working edits survive switching without overwriting its named 
 });
 test('saving a copy keeps the source working state, and New sound resumes until it is named', () => {
   const store=fresh();factory(store,'kick');store.edit(d=>d.params.pitch=82);store.commit();
-  store.save('Kick copy');factory(store,'kick');assert.equal(store.document.params.pitch,82);
+  store.save('Kick copy', { asNew: true });factory(store,'kick');assert.equal(store.document.params.pitch,82);
   store.load(makeDocument({name:'Untitled',params:BASE}),null,'new');
   store.edit(d=>d.params.noise=.41);store.commit();factory(store,'synth');store.persist();
   const reload=fresh();reload.load(makeDocument({name:'Untitled',params:BASE}),null,'new');
@@ -259,7 +259,7 @@ test('saving a copy keeps the source working state, and New sound resumes until 
   assert.equal(reload.document.params.noise,BASE.noise);
 });
 test('rename and delete/restore preserve an inactive sound workspace', () => {
-  const store=fresh(), saved=store.save('Original');
+  const store=fresh(), saved=store.save('Original', { asNew: true });
   store.edit(d=>d.params.noise=.38);store.commit();factory(store,'bass');
   store.renameSaved(saved.libraryId,'Renamed');store.deleteSaved(saved.libraryId);store.persist();
   const reload=fresh();reload.restoreSaved(saved.libraryId);reload.load(reload.saved[0],saved.libraryId);
@@ -277,7 +277,7 @@ test('failed copy save restores its sound identity and cached edits', () => {
 });
 
 test('New creates an immediate library instance with clean defaults and preserves the source draft', () => {
-  const store=fresh(),source=store.save('Original');
+  const store=fresh(),source=store.save('Original', { asNew: true });
   store.edit(d=>d.params.noise=.42);store.commit();
   const created=store.createSound();
   assert.equal(store.saved.length,2);assert.equal(created.name,'Untitled');
@@ -298,8 +298,48 @@ test('consecutive New actions create uniquely named independent sounds and Save 
   assert.equal(store.saved[1].params.pitch,BASE.pitch);
 });
 test('failed New preserves the active sound and library', () => {
-  const store=fresh(),source=store.save('Original');store.edit(d=>d.params.noise=.42);store.commit();
+  const store=fresh(),source=store.save('Original', { asNew: true });store.edit(d=>d.params.noise=.42);store.commit();
   blocked=true;assert.throws(()=>store.createSound(),/Could not update sounds/);blocked=false;
   assert.equal(store.saved.length,1);assert.equal(store.activeSavedId,source.libraryId);
   assert.equal(store.document.params.noise,.42);assert.equal(store.document.name,'Original');
+});
+
+test('Save replaces each basic sound in its fixed slot and survives reload without adding a library copy',()=>{
+  const store=fresh();
+  for(const [index,preset] of PRESETS.entries()){
+    factory(store,preset.id);store.edit(d=>d.params.pitch=100+index);store.commit();
+    store.save(preset.name);
+    assert.equal(store.activeSoundKey,`factory:${preset.id}`);
+    assert.equal(store.activeSavedId,null);assert.equal(store.hasUnsavedChanges,false);
+    assert.equal(store.saved.length,0);
+    assert.equal(store.factoryDocument(preset).params.pitch,100+index);
+  }
+  const reload=fresh();
+  for(const [index,preset] of PRESETS.entries()){
+    factory(reload,preset.id);
+    assert.equal(reload.document.params.pitch,100+index);
+    assert.equal(reload.initial.params.pitch,100+index);
+    assert.equal(reload.hasUnsavedChanges,false);
+  }
+  assert.equal(reload.saved.length,0);
+});
+test('basic sound previews retain their saved snapshot until Save, and Save as new preserves that snapshot',()=>{
+  const store=fresh(),preset=PRESETS[0];factory(store,preset.id);
+  store.edit(d=>d.params.pitch=80);store.commit();store.save(preset.name);
+  store.edit(d=>d.params.pitch=90);store.commit();
+  assert.equal(store.factoryDocument(preset).params.pitch,80);
+  store.save('Kick copy',{asNew:true});
+  assert.equal(store.saved.length,1);assert.equal(store.saved[0].params.pitch,90);
+  assert.equal(store.factoryDocument(preset).params.pitch,80);
+  factory(store,preset.id);assert.equal(store.document.params.pitch,90);
+  assert.equal(store.initial.params.pitch,80);assert.equal(store.hasUnsavedChanges,true);
+});
+test('failed basic sound overwrite preserves its previous saved preview and the current unsaved edit',()=>{
+  const store=fresh(),preset=PRESETS[0];factory(store,preset.id);
+  store.edit(d=>d.params.pitch=80);store.commit();store.save(preset.name);
+  store.edit(d=>d.params.pitch=90);store.commit();
+  blocked=true;assert.throws(()=>store.save(preset.name),/Could not save/);blocked=false;
+  assert.equal(store.factoryDocument(preset).params.pitch,80);
+  assert.equal(store.document.params.pitch,90);assert.equal(store.hasUnsavedChanges,true);
+  assert.equal(store.activeSoundKey,'factory:kick');assert.equal(store.saved.length,0);
 });
