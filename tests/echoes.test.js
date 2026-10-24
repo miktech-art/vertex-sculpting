@@ -197,8 +197,22 @@ test('the timeline stays at the fully wide saw reference through harmonic, width
   let y;
   for(const patch of [{harmonics:0,width:0,wavePosition:0},{harmonics:1,width:0,wavePosition:2/3},{harmonics:1,width:1,wavePosition:2/3},{harmonics:.1,width:.5,wavePosition:1}]){
     const p={...BASE,...patch},g=buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));
+    renderer.document={params:p,routes:DEFAULT_ROUTES};
     renderer.drawTimeAxis(g);y??=renderer.axisY;assert.equal(renderer.axisY,y);
   }
   renderer.pan.y=-20;const p={...BASE},g=buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));renderer.drawTimeAxis(g);
   assert.ok(renderer.axisY<y);
+});
+
+test('the timeline leaves only eight pixels beneath this sound at full harmonic width',()=>{
+  const p={...BASE,unison:1,detune:0,harmonics:1,width:1,waveTable:0,wavePosition:2/3,sustain:.7};
+  const g=buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));
+  const renderer=Object.assign(Object.create(SculptureRenderer.prototype),{
+    document:{params:p,routes:DEFAULT_ROUTES},size:{width:1400,height:1000},
+    yaw:0,pitch:0,axialRotation:0,zoom:.65,pan:{x:0,y:0},
+    ctx:{beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}},
+  });
+  renderer.drawTimeAxis(g);
+  const bottom=Math.max(...g.lines.flatMap(l=>l.points.map(p=>renderer.project(p).y)));
+  assert.ok(Math.abs(renderer.axisY-bottom-8)<1e-9);
 });

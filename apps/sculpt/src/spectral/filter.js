@@ -50,9 +50,17 @@ export function createFilterResponse(params, sampleRate = 48000) {
   const s = filterSettings(params, sampleRate),
     low = filterCoefficients("highpass", s.low, s.resonance, sampleRate),
     high = filterCoefficients("lowpass", s.high, s.resonance, sampleRate);
-  return (frequency) =>
+  const response=(frequency) =>
     responseMagnitude(low, frequency, sampleRate) *
     responseMagnitude(high, frequency, sampleRate);
+  // Relative filter phase matters when neighboring detuned voices interfere.
+  const phase=(coefficients,frequency)=>{
+    const w=2*Math.PI*frequency/sampleRate;
+    const angle=values=>Math.atan2(-values[1]*Math.sin(w)-values[2]*Math.sin(2*w),values[0]+values[1]*Math.cos(w)+values[2]*Math.cos(2*w));
+    return angle(coefficients.b)-angle(coefficients.a);
+  };
+  response.phase=frequency=>phase(low,frequency)+phase(high,frequency);
+  return response;
 }
 
 // Individual low partials and grouped higher partials keep the form readable.

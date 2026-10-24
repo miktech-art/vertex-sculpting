@@ -365,7 +365,6 @@ const pairs = [
   ["pitch", "thickness"],
   ["harmonics", "body"],
   ["noise", "grain"],
-  ["detune", "twist"],
   ["cutoff", "spectralHigh"],
   ["resonance", "spectralPeak"],
   ["volume", "brightness"],
@@ -463,12 +462,19 @@ export function noteName(hz) {
   const midi = Math.round(69 + 12 * Math.log2(hz / 440));
   return `${["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"][((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
+// A single oscillator has no detune offset, including through custom routes.
+export function routeContribution(params, route) {
+  // Older sounds may still contain this former artistic default connection.
+  // Detune now has its own interference model, never an invented rotation.
+  if(route.source === "detune" && (route.target === "twist" || Math.round(params.unison ?? 2) === 1)) return 0;
+  let n = normalize(route.source, params[route.source]);
+  if(route.invert) n = 1 - n;
+  return n ** route.curve * route.amount;
+}
 export function resolveMappings(params, routes) {
   const values = Object.fromEntries(TARGETS.map((t) => [t.id, 0]));
   for (const r of routes) {
-    let n = normalize(r.source, params[r.source]);
-    if (r.invert) n = 1 - n;
-    values[r.target] += n ** r.curve * r.amount;
+    values[r.target] += routeContribution(params,r);
   }
   for (const target of TARGETS)
     values[target.id] = routes.some((r) => r.target === target.id)

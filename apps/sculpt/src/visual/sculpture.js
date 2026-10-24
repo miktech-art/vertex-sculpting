@@ -1,3 +1,5 @@
+import {createUnisonBandEnvelope} from '../spectral/unison.js';
+import {unisonCount} from '../oscillator/unison.js';
 import {modulatedParams} from "../audio/modulation.js";
 import {voiceEnvelopeAt} from "../audio/live-envelope.js";
 import {getLfos,modulationEnvelopes,activeLfos} from "../lfo.js";
@@ -19,6 +21,7 @@ import {
   envelopeAt,
   duration,
   resolveMappings,
+  routeContribution,
   DEFAULT_ROUTES,
 } from "../model.js";
 
@@ -26,15 +29,19 @@ const TAU = Math.PI * 2;
 const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
 // Keep the most recent immutable noise fields shared by the main and mini views.
 const noiseFields = new Map();
-let timelineReference;
-function timeAxisReference(){
-  if(!timelineReference){
-    const params={...BASE,harmonics:1,width:1,detune:40,waveTable:0,wavePosition:2/3,
-      attack:.005,decay:.005,sustain:1,hold:1,release:.02};
-    const geometry=buildGeometry(params,resolveMappings(params,DEFAULT_ROUTES));
-    timelineReference={length:geometry.length,points:geometry.lines.flatMap(line=>line.points)};
+const timelineReferences=new Map();
+function timeAxisReference(document){
+  const routes=document?.routes??DEFAULT_ROUTES;
+  // Match this sound's envelope and tuning, reserving only the space needed by
+  // a full-harmonic, full-width saw. Do not reserve an unrelated maximum envelope.
+  const params={...(document?.params??BASE),harmonics:1,width:1,unison:1,detune:0,waveTable:0,wavePosition:2/3};
+  const key=JSON.stringify([params,routes]);
+  if(!timelineReferences.has(key)){
+    const geometry=buildGeometry(params,resolveMappings(params,routes));
+    timelineReferences.set(key,{key,length:geometry.length,points:geometry.lines.flatMap(line=>line.points)});
+    if(timelineReferences.size>8)timelineReferences.delete(timelineReferences.keys().next().value);
   }
-  return timelineReference;
+  return timelineReferences.get(key);
 }
 
 // Geometry is deterministic: identical sound + mapping always gives the same object.
@@ -60,9 +67,10 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
     body = m.body * 100 + m.twist * 15 + m.spread * 14,
     twist = m.twist * 3.6,
     spread = m.spread * 34;
+  const beating=unisonCount(params)>1&&params.detune>0&&toneGain>0;
   const modulated=activeLfos(params).some(l=>l.target!=='none'&&l.amount!==0)||modulationEnvelopes(params).some(e=>e.amount!==0);
   const maxRate=Math.max(...getLfos(params).map(l=>l.rate),modulationEnvelopes(params).some(e=>e.amount!==0&&e.target.startsWith('lfoRate:'))?100:0);
-  const points = modulated?Math.max(121,Math.min(2049,Math.ceil(total*maxRate*16)+1)):121;
+  const points = modulated||beating?Math.max(121,Math.min(2049,Math.ceil(total*Math.max(maxRate*16,beating?800:0))+1)):121;
   const baseMappings=modulated?resolveMappings(params,routes):null;
   const state={...(voice||{}),lfoPhaseCache:new Map()};
   const offset=voice?.timeOffset||0;
@@ -75,6 +83,15 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
     const amplitude=params.volume?mod.amplitude/params.volume:0;
     return {t,params:p,mapped,response:filter,amplitude,
       e:voice?voiceEnvelopeAt(contour,at,state):envelopeAt(contour,Math.min(total-.00001,t))};
+  }):null;
+  let cycles=0;
+  const phaseCycles=Array.from({length:points},(_,i)=>{
+    if(i)cycles+=((samples?.[i-1].params.pitch??params.pitch)+(samples?.[i].params.pitch??params.pitch))/2*total/(points-1);
+    return cycles;
+  });
+  const unisonLevels=beating?HARMONIC_BANDS.map(band=>{
+    const model=samples?null:createUnisonBandEnvelope(band,params,response);
+    return Array.from({length:points},(_,i)=>(model||createUnisonBandEnvelope(band,samples[i].params,samples[i].response))(phaseCycles[i],total/(points-1)/2));
   }):null;
   const bands =
       body > 0.05 || m.edge > 0.04
@@ -93,9 +110,10 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
     const sample=samples?.[i];
     const localE=sample?sample.e*sample.amplitude*wave: e;
     const p=sample?.params||params;
-    const strength=sample?ridgeStrength(sample.response(p.pitch))*toneGain**2*sample.amplitude:null;
+    const amplitude=beating?unisonLevels[0][i]:null;
+    const strength=beating?ridgeStrength(amplitude)*toneGain**2*(sample?.amplitude??1):sample?ridgeStrength(sample.response(p.pitch))*toneGain**2*sample.amplitude:null;
     return {
-      ...(sample?{spectralLevel:strength,thickness:.65+sample.mapped.thickness*4.4,frequency:p.pitch,levelDb:ridgeDecibels(sample.response(p.pitch)*toneGain)}:{}),
+      ...(sample||beating?{spectralLevel:strength,thickness:(.65+(sample?.mapped.thickness??m.thickness)*4.4)*(beating?amplitude/Math.max(1e-12,(sample?.response||response)(p.pitch)):1),frequency:p.pitch,levelDb:ridgeDecibels((amplitude??sample.response(p.pitch))*toneGain)}:{}),
       x: (u - 0.5) * length,
       y: (sample?cutoffResonanceWeight(p.pitch,denormalize("cutoffLow",sample.mapped.spectralLow),denormalize("cutoff",sample.mapped.spectralHigh),sample.mapped.spectralPeak):crinkle(p.pitch)) * 13 * Math.sin(u * TAU * 22) ** 7 * localE ** 0.6,
       z: 0,
@@ -105,7 +123,7 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
   });
   lines.push({
     points: center,
-    dynamic:modulated,
+    dynamic:modulated||beating,
     alpha: 1,
     width: 1,
     kind: "core",
@@ -142,14 +160,19 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
             m.motion * 0.5 +
             m.motion * 0.5 * Math.sin(t * denormalize("rate", m.rate) * TAU),
           localEnergy=sample?bandAmplitude(band,p,sample.response):energy,
-          strength=sample?ridgeStrength(localEnergy.source*localEnergy.gain)*toneGain**2*sample.amplitude:spectralLevel,
+          combinedAmplitude=beating?unisonLevels[j+1][i]:localEnergy.source*localEnergy.gain,
+          beatGain=beating?combinedAmplitude/Math.max(1e-12,localEnergy.source*localEnergy.gain):1,
+          strength=sample||beating?ridgeStrength(combinedAmplitude)*toneGain**2*(sample?.amplitude??1):spectralLevel,
           localE=sample?sample.e*sample.amplitude:e,
           localBody=sample?sample.mapped.body*100+sample.mapped.twist*15+sample.mapped.spread*14:body,
-          radius = (localBody * position * modal + teeth) * localE ** 0.6 * wave;
+          radius = (localBody * position * modal + teeth) * localE ** 0.6 * wave * beatGain;
         line.push({
-          ...(sample?{spectralLevel:strength,frequency:p.pitch*band.center,levelDb:ridgeDecibels(localEnergy.source*localEnergy.gain*toneGain)}:{}),
+          ...(sample||beating?{spectralLevel:strength,frequency:p.pitch*band.center,levelDb:ridgeDecibels(combinedAmplitude*toneGain)}:{}),
+          // Actual cents occupy only a narrow interval on this logarithmic
+          // frequency scale; never exaggerate them into a large spatial twist.
+          ...(beating?{frequencySpread:(localBody*modal+spread)*localE**.6*Math.LN2*params.detune/2400/Math.log(96)}:{}),
           x: (u - 0.5) * length,
-          y: sign * (Math.cos(a) * radius + (sample?sample.mapped.spread*34:spread) * localE * position),
+          y: sign * (Math.cos(a) * radius + (sample?sample.mapped.spread*34:spread) * localE * position * beatGain),
           z: sign * Math.sin(a) * radius * 0.8,
           u,
           e:localE,
@@ -157,7 +180,7 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
       }
       lines.push({
         points: line,
-        dynamic:modulated,
+        dynamic:modulated||beating,
         alpha: spectralLevel,
         spectralLevel,
         levelDb: ridgeDecibels(spectralAmplitude),
@@ -199,7 +222,7 @@ export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_RO
     maxY = Math.max(maxY, point.y);
   }
   return {
-    modulated,
+    modulated:modulated||beating,
     samples,
     lines,
     particles,
@@ -375,10 +398,9 @@ export class SculptureRenderer {
     const valid = new Set();
     for (const r of doc.routes) {
       valid.add(r.id);
-      let n = normalize(r.source, doc.params[r.source]);
-      if (r.invert) n = 1 - n;
-      const next = n ** r.curve * r.amount,
-        prev = this.routeValues.get(r.id) ?? next,
+      const next = routeContribution(doc.params,r),
+        prev = r.source==='detune'&&Math.round(doc.params.unison??2)===1
+          ? next : this.routeValues.get(r.id) ?? next,
         alpha =
           r.smoothing === 0
             ? 1
@@ -457,14 +479,15 @@ export class SculptureRenderer {
   }
   drawTimeAxis(g) {
     const c = this.ctx,{width:w,height:h}=this.size;
-    const viewKey=JSON.stringify([w,h,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift,g.length]);
+    const reference=timeAxisReference(this.compare||this.document);
+    const viewKey=JSON.stringify([w,h,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift,g.length,reference.key]);
     if(this.axisViewKey!==viewKey){
       // Anchor to a fully wide, fully harmonic saw instead of the visible ridges.
-      // Parameter edits cannot raise/lower the ruler; camera controls still can.
-      const reference=timeAxisReference(),scaleX=g.length/reference.length;
+      // Harmonic/width/wavetable edits leave the ruler fixed; camera controls still work.
+      const scaleX=g.length/reference.length;
       let bottom=h/2-(this.stageLift||0)+this.pan.y;
       for(const pt of reference.points)bottom=Math.max(bottom,this.project({...pt,x:pt.x*scaleX}).y);
-      this.axisY=clamp(bottom+26,40,h-78);this.axisViewKey=viewKey;
+      this.axisY=clamp(bottom+8,40,h-78);this.axisViewKey=viewKey;
     }
     const y=this.axisY;
     const x = (seconds) =>
@@ -614,7 +637,8 @@ export class SculptureRenderer {
       const start=this.project(a,copy.offset,copy.scale),end=this.project(b,copy.offset,copy.scale);
       const core=line.kind==='core',alpha=clamp(strength*g.brightness*opacity*(core?1:.85));
       c.strokeStyle=`rgba(255,255,255,${alpha})`;c.lineCap='butt';
-      c.lineWidth=core?.12+((a.thickness+b.thickness)/2)*(a.e+b.e)/2:line.width;
+      const spread=a.frequencySpread?Math.abs(this.project({...a,y:a.y+a.frequencySpread},copy.offset,copy.scale).y-start.y):0;
+      c.lineWidth=core?.12+((a.thickness+b.thickness)/2)*(a.e+b.e)/2:line.width+spread*2;
       if(highlight)c.lineWidth+=1.05;
       c.beginPath();c.moveTo(start.x,start.y);c.lineTo(end.x,end.y);c.stroke();
     };

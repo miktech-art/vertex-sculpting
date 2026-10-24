@@ -51,3 +51,14 @@ test('modulated playback cannot highlight a locally absent harmonic',()=>{
   SculptureRenderer.prototype.drawModulatedLine.call(fake,{brightness:1,total:1,echoLayout:{duration:1}},line,{gain:1,time:0,offset:{},scale:1},.5);
   assert.equal(strokes,0);
 });
+
+test('switching to one voice removes detune twist immediately, without a smoothing tail',()=>{
+  const renderer=Object.assign(Object.create(SculptureRenderer.prototype),{
+    document:{params:{...patch,unison:8,detune:40},routes:DEFAULT_ROUTES},
+    routeValues:new Map(),targets:{},needsBuild:true,
+  });
+  renderer.updateMapping(.016);assert.equal(renderer.targets.twist,0);
+  renderer.document.params.unison=1;renderer.needsBuild=true;
+  renderer.updateMapping(.016);assert.equal(renderer.targets.twist,0);
+  assert.deepEqual(renderer.geometry,geometry({...patch,unison:1,detune:0}));
+});
