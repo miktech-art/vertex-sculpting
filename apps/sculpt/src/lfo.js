@@ -18,7 +18,7 @@ export function validateLfos(value){
     if(!lfo||!Object.hasOwn(MOD_LIMITS,lfo.target))throw new Error('Invalid LFO destination.');
     const result={target:lfo.target};
     if(lfo.enabled!==undefined){if(typeof lfo.enabled!=='boolean')throw new Error('Invalid LFO power state.');result.enabled=lfo.enabled;}
-    for(const [key,min,max] of [['shape',0,5],['rate',.05,30],['amount',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase',0,1],['delay',0,2],['fade',0,3],['offset',-1,1]]){
+    for(const [key,min,max] of [['shape',0,5],['rate',.05,50],['amount',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase',0,1],['delay',0,2],['fade',0,3],['offset',-1,1]]){
       const n=lfo[key];if(!Number.isFinite(n)||n<min||n>max||(key==='shape'&&!Number.isInteger(n)))throw new Error(`Invalid LFO ${key}.`);
       result[key]=n;
     }

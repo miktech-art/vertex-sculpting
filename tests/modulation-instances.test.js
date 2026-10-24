@@ -86,3 +86,9 @@ test('selection stays on the same surviving instance or moves to the nearest one
   assert.equal(selectionAfterRemoval(3,3,4),2);
   assert.equal(selectionAfterRemoval(0,0,2),0);
 });
+
+test('LFO rates can reach 50 Hz and retain their value through preset round trips',()=>{
+  const doc=makeDocument();doc.params.lfos=[{...defaultLfo(),rate:50}];
+  assert.equal(validateDocument(doc).params.lfos[0].rate,50);
+  doc.params.lfos[0].rate=50.01;assert.throws(()=>validateDocument(doc));
+});

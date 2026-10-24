@@ -525,3 +525,20 @@ test('eight-voice wavetable modulation keeps per-voice gains normalized during l
   engine.update({...voice.params,unison:8});assert.equal(voice.tones.length,256);
   engine.disposeVoice(voice);
 });
+
+test('computer keyboard notes hold independently and retain their pitch through live sound edits',async()=>{
+  const engine=new NativeAudioEngine();
+  const low=await engine.trigger(BASE,{held:true,midiNote:60}),high=await engine.trigger(BASE,{held:true,midiNote:64});
+  assert.ok(Math.abs(low.params.pitch-261.6255653005986)<1e-9);assert.ok(Math.abs(high.params.pitch-329.6275569128699)<1e-9);
+  assert.equal(low.total,Infinity);assert.equal(high.total,Infinity);
+  engine.context.currentTime=low.start+2;engine.update({...BASE,volume:.5,cutoff:2000,pitch:110});
+  assert.ok(Math.abs(low.params.pitch-261.6255653005986)<1e-9);assert.ok(Math.abs(high.params.pitch-329.6275569128699)<1e-9);
+  assert.equal(low.params.volume,.5);engine.release(low);assert.equal(low.held,false);assert.ok(Number.isFinite(low.total));assert.equal(high.held,true);
+  engine.disposeVoice(low);engine.disposeVoice(high);
+});
+test('preview playback and its stop can preserve held keyboard notes, while full Stop stops everything',async()=>{
+  const engine=new NativeAudioEngine(),key=await engine.trigger(BASE,{held:true,midiNote:60}),preview=await engine.trigger(BASE);
+  assert.equal(preview.held,false);assert.ok(Number.isFinite(preview.total));
+  engine.stop({preserveKeyboard:true});assert.equal(key.stopping,false);assert.equal(preview.stopping,true);
+  engine.stop();assert.equal(key.stopping,true);engine.disposeVoice(key);engine.disposeVoice(preview);
+});

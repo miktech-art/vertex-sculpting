@@ -1,3 +1,4 @@
+import {midiFrequency} from "../notes.js";
 import {unisonCount,unisonVoices} from "../oscillator/unison.js";
 import {scheduleModulation} from "./modulation.js";
 import { reverbImpulse } from "./reverb.js";
@@ -86,13 +87,15 @@ export class NativeAudioEngine {
     v.tasks.add(timer);
     return timer;
   }
-  async trigger(params, { held = false } = {}) {
+  async trigger(params, { held = false, midiNote = null } = {}) {
+    if(midiNote!==null&&(!Number.isInteger(midiNote)||midiNote<0||midiNote>127))throw new Error("Invalid MIDI note.");
     await this.init();
     const c = this.context,
       p = structuredClone(params),
       start = c.currentTime + 0.015;
     const v = {
       start,
+      midiNote,
       params: p,
       nodes: [],
       sources: [],
@@ -105,6 +108,7 @@ export class NativeAudioEngine {
       releaseLevel: 0,
       stopping: false,
     };
+    if(midiNote!==null)p.pitch=midiFrequency(midiNote);
     v.own = (node) => {
       v.nodes.push(node);
       return node;
@@ -347,11 +351,12 @@ export class NativeAudioEngine {
         wait * 1000,
       );
   }
-  update(params, only = null) {
+  update(patch, only = null) {
     if (!this.context) return;
     const now = this.now();
     for (const v of only ? [only] : this.voices) {
       if (v.stopping) continue;
+      const params=v.midiNote!=null?{...patch,pitch:midiFrequency(v.midiNote)}:patch;
       const old = { ...v.params },
         changed = (id) => ["envelopes","lfos"].includes(id) ? JSON.stringify(old[id]) !== JSON.stringify(params[id]) : old[id] !== params[id];
       if (![...new Set([...Object.keys(old),...Object.keys(params)])].some(changed)) continue;
@@ -528,8 +533,9 @@ export class NativeAudioEngine {
     }
     this.voices.delete(v);
   }
-  stop() {
+  stop({preserveKeyboard=false}={}) {
     for (const v of this.voices) {
+      if(preserveKeyboard&&v.midiNote!=null)continue;
       v.stopping = true;
       v.level.gain.setTargetAtTime(0, this.now(), 0.008);
       clearTimeout(v.timer);

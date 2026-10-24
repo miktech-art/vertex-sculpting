@@ -26,6 +26,17 @@ const TAU = Math.PI * 2;
 const PRESENT_WINDOW_HALF_WIDTH = 0.055 / 3;
 // Keep the most recent immutable noise fields shared by the main and mini views.
 const noiseFields = new Map();
+let timelineReference;
+function timeAxisReference(){
+  if(!timelineReference){
+    const params={...BASE,harmonics:1,width:1,detune:40,waveTable:0,wavePosition:2/3,
+      attack:.005,decay:.005,sustain:1,hold:1,release:.02};
+    const geometry=buildGeometry(params,resolveMappings(params,DEFAULT_ROUTES));
+    timelineReference={length:geometry.length,points:geometry.lines.flatMap(line=>line.points)};
+  }
+  return timelineReference;
+}
+
 // Geometry is deterministic: identical sound + mapping always gives the same object.
 export function buildGeometry(params, m, sampleRate = 48000, routes = DEFAULT_ROUTES, voice = null) {
   const lowCut = denormalize("cutoffLow", m.spectralLow ?? 0),
@@ -446,15 +457,14 @@ export class SculptureRenderer {
   }
   drawTimeAxis(g) {
     const c = this.ctx,{width:w,height:h}=this.size;
-    const viewKey=JSON.stringify([w,h,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift]);
-    if(this.axisGeometry!==g||this.axisViewKey!==viewKey){
-      let bottom=h/2-(this.stageLift||0);
-      for(const line of g.lines)for(const pt of line.points){
-        if((pt.spectralLevel??line.spectralLevel??1)<.002)continue;
-        bottom=Math.max(bottom,this.project(pt).y);
-      }
-      for(const pt of g.particles)bottom=Math.max(bottom,this.project(pt).y);
-      this.axisY=clamp(bottom+26,40,h-78);this.axisGeometry=g;this.axisViewKey=viewKey;
+    const viewKey=JSON.stringify([w,h,this.yaw,this.pitch,this.axialRotation,this.zoom,this.pan,this.stageLift,g.length]);
+    if(this.axisViewKey!==viewKey){
+      // Anchor to a fully wide, fully harmonic saw instead of the visible ridges.
+      // Parameter edits cannot raise/lower the ruler; camera controls still can.
+      const reference=timeAxisReference(),scaleX=g.length/reference.length;
+      let bottom=h/2-(this.stageLift||0)+this.pan.y;
+      for(const pt of reference.points)bottom=Math.max(bottom,this.project({...pt,x:pt.x*scaleX}).y);
+      this.axisY=clamp(bottom+26,40,h-78);this.axisViewKey=viewKey;
     }
     const y=this.axisY;
     const x = (seconds) =>

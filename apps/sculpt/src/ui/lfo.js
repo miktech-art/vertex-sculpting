@@ -39,7 +39,7 @@ export class LfoPanel {
       this.onEdit(this.selected,{target,amount:{pitch:2,wavePosition:.25,cutoff:1,amplitude:.5,none:0}[target]});this.onCommit();
     }});
     const controls=document.querySelector('#lfo-controls');controls.replaceChildren();this.knobs.clear();
-    for(const [id,label,min,max] of [['rate','Rate',.05,30],['amount','Depth',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase','Phase',0,1],['delay','Delay',0,2],['fade','Fade',0,3],['offset','Offset',-1,1]]){
+    for(const [id,label,min,max] of [['rate','Rate',.05,50],['amount','Depth',-MOD_LIMITS[lfo.target],MOD_LIMITS[lfo.target]],['phase','Phase',0,1],['delay','Delay',0,2],['fade','Fade',0,3],['offset','Offset',-1,1]]){
       const knob=new Knob({id:`lfo-${id}`,label,min,max,value:lfo[id],
         normalize:v=>id==='rate'?Math.log(v/min)/Math.log(max/min):(v-min)/(max-min),
         denormalize:n=>id==='rate'?min*(max/min)**n:min+n*(max-min),

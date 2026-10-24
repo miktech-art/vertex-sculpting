@@ -5,7 +5,7 @@ import {
   presentProgress,
   timeTickStep,
 } from "../apps/sculpt/src/visual/echoes.js";
-import { PRESETS, DEFAULT_ROUTES, resolveMappings } from "../apps/sculpt/src/model.js";
+import { BASE, PRESETS, DEFAULT_ROUTES, resolveMappings } from "../apps/sculpt/src/model.js";
 import {
   buildGeometry,
   SculptureRenderer,
@@ -187,4 +187,18 @@ test("the seconds axis is drawn even when delay is zero", () => {
   renderer.drawTimeAxis(geometry);
   assert.ok(labels.includes("0 s"));
   assert.ok(labels.length > 1);
+});
+
+test('the timeline stays at the fully wide saw reference through harmonic, width and waveform edits',()=>{
+  const renderer=Object.assign(Object.create(SculptureRenderer.prototype),{
+    size:{width:1400,height:1000},yaw:0,pitch:0,axialRotation:0,zoom:.65,pan:{x:0,y:0},
+    ctx:{beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}},
+  });
+  let y;
+  for(const patch of [{harmonics:0,width:0,wavePosition:0},{harmonics:1,width:0,wavePosition:2/3},{harmonics:1,width:1,wavePosition:2/3},{harmonics:.1,width:.5,wavePosition:1}]){
+    const p={...BASE,...patch},g=buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));
+    renderer.drawTimeAxis(g);y??=renderer.axisY;assert.equal(renderer.axisY,y);
+  }
+  renderer.pan.y=-20;const p={...BASE},g=buildGeometry(p,resolveMappings(p,DEFAULT_ROUTES));renderer.drawTimeAxis(g);
+  assert.ok(renderer.axisY<y);
 });

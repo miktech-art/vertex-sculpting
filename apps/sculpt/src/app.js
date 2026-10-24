@@ -1,3 +1,4 @@
+import {installComputerKeyboard} from "./ui/computer-keyboard.js";
 import {renderUnison} from "./ui/unison.js";
 import {instanceActions} from "./ui/instance-selector.js";
 import {routeSelect} from "./ui/route-select.js";
@@ -61,6 +62,8 @@ let mode = "sculpt",
   compareWasPlaying = false,
   playingPromise = false,
   playbackTicket = 0,
+  keyboardTicket = 0,
+  keyboard = null,
   frameTime = 0;
 const inputs = new Map();
 const wavetable = new WavetableView($("#wavetable-canvas"), value => {
@@ -241,7 +244,7 @@ async function play() {
   playingPromise = true;
   const ticket = playbackTicket;
   try {
-    if (!looping) audio.stop();
+    if (!looping) audio.stop({preserveKeyboard:true});
     const params = compare ? store.initial.params : store.document.params;
     const event = await audio.trigger(params);
     renderer.setSampleRate(audio.context.sampleRate);
@@ -271,11 +274,12 @@ function scheduleNext() {
     Math.max(30, (deadline - audio.now()) * 1000),
   );
 }
-function stop() {
+function stop({previewOnly=false}={}) {
   playbackTicket++;
+  if(!previewOnly){keyboardTicket++;keyboard?.releaseAll();}
   clearTimeout(loopTimer);
   loopTimer = null;
-  audio.stop();
+  audio.stop({preserveKeyboard:previewOnly});
   activeEvent = null;
   renderer.stop();
   miniRenderer.stop();
@@ -690,10 +694,22 @@ $("#wav-button").addEventListener("click", async () => {
   }
 });
 
+const keyboardBlocked=()=>tableSelect.isOpen||lfoPanel.shapes.isOpen||!!document.querySelector('.route-select [role="listbox"]:not([hidden])')||!!document.querySelector('dialog[open]');
+keyboard=installComputerKeyboard(document,{
+  isBlocked:keyboardBlocked,
+  noteOn:async midiNote=>{
+    const ticket=keyboardTicket,params=compare?store.initial.params:store.document.params;
+    const voice=await audio.trigger(params,{held:true,midiNote});
+    if(document.hidden||ticket!==keyboardTicket){audio.disposeVoice(voice);return null;}
+    return voice;
+  },
+  noteOff:voice=>audio.release(voice),
+  onError:error=>reportError(error.message||'Audio could not start.'),
+});
 installHoldLoopShortcut(document, () => {
   setLoop(true);
   play();
-}, stop, () => tableSelect.isOpen || lfoPanel.shapes.isOpen || !!document.querySelector('.route-select [role="listbox"]:not([hidden])') || !!document.querySelector("dialog[open]"));
+}, ()=>stop({previewOnly:true}), keyboardBlocked);
 
 document.addEventListener("keydown", (e) => {
   const editable = e.target.matches(
@@ -713,11 +729,6 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     e.shiftKey ? store.redo() : store.undo();
     return;
-  }
-  if (e.key.toLowerCase() === "l" && !mod) {
-    e.preventDefault();
-    setLoop(!looping);
-    if (looping) play();
   }
 });
 document.addEventListener("visibilitychange", () => {
